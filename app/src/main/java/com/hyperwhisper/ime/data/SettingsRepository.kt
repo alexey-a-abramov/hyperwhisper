@@ -38,7 +38,7 @@ class SettingsRepository @Inject constructor(
         ApiSettings(
             provider = preferences[API_PROVIDER_KEY]?.let { ApiProvider.valueOf(it) }
                 ?: ApiProvider.OPENAI,
-            baseUrl = preferences[BASE_URL_KEY] ?: "https://api.openai.com/v1",
+            baseUrl = preferences[BASE_URL_KEY] ?: "https://api.openai.com/v1/",
             apiKey = preferences[API_KEY_KEY] ?: "",
             modelId = preferences[MODEL_ID_KEY] ?: "whisper-1"
         )
@@ -47,7 +47,13 @@ class SettingsRepository @Inject constructor(
     suspend fun saveApiSettings(settings: ApiSettings) {
         dataStore.edit { preferences ->
             preferences[API_PROVIDER_KEY] = settings.provider.name
-            preferences[BASE_URL_KEY] = settings.baseUrl
+            // Ensure base URL ends with /
+            val normalizedUrl = if (settings.baseUrl.isNotEmpty() && !settings.baseUrl.endsWith("/")) {
+                settings.baseUrl + "/"
+            } else {
+                settings.baseUrl
+            }
+            preferences[BASE_URL_KEY] = normalizedUrl
             preferences[API_KEY_KEY] = settings.apiKey
             preferences[MODEL_ID_KEY] = settings.modelId
         }

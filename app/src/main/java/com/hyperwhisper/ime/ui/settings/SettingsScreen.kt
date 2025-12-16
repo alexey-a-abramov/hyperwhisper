@@ -84,7 +84,8 @@ fun SettingsScreen(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
                     label = { Text("Base URL") },
-                    placeholder = { Text("https://api.openai.com/v1") },
+                    placeholder = { Text("https://api.openai.com/v1/") },
+                    supportingText = { Text("Must end with /") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
