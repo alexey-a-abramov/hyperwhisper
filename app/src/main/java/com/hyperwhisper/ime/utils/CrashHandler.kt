@@ -17,6 +17,8 @@ class CrashHandler private constructor(
 
     companion object {
         private const val TAG = "CrashHandler"
+        @Volatile
+        private var crashShown = false
 
         fun install(context: Context) {
             val handler = CrashHandler(context.applicationContext)
@@ -29,18 +31,25 @@ class CrashHandler private constructor(
         try {
             Log.e(TAG, "Uncaught exception in thread: ${thread.name}", throwable)
 
-            // Collect crash information
-            val crashInfo = collectCrashInfo(thread, throwable)
+            // Only show crash dialog once per session
+            if (!crashShown) {
+                crashShown = true
 
-            // Launch error activity
-            val intent = Intent(context, CrashActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                putExtra("crash_info", crashInfo)
+                // Collect crash information
+                val crashInfo = collectCrashInfo(thread, throwable)
+
+                // Launch error activity
+                val intent = Intent(context, CrashActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    putExtra("crash_info", crashInfo)
+                }
+                context.startActivity(intent)
+
+                // Give the activity time to start
+                Thread.sleep(500)
+            } else {
+                Log.w(TAG, "Crash already shown in this session, suppressing duplicate crash screen")
             }
-            context.startActivity(intent)
-
-            // Give the activity time to start
-            Thread.sleep(500)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error handling crash", e)

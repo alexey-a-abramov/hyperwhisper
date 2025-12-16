@@ -3,7 +3,9 @@ package com.hyperwhisper.utils
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,6 +42,7 @@ class CrashActivity : ComponentActivity() {
                 CrashScreen(
                     crashInfo = crashInfo,
                     onCopy = { copyToClipboard() },
+                    onSwitchKeyboard = { openKeyboardSettings() },
                     onClose = { finish() }
                 )
             }
@@ -53,6 +56,17 @@ class CrashActivity : ComponentActivity() {
         Toast.makeText(this, "Crash report copied to clipboard", Toast.LENGTH_LONG).show()
     }
 
+    private fun openKeyboardSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not open keyboard settings", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onBackPressed() {
         super.onBackPressed()
         exitProcess(0)
@@ -64,6 +78,7 @@ class CrashActivity : ComponentActivity() {
 fun CrashScreen(
     crashInfo: String,
     onCopy: () -> Unit,
+    onSwitchKeyboard: () -> Unit,
     onClose: () -> Unit
 ) {
     Scaffold(
@@ -102,11 +117,18 @@ fun CrashScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = onCopy,
+                        onClick = onSwitchKeyboard,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
+                    ) {
+                        Text("Switch to Another Keyboard")
+                    }
+
+                    OutlinedButton(
+                        onClick = onCopy,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
                             Icons.Default.ContentCopy,
@@ -148,7 +170,13 @@ fun CrashScreen(
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        "Please copy the error details below and report this issue.",
+                        "Please switch to another keyboard to continue typing.",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "You can copy the error details below and report this issue.",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                     )
