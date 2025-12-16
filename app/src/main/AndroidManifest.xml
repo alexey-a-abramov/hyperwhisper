@@ -48,6 +48,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Crash Report Activity -->
+        <activity
+            android:name=".utils.CrashActivity"
+            android:label="App Crashed"
+            android:theme="@style/Theme.HyperWhisper"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:process=":crash" />
+
     </application>
 
 </manifest>
