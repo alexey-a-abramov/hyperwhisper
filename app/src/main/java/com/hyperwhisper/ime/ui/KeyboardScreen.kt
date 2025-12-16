@@ -1,0 +1,278 @@
+package com.hyperwhisper.ui
+
+import android.content.Intent
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.RecordingState
+import com.hyperwhisper.data.VoiceMode
+
+@Composable
+fun KeyboardScreen(
+    viewModel: KeyboardViewModel,
+    onTextCommit: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val recordingState by viewModel.recordingState.collectAsState()
+    val transcribedText by viewModel.transcribedText.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val voiceModes by viewModel.voiceModes.collectAsState()
+    val selectedModeId by viewModel.selectedModeId.collectAsState()
+
+    // Auto-commit transcribed text
+    LaunchedEffect(transcribedText) {
+        if (transcribedText.isNotEmpty()) {
+            onTextCommit(transcribedText)
+            viewModel.clearTranscribedText()
+        }
+    }
+
+    // Show error snackbar
+    errorMessage?.let { error ->
+        LaunchedEffect(error) {
+            // Error is displayed in the UI, so just log it
+            viewModel.clearError()
+        }
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(280.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Top Row: Mode Selector + Settings Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ModeSelector(
+                    modes = voiceModes,
+                    selectedModeId = selectedModeId,
+                    onModeSelected = { viewModel.selectMode(it) },
+                    enabled = recordingState == RecordingState.IDLE,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = {
+                        val intent = Intent(context, com.hyperwhisper.ui.settings.SettingsActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Center: Microphone Button
+            MicrophoneButton(
+                recordingState = recordingState,
+                onStartRecording = { viewModel.startRecording() },
+                onStopRecording = { viewModel.stopRecording() },
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bottom: Status Text or Error
+            StatusText(
+                recordingState = recordingState,
+                errorMessage = errorMessage
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModeSelector(
+    modes: List<VoiceMode>,
+    selectedModeId: String,
+    onModeSelected: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedMode = modes.firstOrNull { it.id == selectedModeId }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedMode?.name ?: "Select Mode",
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            modes.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.name) },
+                    onClick = {
+                        onModeSelected(mode.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MicrophoneButton(
+    recordingState: RecordingState,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        when (recordingState) {
+            RecordingState.IDLE -> {
+                IdleMicButton(onClick = onStartRecording)
+            }
+            RecordingState.RECORDING -> {
+                RecordingMicButton(onClick = onStopRecording)
+            }
+            RecordingState.PROCESSING -> {
+                ProcessingIndicator()
+            }
+            RecordingState.ERROR -> {
+                IdleMicButton(onClick = onStartRecording)
+            }
+        }
+    }
+}
+
+@Composable
+fun IdleMicButton(onClick: () -> Unit) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier.size(100.dp),
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = Color.White
+    ) {
+        Icon(
+            imageVector = Icons.Default.Mic,
+            contentDescription = "Start Recording",
+            modifier = Modifier.size(48.dp)
+        )
+    }
+}
+
+@Composable
+fun RecordingMicButton(onClick: () -> Unit) {
+    // Pulsing animation
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(100.dp)
+            .scale(scale),
+        containerColor = Color(0xFFE53935), // Red
+        contentColor = Color.White
+    ) {
+        Icon(
+            imageVector = Icons.Default.Stop,
+            contentDescription = "Stop Recording",
+            modifier = Modifier.size(48.dp)
+        )
+    }
+}
+
+@Composable
+fun ProcessingIndicator() {
+    Box(
+        modifier = Modifier.size(100.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(80.dp),
+            strokeWidth = 6.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun StatusText(
+    recordingState: RecordingState,
+    errorMessage: String?
+) {
+    val text = when {
+        errorMessage != null -> errorMessage
+        recordingState == RecordingState.RECORDING -> "Recording..."
+        recordingState == RecordingState.PROCESSING -> "Processing..."
+        else -> "Tap to speak"
+    }
+
+    val color = when {
+        errorMessage != null -> MaterialTheme.colorScheme.error
+        recordingState == RecordingState.RECORDING -> Color(0xFFE53935)
+        recordingState == RecordingState.PROCESSING -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    }
+
+    Text(
+        text = text,
+        fontSize = 16.sp,
+        fontWeight = if (recordingState != RecordingState.IDLE) FontWeight.Medium else FontWeight.Normal,
+        color = color
+    )
+}
