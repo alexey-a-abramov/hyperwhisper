@@ -9,6 +9,7 @@ import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnAttach
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -112,8 +113,12 @@ class VoiceInputMethodService : InputMethodService(),
             setViewTreeViewModelStoreOwner(this@VoiceInputMethodService)
             setViewTreeSavedStateRegistryOwner(this@VoiceInputMethodService)
 
-            setContent {
-                KeyboardContent()
+            // Delay setContent until after the view is attached to window
+            // This ensures the view tree owners are properly propagated
+            doOnAttach {
+                setContent {
+                    KeyboardContent()
+                }
             }
         }
 
