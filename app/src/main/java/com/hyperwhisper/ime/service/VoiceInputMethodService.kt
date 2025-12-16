@@ -101,6 +101,10 @@ class VoiceInputMethodService : InputMethodService(),
             Log.w(TAG, "Microphone permission not granted")
         }
 
+        // Move lifecycle to STARTED state before creating Compose content
+        // This ensures the lifecycle is active when the ComposeView is attached to window
+        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+
         // Create ComposeView
         composeView = ComposeView(this).apply {
             // Set up lifecycle owners for proper Compose integration
