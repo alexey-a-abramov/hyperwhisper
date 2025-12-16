@@ -18,6 +18,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,17 +35,31 @@ import kotlin.system.exitProcess
 class CrashActivity : ComponentActivity() {
 
     private var crashInfo: String = ""
+    private var traceLogs: String = ""
+    private var versionInfo: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         crashInfo = intent.getStringExtra("crash_info") ?: "No crash information available"
+        traceLogs = intent.getStringExtra("trace_logs") ?: "No trace logs available"
+
+        // Get version info
+        versionInfo = try {
+            val packageInfo = packageManager.getPackageInfo(packageName, 0)
+            "v${packageInfo.versionName} (Build ${packageInfo.versionCode})"
+        } catch (e: Exception) {
+            "Version unknown"
+        }
 
         setContent {
             HyperWhisperTheme {
                 CrashScreen(
                     crashInfo = crashInfo,
+                    traceLogs = traceLogs,
+                    versionInfo = versionInfo,
                     onCopy = { copyToClipboard() },
+                    onCopyTraces = { copyTracesToClipboard() },
                     onSwitchKeyboard = { openKeyboardSettings() },
                     onClose = { finish() }
                 )
@@ -54,6 +72,13 @@ class CrashActivity : ComponentActivity() {
         val clip = ClipData.newPlainText("HyperWhisper Crash Report", crashInfo)
         clipboard.setPrimaryClip(clip)
         Toast.makeText(this, "Crash report copied to clipboard", Toast.LENGTH_LONG).show()
+    }
+
+    private fun copyTracesToClipboard() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("HyperWhisper Trace Logs", traceLogs)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(this, "Trace logs copied to clipboard", Toast.LENGTH_LONG).show()
     }
 
     private fun openKeyboardSettings() {
@@ -77,18 +102,29 @@ class CrashActivity : ComponentActivity() {
 @Composable
 fun CrashScreen(
     crashInfo: String,
+    traceLogs: String,
+    versionInfo: String,
     onCopy: () -> Unit,
+    onCopyTraces: () -> Unit,
     onSwitchKeyboard: () -> Unit,
     onClose: () -> Unit
 ) {
+    var showTraces by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "App Crashed",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            "App Crashed",
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            versionInfo,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -126,17 +162,42 @@ fun CrashScreen(
                         Text("Switch to Another Keyboard")
                     }
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onCopy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy Error", fontSize = 13.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = onCopyTraces,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy Traces", fontSize = 13.sp)
+                        }
+                    }
+
                     OutlinedButton(
-                        onClick = onCopy,
+                        onClick = { showTraces = !showTraces },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Copy Error Details")
+                        Text(if (showTraces) "Show Crash Details" else "Show Trace Logs")
                     }
 
                     OutlinedButton(
@@ -185,7 +246,7 @@ fun CrashScreen(
 
             Divider()
 
-            // Crash details
+            // Content area - shows either crash details or trace logs
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -193,12 +254,22 @@ fun CrashScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
+                // Header showing what's being displayed
                 Text(
-                    text = crashInfo,
+                    text = if (showTraces) "═══ TRACE LOGS ═══" else "═══ CRASH DETAILS ═══",
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFB74D),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Text(
+                    text = if (showTraces) traceLogs else crashInfo,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
                     color = Color(0xFFE0E0E0),
-                    lineHeight = 18.sp
+                    lineHeight = 16.sp
                 )
             }
         }

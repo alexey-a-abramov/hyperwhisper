@@ -30,6 +30,7 @@ import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.ui.KeyboardScreen
 import com.hyperwhisper.ui.KeyboardViewModel
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
+import com.hyperwhisper.utils.TraceLogger
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -87,42 +88,65 @@ class VoiceInputMethodService : InputMethodService(),
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "VoiceInputMethodService onCreate")
-        savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+        TraceLogger.lifecycle("IME", "onCreate")
 
-        // Initialize ViewModel using ViewModelProvider
-        viewModel = KeyboardViewModel(voiceRepository, settingsRepository)
+        try {
+            savedStateRegistryController.performRestore(null)
+            lifecycleRegistry.currentState = Lifecycle.State.CREATED
+            TraceLogger.trace("IME", "Lifecycle state set to CREATED")
+
+            // Initialize ViewModel using ViewModelProvider
+            viewModel = KeyboardViewModel(voiceRepository, settingsRepository)
+            TraceLogger.trace("IME", "ViewModel initialized")
+        } catch (e: Exception) {
+            TraceLogger.error("IME", "Error in onCreate", e)
+            throw e
+        }
     }
 
     override fun onCreateInputView(): View {
         Log.d(TAG, "onCreateInputView")
+        TraceLogger.lifecycle("IME", "onCreateInputView")
 
-        // Check microphone permission
-        if (!hasMicrophonePermission()) {
-            Log.w(TAG, "Microphone permission not granted")
-        }
+        try {
+            // Check microphone permission
+            val hasMicPermission = hasMicrophonePermission()
+            if (!hasMicPermission) {
+                Log.w(TAG, "Microphone permission not granted")
+                TraceLogger.trace("IME", "WARNING: Microphone permission not granted")
+            } else {
+                TraceLogger.trace("IME", "Microphone permission granted")
+            }
 
-        // Move lifecycle to STARTED state before creating Compose content
-        // This ensures the lifecycle is active when the ComposeView is attached to window
-        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+            // Move lifecycle to STARTED state before creating Compose content
+            // This ensures the lifecycle is active when the ComposeView is attached to window
+            lifecycleRegistry.currentState = Lifecycle.State.STARTED
+            TraceLogger.trace("IME", "Lifecycle state set to STARTED")
 
-        // Create ComposeView
-        composeView = ComposeView(this).apply {
-            // Set up lifecycle owners for proper Compose integration
-            setViewTreeLifecycleOwner(this@VoiceInputMethodService as androidx.lifecycle.LifecycleOwner)
-            setViewTreeViewModelStoreOwner(this@VoiceInputMethodService)
-            setViewTreeSavedStateRegistryOwner(this@VoiceInputMethodService)
+            // Create ComposeView
+            composeView = ComposeView(this).apply {
+                // Set up lifecycle owners for proper Compose integration
+                setViewTreeLifecycleOwner(this@VoiceInputMethodService as androidx.lifecycle.LifecycleOwner)
+                setViewTreeViewModelStoreOwner(this@VoiceInputMethodService)
+                setViewTreeSavedStateRegistryOwner(this@VoiceInputMethodService)
+                TraceLogger.trace("IME", "ViewTree owners set on ComposeView")
 
-            // Delay setContent until after the view is attached to window
-            // This ensures the view tree owners are properly propagated
-            doOnAttach {
-                setContent {
-                    KeyboardContent()
+                // Delay setContent until after the view is attached to window
+                // This ensures the view tree owners are properly propagated
+                doOnAttach {
+                    TraceLogger.trace("IME", "ComposeView attached to window, setting content")
+                    setContent {
+                        KeyboardContent()
+                    }
                 }
             }
-        }
 
-        return composeView!!
+            TraceLogger.trace("IME", "ComposeView created successfully")
+            return composeView!!
+        } catch (e: Exception) {
+            TraceLogger.error("IME", "Error in onCreateInputView", e)
+            throw e
+        }
     }
 
     @Composable
@@ -155,21 +179,25 @@ class VoiceInputMethodService : InputMethodService(),
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         Log.d(TAG, "onStartInput - inputType: ${attribute?.inputType}, restarting: $restarting")
+        TraceLogger.lifecycle("IME", "onStartInput", "inputType=${attribute?.inputType}, restarting=$restarting")
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         Log.d(TAG, "onStartInputView - restarting: $restarting")
+        TraceLogger.lifecycle("IME", "onStartInputView", "restarting=$restarting")
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         Log.d(TAG, "onFinishInputView - finishing: $finishingInput")
+        TraceLogger.lifecycle("IME", "onFinishInputView", "finishing=$finishingInput")
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
         // Cancel any ongoing recording when keyboard is dismissed
         if (voiceRepository.isRecording()) {
+            TraceLogger.trace("IME", "Canceling ongoing recording on keyboard dismiss")
             viewModel.cancelRecording()
         }
     }
@@ -177,17 +205,21 @@ class VoiceInputMethodService : InputMethodService(),
     override fun onFinishInput() {
         super.onFinishInput()
         Log.d(TAG, "onFinishInput")
+        TraceLogger.lifecycle("IME", "onFinishInput")
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
+        TraceLogger.lifecycle("IME", "onDestroy")
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
 
         // Clean up resources
         audioRecorderManager.release()
+        TraceLogger.trace("IME", "AudioRecorderManager released")
         composeView = null
         _viewModelStore.clear()
+        TraceLogger.trace("IME", "ViewModelStore cleared")
     }
 
     /**

@@ -35,13 +35,18 @@ class CrashHandler private constructor(
             if (!crashShown) {
                 crashShown = true
 
+                // Log the crash
+                TraceLogger.error("CrashHandler", "Uncaught exception in thread ${thread.name}", throwable)
+
                 // Collect crash information
                 val crashInfo = collectCrashInfo(thread, throwable)
+                val traces = TraceLogger.getTraces()
 
                 // Launch error activity
                 val intent = Intent(context, CrashActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     putExtra("crash_info", crashInfo)
+                    putExtra("trace_logs", traces)
                 }
                 context.startActivity(intent)
 
@@ -80,7 +85,12 @@ class CrashHandler private constructor(
         try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             sb.appendLine("  Package: ${packageInfo.packageName}")
-            sb.appendLine("  Version: ${packageInfo.versionName} (${packageInfo.versionCode})")
+            sb.appendLine("  Version: ${packageInfo.versionName} (Build ${packageInfo.versionCode})")
+
+            // Build timestamp (from package install time as proxy)
+            val buildDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(Date(packageInfo.lastUpdateTime))
+            sb.appendLine("  Build Date: $buildDate")
         } catch (e: Exception) {
             sb.appendLine("  Package: ${context.packageName}")
             sb.appendLine("  Version: Unknown")
