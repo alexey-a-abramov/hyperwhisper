@@ -5,6 +5,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.util.Base64
 import android.util.Log
+import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,8 +33,11 @@ class AudioRecorderManager @Inject constructor(
     suspend fun startRecording(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (isRecording) {
+                TraceLogger.trace("AudioRecorder", "Already recording - ignoring start request")
                 return@withContext Result.failure(IllegalStateException("Already recording"))
             }
+
+            TraceLogger.trace("AudioRecorder", "Starting audio recording session")
 
             // Create temp file
             val audioFile = File.createTempFile(
@@ -42,37 +46,70 @@ class AudioRecorderManager @Inject constructor(
                 context.cacheDir
             )
             currentAudioFile = audioFile
+            TraceLogger.trace("AudioRecorder", "Created temp file: ${audioFile.absolutePath}")
 
-            // Initialize MediaRecorder
-            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                MediaRecorder(context)
-            } else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
-            }.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(SAMPLE_RATE)
-                setAudioEncodingBitRate(BIT_RATE)
-                setOutputFile(audioFile.absolutePath)
+            // Try VOICE_RECOGNITION first (works better for keyboards/background services)
+            // Fall back to MIC if that fails
+            val audioSources = listOf(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION",
+                MediaRecorder.AudioSource.MIC to "MIC",
+                MediaRecorder.AudioSource.CAMCORDER to "CAMCORDER"
+            )
 
+            var lastException: Exception? = null
+
+            for ((audioSource, sourceName) in audioSources) {
                 try {
-                    prepare()
-                    start()
+                    TraceLogger.trace("AudioRecorder", "Trying audio source: $sourceName")
+
+                    // Initialize MediaRecorder
+                    mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        MediaRecorder(context)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaRecorder()
+                    }.apply {
+                        setAudioSource(audioSource)
+                        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                        setAudioSamplingRate(SAMPLE_RATE)
+                        setAudioEncodingBitRate(BIT_RATE)
+                        setOutputFile(audioFile.absolutePath)
+
+                        prepare()
+                        start()
+                    }
+
                     isRecording = true
-                    Log.d(TAG, "Recording started: ${audioFile.absolutePath}")
-                    Result.success(Unit)
-                } catch (e: IOException) {
-                    Log.e(TAG, "Failed to start recording", e)
-                    release()
-                    Result.failure(e)
+                    Log.d(TAG, "Recording started with $sourceName: ${audioFile.absolutePath}")
+                    TraceLogger.trace("AudioRecorder", "Recording started successfully with $sourceName")
+                    return@withContext Result.success(Unit)
+
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to start recording with $sourceName: ${e.message}")
+                    TraceLogger.trace("AudioRecorder", "Failed with $sourceName: ${e.message}")
+                    lastException = e
+                    mediaRecorder?.release()
+                    mediaRecorder = null
+                    // Continue to next audio source
                 }
             }
 
-            Result.success(Unit)
+            // All audio sources failed
+            val errorMessage = "Failed to access microphone with any audio source. " +
+                "Last error: ${lastException?.message}. " +
+                "Please ensure microphone permission is granted and no other app is using it."
+
+            Log.e(TAG, errorMessage, lastException)
+            TraceLogger.error("AudioRecorder", errorMessage, lastException)
+
+            cleanup()
+            Result.failure(Exception(errorMessage, lastException))
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting recording", e)
+            Log.e(TAG, "Unexpected error starting recording", e)
+            TraceLogger.error("AudioRecorder", "Unexpected error starting recording", e)
+            cleanup()
             Result.failure(e)
         }
     }
