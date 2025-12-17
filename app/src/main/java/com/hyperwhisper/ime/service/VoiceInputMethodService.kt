@@ -7,9 +7,14 @@ import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Recomposer
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.compositionContext
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnAttach
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -61,6 +66,7 @@ class VoiceInputMethodService : InputMethodService(),
 
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
+    private var recomposer: Recomposer? = null
 
     // Lifecycle for Compose integration
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -123,6 +129,17 @@ class VoiceInputMethodService : InputMethodService(),
             lifecycleRegistry.currentState = Lifecycle.State.STARTED
             TraceLogger.trace("IME", "Lifecycle state set to STARTED")
 
+            // Create manual Recomposer to avoid parent composition context resolution issues
+            val coroutineContext = AndroidUiDispatcher.CurrentThread
+            recomposer = Recomposer(coroutineContext)
+            TraceLogger.trace("IME", "Recomposer created")
+
+            // Launch recomposer in coroutine
+            CoroutineScope(coroutineContext).launch {
+                recomposer?.runRecomposeAndApplyChanges()
+            }
+            TraceLogger.trace("IME", "Recomposer launched")
+
             // Create ComposeView
             composeView = ComposeView(this).apply {
                 // Set up lifecycle owners for proper Compose integration
@@ -131,14 +148,16 @@ class VoiceInputMethodService : InputMethodService(),
                 setViewTreeSavedStateRegistryOwner(this@VoiceInputMethodService)
                 TraceLogger.trace("IME", "ViewTree owners set on ComposeView")
 
-                // Delay setContent until after the view is attached to window
-                // This ensures the view tree owners are properly propagated
-                doOnAttach {
-                    TraceLogger.trace("IME", "ComposeView attached to window, setting content")
-                    setContent {
-                        KeyboardContent()
-                    }
+                // Set the manual composition context to avoid parent resolution
+                setParentCompositionContext(recomposer)
+                TraceLogger.trace("IME", "Parent composition context set to manual Recomposer")
+
+                // Set content immediately - no need to wait for attach
+                // since we're using manual recomposer
+                setContent {
+                    KeyboardContent()
                 }
+                TraceLogger.trace("IME", "Content set on ComposeView")
             }
 
             TraceLogger.trace("IME", "ComposeView created successfully")
@@ -217,6 +236,12 @@ class VoiceInputMethodService : InputMethodService(),
         // Clean up resources
         audioRecorderManager.release()
         TraceLogger.trace("IME", "AudioRecorderManager released")
+
+        // Cancel recomposer
+        recomposer?.cancel()
+        recomposer = null
+        TraceLogger.trace("IME", "Recomposer cancelled")
+
         composeView = null
         _viewModelStore.clear()
         TraceLogger.trace("IME", "ViewModelStore cleared")
