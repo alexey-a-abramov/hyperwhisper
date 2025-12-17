@@ -43,13 +43,8 @@ fun KeyboardScreen(
         }
     }
 
-    // Show error snackbar
-    errorMessage?.let { error ->
-        LaunchedEffect(error) {
-            // Error is displayed in the UI, so just log it
-            viewModel.clearError()
-        }
-    }
+    // DON'T auto-clear errors - let user read them
+    // Errors will be cleared when user taps mic again or manually dismisses
 
     Surface(
         modifier = modifier
@@ -110,7 +105,8 @@ fun KeyboardScreen(
             // Bottom: Status Text or Error
             StatusText(
                 recordingState = recordingState,
-                errorMessage = errorMessage
+                errorMessage = errorMessage,
+                onDismissError = { viewModel.clearError() }
             )
         }
     }
@@ -253,26 +249,61 @@ fun ProcessingIndicator() {
 @Composable
 fun StatusText(
     recordingState: RecordingState,
-    errorMessage: String?
+    errorMessage: String?,
+    onDismissError: () -> Unit
 ) {
-    val text = when {
-        errorMessage != null -> errorMessage
-        recordingState == RecordingState.RECORDING -> "Recording..."
-        recordingState == RecordingState.PROCESSING -> "Processing..."
-        else -> "Tap to speak"
-    }
+    // Show error in a prominent card if present
+    if (errorMessage != null) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = errorMessage,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onDismissError) {
+                    Text(
+                        "DISMISS",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    } else {
+        // Normal status text
+        val text = when (recordingState) {
+            RecordingState.RECORDING -> "Recording... (tap to stop)"
+            RecordingState.PROCESSING -> "Processing audio..."
+            RecordingState.IDLE -> "Tap microphone to start recording"
+            RecordingState.ERROR -> "Error occurred"
+        }
 
-    val color = when {
-        errorMessage != null -> MaterialTheme.colorScheme.error
-        recordingState == RecordingState.RECORDING -> Color(0xFFE53935)
-        recordingState == RecordingState.PROCESSING -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-    }
+        val color = when (recordingState) {
+            RecordingState.RECORDING -> Color(0xFFE53935)
+            RecordingState.PROCESSING -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        }
 
-    Text(
-        text = text,
-        fontSize = 16.sp,
-        fontWeight = if (recordingState != RecordingState.IDLE) FontWeight.Medium else FontWeight.Normal,
-        color = color
-    )
+        Text(
+            text = text,
+            fontSize = 15.sp,
+            fontWeight = if (recordingState != RecordingState.IDLE) FontWeight.Medium else FontWeight.Normal,
+            color = color
+        )
+    }
 }
