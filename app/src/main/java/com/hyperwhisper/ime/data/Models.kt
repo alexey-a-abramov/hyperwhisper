@@ -19,9 +19,36 @@ data class ApiSettings(
     val modelId: String = "whisper-1"
 )
 
-enum class ApiProvider {
-    OPENAI,
-    OPENROUTER
+enum class ApiProvider(
+    val displayName: String,
+    val defaultEndpoint: String,
+    val defaultModels: List<String>
+) {
+    OPENAI(
+        displayName = "OpenAI",
+        defaultEndpoint = "https://api.openai.com/v1/",
+        defaultModels = listOf("whisper-1")
+    ),
+    GROQ(
+        displayName = "Groq",
+        defaultEndpoint = "https://api.groq.com/openai/v1/",
+        defaultModels = listOf("whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en")
+    ),
+    OPENROUTER(
+        displayName = "OpenRouter",
+        defaultEndpoint = "https://openrouter.ai/api/v1/",
+        defaultModels = listOf("whisper-1", "whisper-large-v3")
+    ),
+    GEMINI(
+        displayName = "Google Gemini",
+        defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
+        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro")
+    ),
+    HUGGINGFACE(
+        displayName = "Hugging Face",
+        defaultEndpoint = "https://api-inference.huggingface.co/models/",
+        defaultModels = listOf("openai/whisper-large-v3", "openai/whisper-medium", "openai/whisper-small")
+    )
 }
 
 enum class RecordingState {

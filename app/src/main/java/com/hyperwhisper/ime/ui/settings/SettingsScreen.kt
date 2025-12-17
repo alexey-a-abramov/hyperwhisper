@@ -33,8 +33,11 @@ fun SettingsScreen(
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
     var apiKey by remember { mutableStateOf(apiSettings.apiKey) }
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
+    var showModelSelector by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
+
+    val connectionTestState by viewModel.connectionTestState.collectAsState()
 
     // Update fields when settings change
     LaunchedEffect(apiSettings) {
@@ -42,6 +45,13 @@ fun SettingsScreen(
         baseUrl = apiSettings.baseUrl
         apiKey = apiSettings.apiKey
         modelId = apiSettings.modelId
+    }
+
+    // Auto-update base URL when provider changes
+    LaunchedEffect(provider) {
+        if (baseUrl.isEmpty() || baseUrl == apiSettings.provider.defaultEndpoint) {
+            baseUrl = provider.defaultEndpoint
+        }
     }
 
     Scaffold(
@@ -104,24 +114,99 @@ fun SettingsScreen(
             }
 
             item {
-                OutlinedTextField(
-                    value = modelId,
-                    onValueChange = { modelId = it },
-                    label = { Text("Model ID") },
-                    placeholder = { Text("whisper-1") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                ModelSelector(
+                    selectedModel = modelId,
+                    availableModels = provider.defaultModels,
+                    onModelSelected = { modelId = it }
                 )
             }
 
             item {
-                Button(
-                    onClick = {
-                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId)
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Save API Settings")
+                    Button(
+                        onClick = {
+                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save Settings")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.testConnection(baseUrl, apiKey, modelId)
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
+                    ) {
+                        Text("Test Connection")
+                    }
+                }
+            }
+
+            // Connection test result
+            item {
+                when (val state = connectionTestState) {
+                    is com.hyperwhisper.ui.settings.ConnectionTestState.Testing -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text("Testing connection...")
+                            }
+                        }
+                    }
+                    is com.hyperwhisper.ui.settings.ConnectionTestState.Success -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        ) {
+                            Text(
+                                text = state.message,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                        LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(3000)
+                            viewModel.resetConnectionTestState()
+                        }
+                    }
+                    is com.hyperwhisper.ui.settings.ConnectionTestState.Error -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = state.message,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        LaunchedEffect(Unit) {
+                            kotlinx.coroutines.delay(5000)
+                            viewModel.resetConnectionTestState()
+                        }
+                    }
+                    else -> {}
                 }
             }
 
@@ -185,10 +270,7 @@ fun ProviderSelector(
         onExpandedChange = { expanded = it }
     ) {
         OutlinedTextField(
-            value = when (selectedProvider) {
-                ApiProvider.OPENAI -> "OpenAI / Groq"
-                ApiProvider.OPENROUTER -> "OpenRouter"
-            },
+            value = selectedProvider.displayName,
             onValueChange = {},
             readOnly = true,
             label = { Text("API Provider") },
@@ -203,20 +285,68 @@ fun ProviderSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            DropdownMenuItem(
-                text = { Text("OpenAI / Groq") },
-                onClick = {
-                    onProviderSelected(ApiProvider.OPENAI)
-                    expanded = false
+            ApiProvider.values().forEach { provider ->
+                DropdownMenuItem(
+                    text = { Text(provider.displayName) },
+                    onClick = {
+                        onProviderSelected(provider)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModelSelector(
+    selectedModel: String,
+    availableModels: List<String>,
+    onModelSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var customModel by remember { mutableStateOf(selectedModel) }
+    val isCustomModel = !availableModels.contains(selectedModel)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selectedModel,
+            onValueChange = {
+                customModel = it
+                onModelSelected(it)
+            },
+            label = { Text("Model ID") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            singleLine = true,
+            supportingText = {
+                if (isCustomModel && selectedModel.isNotEmpty()) {
+                    Text("Custom model")
                 }
-            )
-            DropdownMenuItem(
-                text = { Text("OpenRouter") },
-                onClick = {
-                    onProviderSelected(ApiProvider.OPENROUTER)
-                    expanded = false
-                }
-            )
+            }
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            availableModels.forEach { model ->
+                DropdownMenuItem(
+                    text = { Text(model) },
+                    onClick = {
+                        onModelSelected(model)
+                        customModel = model
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
