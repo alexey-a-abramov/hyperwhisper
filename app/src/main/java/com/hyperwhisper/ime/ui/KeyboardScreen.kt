@@ -10,6 +10,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,11 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.VoiceMode
 
@@ -173,14 +177,17 @@ fun KeyboardScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Center: Microphone Button + Cancel Button
-            Box(
+            // Middle section: Mic (left) + Controls (right)
+            Row(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Left side: Microphone Button + Cancel Button
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     MicrophoneButton(
                         recordingState = recordingState,
@@ -201,21 +208,50 @@ fun KeyboardScreen(
                         }
                     }
                 }
+
+                // Right side: Delete and Enter buttons stacked
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    // Delete button with repeat functionality
+                    RepeatableDeleteButton(
+                        onDelete = onDelete,
+                        modifier = Modifier.width(80.dp).height(50.dp)
+                    )
+
+                    // Enter button
+                    Button(
+                        onClick = onEnter,
+                        modifier = Modifier.width(80.dp).height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardReturn,
+                            contentDescription = "Enter",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom Row: Text Input Controls
+            // Bottom row: Paste (left) + Space button (center/right)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Paste clipboard button (left side)
                 if (clipboardPreview.isNotEmpty()) {
                     Button(
                         onClick = onInsertClipboard,
-                        modifier = Modifier.padding(end = 8.dp),
+                        modifier = Modifier.height(48.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -241,61 +277,19 @@ fun KeyboardScreen(
                             )
                         }
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(1.dp))
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Right side controls
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Space button (takes remaining width)
+                Button(
+                    onClick = onSpace,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    // Delete button
-                    OutlinedButton(
-                        onClick = onDelete,
-                        modifier = Modifier.height(40.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Backspace,
-                            contentDescription = "Delete",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Space button
-                    Button(
-                        onClick = onSpace,
-                        modifier = Modifier.height(40.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            "SPACE",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Enter button
-                    Button(
-                        onClick = onEnter,
-                        modifier = Modifier.height(40.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardReturn,
-                            contentDescription = "Enter",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Text(
+                        "SPACE",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -450,6 +444,51 @@ fun ProcessingIndicator() {
             modifier = Modifier.size(60.dp),
             strokeWidth = 5.dp,
             color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun RepeatableDeleteButton(
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    var isPressed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            // Initial delay before repeat starts (500ms like typical keyboards)
+            delay(500)
+            // Repeat deletion while pressed (50ms between deletions for fast repeat)
+            while (isPressed) {
+                onDelete()
+                delay(50)
+            }
+        }
+    }
+
+    OutlinedButton(
+        onClick = { /* Handled by pointer input */ },
+        modifier = modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    onDelete() // Immediate first delete
+                    tryAwaitRelease()
+                    isPressed = false
+                }
+            )
+        },
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.error
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Backspace,
+            contentDescription = "Delete",
+            modifier = Modifier.size(24.dp)
         )
     }
 }

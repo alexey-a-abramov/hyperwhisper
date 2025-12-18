@@ -8,6 +8,8 @@ A production-ready custom Android keyboard (InputMethodService) that replaces st
 - 🧠 **Multiple Processing Modes**: Verbatim, Polite, Casual, Translation, and custom modes
 - 🔄 **Strategy Pattern API**: Supports both Whisper-style transcription and Chat Completion with audio
 - ⚙️ **BYOK (Bring Your Own Key)**: Configure your own API keys for OpenAI, Groq, or OpenRouter
+- ⌨️ **Intuitive Keyboard Layout**: Horizontal space bar, convenient button placement, and delete with repeat
+- 📋 **Smart Clipboard**: One-tap paste with live preview
 - 🎨 **Modern UI**: Built with Jetpack Compose and Material 3
 - 🏗️ **Clean Architecture**: MVVM pattern with Hilt dependency injection
 
@@ -133,6 +135,32 @@ The app implements two distinct API strategies:
 4. Speak your message
 5. Tap again to stop and process
 6. The transcribed/transformed text will be automatically inserted
+
+## Keyboard Layout
+
+The keyboard features an ergonomic layout optimized for voice input:
+
+```
+┌────────────────────────────────────────────────┐
+│ [←] [Mode Selector ▼]              [⚙️]       │
+│ [Provider / Model Info]                   [ℹ️] │
+│                                                 │
+│     🎤                           [⌫ Delete]     │
+│   (Voice)                        [↵ Enter]     │
+│                                                 │
+│ [📋 Paste]  [━━━━━ SPACE ━━━━━━━━━━━━━━━]     │
+└────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+- **Voice Button**: Large, centered button on the left for easy thumb access
+- **Delete Button**: Hold to repeat (500ms delay, then rapid repeat) - typical keyboard behavior
+- **Enter Button**: Positioned above space for quick access
+- **Space Bar**: Full-width horizontal button at the bottom
+- **Paste Button**: Shows clipboard preview when content is available
+- **Mode Selector**: Quick access to voice processing modes
+- **Settings**: Direct access to configuration
 
 ## Voice Modes
 
@@ -273,17 +301,28 @@ Edit Compose files in `ui/` package. The keyboard UI is in `KeyboardScreen.kt`.
 
 ## Contributing
 
-This is a production-ready template. Customize it for your needs:
+Contributions are welcome! This is a production-ready template you can customize:
 - Add more API providers
 - Implement caching
 - Add voice activity detection
 - Support more audio formats
 - Add pronunciation feedback
 
+Please feel free to submit issues and pull requests.
+
 ## License
 
-This project is provided as-is for educational and commercial use.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+This project is free to use for personal and commercial purposes.
 
 ## Credits
 
 Built with ❤️ using Kotlin, Jetpack Compose, and modern Android architecture.
+
+## Support
+
+If you encounter issues or have questions:
+- Check the [Troubleshooting](#troubleshooting) section
+- Open an issue on GitHub
+- Review the API provider documentation
