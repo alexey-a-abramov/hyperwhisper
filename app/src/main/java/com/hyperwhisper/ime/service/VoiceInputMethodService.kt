@@ -175,6 +175,21 @@ class VoiceInputMethodService : InputMethodService(),
                 viewModel = viewModel,
                 onTextCommit = { text ->
                     commitText(text)
+                },
+                onDelete = {
+                    deleteText()
+                },
+                onSpace = {
+                    commitText(" ")
+                },
+                onEnter = {
+                    commitText("\n")
+                },
+                onInsertClipboard = {
+                    insertClipboard()
+                },
+                onSwitchKeyboard = {
+                    switchToPreviousKeyboard()
                 }
             )
         }
@@ -192,6 +207,51 @@ class VoiceInputMethodService : InputMethodService(),
             Log.d(TAG, "Committed text: $text")
         } catch (e: Exception) {
             Log.e(TAG, "Error committing text", e)
+        }
+    }
+
+    /**
+     * Delete one character before the cursor
+     */
+    private fun deleteText() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.deleteSurroundingText(1, 0)
+            Log.d(TAG, "Deleted character")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting text", e)
+        }
+    }
+
+    /**
+     * Insert clipboard contents at cursor position
+     */
+    private fun insertClipboard() {
+        try {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = clipboard.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).text?.toString() ?: ""
+                if (text.isNotEmpty()) {
+                    commitText(text)
+                    Log.d(TAG, "Inserted clipboard text: ${text.take(50)}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error inserting clipboard", e)
+        }
+    }
+
+    /**
+     * Show input method picker to switch keyboard
+     */
+    private fun switchToPreviousKeyboard() {
+        try {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showInputMethodPicker()
+            Log.d(TAG, "Showing input method picker")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing input method picker", e)
         }
     }
 

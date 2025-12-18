@@ -1,16 +1,20 @@
 package com.hyperwhisper.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +23,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.RecordingState
@@ -28,6 +33,11 @@ import com.hyperwhisper.data.VoiceMode
 fun KeyboardScreen(
     viewModel: KeyboardViewModel,
     onTextCommit: (String) -> Unit,
+    onDelete: () -> Unit = {},
+    onSpace: () -> Unit = {},
+    onEnter: () -> Unit = {},
+    onInsertClipboard: () -> Unit = {},
+    onSwitchKeyboard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -36,6 +46,27 @@ fun KeyboardScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
+    val apiSettings by viewModel.apiSettings.collectAsState()
+
+    var showConfigInfo by remember { mutableStateOf(false) }
+
+    // Get clipboard preview
+    val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+    var clipboardPreview by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        // Update clipboard preview periodically
+        while (true) {
+            val clip = clipboardManager.primaryClip
+            val text = clip?.getItemAt(0)?.text?.toString() ?: ""
+            clipboardPreview = if (text.length > 20) {
+                text.take(20) + "..."
+            } else {
+                text
+            }
+            kotlinx.coroutines.delay(1000) // Check every second
+        }
+    }
 
     // Auto-commit transcribed text
     LaunchedEffect(transcribedText) {
@@ -48,25 +79,35 @@ fun KeyboardScreen(
     // DON'T auto-clear errors - let user read them
     // Errors will be cleared when user taps mic again or manually dismisses
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(280.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+    Box(modifier = modifier.fillMaxWidth().height(320.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
         ) {
-            // Top Row: Mode Selector + Settings Button
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            // Top Row: Switch Keyboard + Mode Selector + Settings Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Switch to Previous Keyboard button
+                IconButton(onClick = onSwitchKeyboard) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Switch Keyboard",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
                 ModeSelector(
                     modes = voiceModes,
                     selectedModeId = selectedModeId,
@@ -75,7 +116,7 @@ fun KeyboardScreen(
                     modifier = Modifier.weight(1f)
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
                 IconButton(
                     onClick = {
@@ -92,23 +133,188 @@ fun KeyboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Center: Microphone Button
-            MicrophoneButton(
-                recordingState = recordingState,
-                onStartRecording = { viewModel.startRecording() },
-                onStopRecording = { viewModel.stopRecording() },
-                modifier = Modifier.weight(1f)
+            // Provider/Model Info Row
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${apiSettings.provider.displayName} / ${apiSettings.modelId}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1
+                        )
+                    }
+                    IconButton(
+                        onClick = { showConfigInfo = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Configuration Info",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Center: Microphone Button + Cancel Button
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MicrophoneButton(
+                        recordingState = recordingState,
+                        onStartRecording = { viewModel.startRecording() },
+                        onStopRecording = { viewModel.stopRecording() },
+                        modifier = Modifier
+                    )
+
+                    // Show Cancel button during recording
+                    if (recordingState == RecordingState.RECORDING) {
+                        OutlinedButton(
+                            onClick = { viewModel.cancelRecording() },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("CANCEL", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Bottom Row: Text Input Controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Paste clipboard button (left side)
+                if (clipboardPreview.isNotEmpty()) {
+                    Button(
+                        onClick = onInsertClipboard,
+                        modifier = Modifier.padding(end = 8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Paste",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                "PASTE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                clipboardPreview,
+                                fontSize = 9.sp,
+                                maxLines = 1,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Right side controls
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Delete button
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Backspace,
+                            contentDescription = "Delete",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Space button
+                    Button(
+                        onClick = onSpace,
+                        modifier = Modifier.height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            "SPACE",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    // Enter button
+                    Button(
+                        onClick = onEnter,
+                        modifier = Modifier.height(40.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardReturn,
+                            contentDescription = "Enter",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+        }
+
+        // Show Error Overlay when there's an error (as overlay within keyboard)
+        errorMessage?.let { error ->
+            ErrorOverlay(
+                errorMessage = error,
+                onDismiss = { viewModel.clearError() },
+                context = context
             )
+        }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bottom: Status Text or Error
-            StatusText(
-                recordingState = recordingState,
-                errorMessage = errorMessage,
-                onDismissError = { viewModel.clearError() }
+        // Show Config Info Dialog
+        if (showConfigInfo) {
+            ConfigInfoDialog(
+                apiSettings = apiSettings,
+                onDismiss = { showConfigInfo = false }
             )
         }
     }
@@ -192,14 +398,14 @@ fun MicrophoneButton(
 fun IdleMicButton(onClick: () -> Unit) {
     FloatingActionButton(
         onClick = onClick,
-        modifier = Modifier.size(100.dp),
+        modifier = Modifier.size(72.dp),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = Color.White
     ) {
         Icon(
             imageVector = Icons.Default.Mic,
             contentDescription = "Start Recording",
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(36.dp)
         )
     }
 }
@@ -221,7 +427,7 @@ fun RecordingMicButton(onClick: () -> Unit) {
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier
-            .size(100.dp)
+            .size(72.dp)
             .scale(scale),
         containerColor = Color(0xFFE53935), // Red
         contentColor = Color.White
@@ -229,7 +435,7 @@ fun RecordingMicButton(onClick: () -> Unit) {
         Icon(
             imageVector = Icons.Default.Stop,
             contentDescription = "Stop Recording",
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(36.dp)
         )
     }
 }
@@ -237,112 +443,272 @@ fun RecordingMicButton(onClick: () -> Unit) {
 @Composable
 fun ProcessingIndicator() {
     Box(
-        modifier = Modifier.size(100.dp),
+        modifier = Modifier.size(72.dp),
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(
-            modifier = Modifier.size(80.dp),
-            strokeWidth = 6.dp,
+            modifier = Modifier.size(60.dp),
+            strokeWidth = 5.dp,
             color = MaterialTheme.colorScheme.primary
         )
     }
 }
 
 @Composable
-fun StatusText(
-    recordingState: RecordingState,
-    errorMessage: String?,
-    onDismissError: () -> Unit
+fun ErrorOverlay(
+    errorMessage: String,
+    onDismiss: () -> Unit,
+    context: Context
 ) {
-    val context = LocalContext.current
+    val isPermissionError = errorMessage.contains("permission", ignoreCase = true)
 
-    // Show error in a prominent card if present
-    if (errorMessage != null) {
-        val isPermissionError = errorMessage.contains("permission", ignoreCase = true)
-
+    // Full-screen overlay within keyboard (not a separate Dialog window)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 16.dp
+    ) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer
-            )
+            ),
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Title
                 Text(
-                    text = errorMessage,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = "Error",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
 
-                Row(
+                // Error message (bigger text, scrollable if needed)
+                Text(
+                    text = errorMessage,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Action buttons
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Copy button
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Error Message", errorMessage)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Error copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                            contentColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "COPY ERROR",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Open Settings button (for permission errors)
                     if (isPermissionError) {
                         Button(
                             onClick = {
-                                // Open app settings
                                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                     data = Uri.fromParts("package", context.packageName, null)
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 context.startActivity(intent)
                             },
+                            modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.onErrorContainer,
                                 contentColor = MaterialTheme.colorScheme.errorContainer
-                            ),
-                            modifier = Modifier.weight(1f)
+                            )
                         ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
                                 "OPEN SETTINGS",
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
+                    // Dismiss button
                     OutlinedButton(
-                        onClick = onDismissError,
-                        modifier = Modifier.weight(1f),
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     ) {
                         Text(
                             "DISMISS",
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
         }
-    } else {
-        // Normal status text
-        val text = when (recordingState) {
-            RecordingState.RECORDING -> "Recording... (tap to stop)"
-            RecordingState.PROCESSING -> "Processing audio..."
-            RecordingState.IDLE -> "Tap microphone to start recording"
-            RecordingState.ERROR -> "Error occurred"
-        }
+    }
+}
 
-        val color = when (recordingState) {
-            RecordingState.RECORDING -> Color(0xFFE53935)
-            RecordingState.PROCESSING -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        }
+@Composable
+fun ConfigInfoDialog(
+    apiSettings: com.hyperwhisper.data.ApiSettings,
+    onDismiss: () -> Unit
+) {
+    // Full-screen overlay within keyboard (not a separate Dialog window)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 16.dp
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        "Current Configuration",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
+                Divider()
+
+                // Content (scrollable if needed)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Provider
+                    ConfigInfoItem(
+                        label = "Provider",
+                        value = apiSettings.provider.displayName
+                    )
+
+                    // Model
+                    ConfigInfoItem(
+                        label = "Model",
+                        value = apiSettings.modelId
+                    )
+
+                    // Endpoint
+                    ConfigInfoItem(
+                        label = "Base URL",
+                        value = apiSettings.baseUrl,
+                        smallText = true
+                    )
+
+                    // Language
+                    ConfigInfoItem(
+                        label = "Language",
+                        value = if (apiSettings.language.isEmpty()) "Auto-detect" else apiSettings.language
+                    )
+
+                    // API Key
+                    ConfigInfoItem(
+                        label = "API Key",
+                        value = if (apiSettings.apiKey.isEmpty()) "Not configured"
+                        else "${apiSettings.apiKey.take(10)}${"*".repeat(20)}",
+                        smallText = true
+                    )
+                }
+
+                // Close button
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(
+                        "CLOSE",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConfigInfoItem(
+    label: String,
+    value: String,
+    smallText: Boolean = false
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = if (recordingState != RecordingState.IDLE) FontWeight.Medium else FontWeight.Normal,
-            color = color
+            label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
         )
+        Text(
+            value,
+            fontSize = if (smallText) 12.sp else 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = if (smallText) 16.sp else 18.sp
+        )
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
     }
 }

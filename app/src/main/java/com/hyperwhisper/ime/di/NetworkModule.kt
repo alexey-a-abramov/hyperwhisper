@@ -148,16 +148,18 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideTranscriptionStrategy(
-        apiService: TranscriptionApiService
+        apiService: TranscriptionApiService,
+        settingsRepository: SettingsRepository
     ): TranscriptionStrategy {
-        return TranscriptionStrategy(apiService)
+        return TranscriptionStrategy(apiService, settingsRepository)
     }
 
     @Provides
     @Singleton
     fun provideChatCompletionStrategy(
-        apiService: ChatCompletionApiService
+        apiService: ChatCompletionApiService,
+        settingsRepository: SettingsRepository
     ): ChatCompletionStrategy {
-        return ChatCompletionStrategy(apiService)
+        return ChatCompletionStrategy(apiService, settingsRepository)
     }
 }

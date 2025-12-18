@@ -53,7 +53,8 @@ class SettingsViewModel @Inject constructor(
         provider: ApiProvider,
         baseUrl: String,
         apiKey: String,
-        modelId: String
+        modelId: String,
+        language: String = ""
     ) {
         viewModelScope.launch {
             try {
@@ -61,12 +62,24 @@ class SettingsViewModel @Inject constructor(
                     provider = provider,
                     baseUrl = baseUrl.trim(),
                     apiKey = apiKey.trim(),
-                    modelId = modelId.trim()
+                    modelId = modelId.trim(),
+                    language = language.trim()
                 )
                 settingsRepository.saveApiSettings(settings)
-                Log.d(TAG, "API settings saved: $provider, $baseUrl")
+                Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId, language: ${language.ifEmpty { "auto" }}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving API settings", e)
+            }
+        }
+    }
+
+    fun resetToDefaults(provider: ApiProvider) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.resetApiSettingsToDefaults(provider)
+                Log.d(TAG, "Reset settings to defaults for provider: ${provider.displayName}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resetting to defaults", e)
             }
         }
     }

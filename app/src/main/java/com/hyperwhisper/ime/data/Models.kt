@@ -16,7 +16,8 @@ data class ApiSettings(
     val provider: ApiProvider = ApiProvider.OPENAI,
     val baseUrl: String = "",
     val apiKey: String = "",
-    val modelId: String = "whisper-1"
+    val modelId: String = "whisper-1",
+    val language: String = "" // ISO-639-1 code (e.g., "en", "es", "ru") - empty for auto-detect
 )
 
 enum class ApiProvider(
@@ -25,12 +26,42 @@ enum class ApiProvider(
     val defaultModels: List<String>
 ) {
     OPENAI(
-        displayName = "OpenAI",
+        displayName = "OpenAI Whisper",
         defaultEndpoint = "https://api.openai.com/v1/",
         defaultModels = listOf("whisper-1")
     ),
+    DEEPGRAM(
+        displayName = "Deepgram",
+        defaultEndpoint = "https://api.deepgram.com/v1/",
+        defaultModels = listOf("nova-2", "nova-3", "nova", "whisper", "base", "enhanced")
+    ),
+    ASSEMBLYAI(
+        displayName = "AssemblyAI",
+        defaultEndpoint = "https://api.assemblyai.com/v2/",
+        defaultModels = listOf("best", "nano")
+    ),
+    GOOGLE_CLOUD(
+        displayName = "Google Cloud Speech",
+        defaultEndpoint = "https://speech.googleapis.com/v1/",
+        defaultModels = listOf("chirp", "long", "phone_call", "video", "command_and_search", "default")
+    ),
+    AWS_TRANSCRIBE(
+        displayName = "AWS Transcribe",
+        defaultEndpoint = "https://transcribe.us-east-1.amazonaws.com/",
+        defaultModels = listOf("standard", "medical", "call-analytics")
+    ),
+    AZURE_SPEECH(
+        displayName = "Azure AI Speech",
+        defaultEndpoint = "https://eastus.stt.speech.microsoft.com/",
+        defaultModels = listOf("default", "conversation", "dictation", "interactive")
+    ),
+    REVAI(
+        displayName = "Rev.ai",
+        defaultEndpoint = "https://api.rev.ai/speechtotext/v1/",
+        defaultModels = listOf("rev", "rev_human_fallback")
+    ),
     GROQ(
-        displayName = "Groq",
+        displayName = "Groq Whisper",
         defaultEndpoint = "https://api.groq.com/openai/v1/",
         defaultModels = listOf("whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en")
     ),
@@ -42,7 +73,7 @@ enum class ApiProvider(
     GEMINI(
         displayName = "Google Gemini",
         defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
-        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro")
+        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp")
     ),
     HUGGINGFACE(
         displayName = "Hugging Face",

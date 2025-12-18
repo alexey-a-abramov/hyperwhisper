@@ -7,7 +7,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +36,9 @@ fun SettingsScreen(
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
     var apiKey by remember { mutableStateOf(apiSettings.apiKey) }
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
+    var language by remember { mutableStateOf(apiSettings.language) }
     var showModelSelector by remember { mutableStateOf(false) }
+    var showModelInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
 
@@ -45,6 +50,7 @@ fun SettingsScreen(
         baseUrl = apiSettings.baseUrl
         apiKey = apiSettings.apiKey
         modelId = apiSettings.modelId
+        language = apiSettings.language
     }
 
     // Auto-update base URL when provider changes
@@ -90,15 +96,31 @@ fun SettingsScreen(
             }
 
             item {
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text("Base URL") },
-                    placeholder = { Text("https://api.openai.com/v1/") },
-                    supportingText = { Text("Must end with /") },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = baseUrl,
+                        onValueChange = { baseUrl = it },
+                        label = { Text("Base URL") },
+                        placeholder = { Text(provider.defaultEndpoint) },
+                        supportingText = { Text("Must end with /") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            baseUrl = provider.defaultEndpoint
+                            modelId = provider.defaultModels.firstOrNull() ?: modelId
+                            viewModel.resetToDefaults(provider)
+                        },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("RESET")
+                    }
+                }
             }
 
             item {
@@ -114,10 +136,37 @@ fun SettingsScreen(
             }
 
             item {
-                ModelSelector(
-                    selectedModel = modelId,
-                    availableModels = provider.defaultModels,
-                    onModelSelected = { modelId = it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ModelSelector(
+                        selectedModel = modelId,
+                        availableModels = provider.defaultModels,
+                        onModelSelected = { modelId = it },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    IconButton(onClick = { showModelInfo = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Model Info",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            item {
+                OutlinedTextField(
+                    value = language,
+                    onValueChange = { language = it },
+                    label = { Text("Language (optional)") },
+                    placeholder = { Text("en, es, ru, etc.") },
+                    supportingText = { Text("ISO-639-1 code for Whisper. Leave empty for auto-detect") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
 
@@ -128,7 +177,7 @@ fun SettingsScreen(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId)
+                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, language)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -246,6 +295,14 @@ fun SettingsScreen(
         }
     }
 
+    if (showModelInfo) {
+        ModelInfoDialog(
+            provider = provider,
+            modelId = modelId,
+            onDismiss = { showModelInfo = false }
+        )
+    }
+
     if (showAddModeDialog) {
         AddModeDialog(
             onDismiss = { showAddModeDialog = false },
@@ -303,7 +360,8 @@ fun ProviderSelector(
 fun ModelSelector(
     selectedModel: String,
     availableModels: List<String>,
-    onModelSelected: (String) -> Unit
+    onModelSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     var customModel by remember { mutableStateOf(selectedModel) }
@@ -311,7 +369,8 @@ fun ModelSelector(
 
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = it }
+        onExpandedChange = { expanded = it },
+        modifier = modifier
     ) {
         OutlinedTextField(
             value = selectedModel,
@@ -450,6 +509,179 @@ fun AddModeDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun ModelInfoDialog(
+    provider: ApiProvider,
+    modelId: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text("Model Information")
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Provider name
+                Text(
+                    text = "Provider: ${provider.displayName}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+
+                Divider()
+
+                // Current model
+                Text(
+                    text = "Selected Model:",
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = modelId,
+                    fontSize = 15.sp
+                )
+
+                Divider()
+
+                // Provider-specific information
+                when (provider) {
+                    ApiProvider.OPENAI -> {
+                        Text("OpenAI Whisper", fontWeight = FontWeight.Medium)
+                        Text("• Multi-language support (98+ languages)", fontSize = 14.sp)
+                        Text("• Translation to English", fontSize = 14.sp)
+                        Text("• Word-level timestamps", fontSize = 14.sp)
+                        Text("• Max file size: 25 MB", fontSize = 14.sp)
+                        Text("• Supports: mp3, mp4, m4a, wav, webm", fontSize = 14.sp)
+                    }
+                    ApiProvider.DEEPGRAM -> {
+                        Text("Deepgram Nova", fontWeight = FontWeight.Medium)
+                        Text("• Extremely low latency", fontSize = 14.sp)
+                        Text("• Speaker diarization", fontSize = 14.sp)
+                        Text("• Smart formatting (punctuation)", fontSize = 14.sp)
+                        Text("• Topic detection", fontSize = 14.sp)
+                        Text("• Real-time & Batch processing", fontSize = 14.sp)
+                    }
+                    ApiProvider.ASSEMBLYAI -> {
+                        Text("AssemblyAI Universal", fontWeight = FontWeight.Medium)
+                        Text("• Speaker diarization", fontSize = 14.sp)
+                        Text("• Audio intelligence features", fontSize = 14.sp)
+                        Text("• PII Redaction", fontSize = 14.sp)
+                        Text("• Auto-language detection", fontSize = 14.sp)
+                        Text("• Async workflow", fontSize = 14.sp)
+                    }
+                    ApiProvider.GOOGLE_CLOUD -> {
+                        Text("Google Cloud Speech", fontWeight = FontWeight.Medium)
+                        Text("• Chirp Universal Speech Model", fontSize = 14.sp)
+                        Text("• Domain-specific models", fontSize = 14.sp)
+                        Text("• Profanity filtering", fontSize = 14.sp)
+                        Text("• Automatic punctuation", fontSize = 14.sp)
+                        Text("• Noise robustness", fontSize = 14.sp)
+                    }
+                    ApiProvider.AWS_TRANSCRIBE -> {
+                        Text("AWS Transcribe", fontWeight = FontWeight.Medium)
+                        Text("• Custom vocabulary", fontSize = 14.sp)
+                        Text("• Vocabulary filtering", fontSize = 14.sp)
+                        Text("• Speaker identification", fontSize = 14.sp)
+                        Text("• Channel identification", fontSize = 14.sp)
+                        Text("• Medical & Standard models", fontSize = 14.sp)
+                    }
+                    ApiProvider.AZURE_SPEECH -> {
+                        Text("Azure AI Speech", fontWeight = FontWeight.Medium)
+                        Text("• Custom Speech training", fontSize = 14.sp)
+                        Text("• Pronunciation assessment", fontSize = 14.sp)
+                        Text("• Phrase lists (dynamic grammar)", fontSize = 14.sp)
+                        Text("• Silent pause support", fontSize = 14.sp)
+                        Text("• Fast/Batch modes", fontSize = 14.sp)
+                    }
+                    ApiProvider.REVAI -> {
+                        Text("Rev.ai", fontWeight = FontWeight.Medium)
+                        Text("• High accuracy on accents", fontSize = 14.sp)
+                        Text("• Human transcription fallback", fontSize = 14.sp)
+                        Text("• Speaker identification", fontSize = 14.sp)
+                        Text("• Custom vocabularies", fontSize = 14.sp)
+                        Text("• Async workflow", fontSize = 14.sp)
+                    }
+                    ApiProvider.GROQ -> {
+                        Text("Groq Whisper", fontWeight = FontWeight.Medium)
+                        Text("• Ultra-fast inference", fontSize = 14.sp)
+                        Text("• Whisper large-v3 models", fontSize = 14.sp)
+                        Text("• Distil-whisper (faster)", fontSize = 14.sp)
+                        Text("• Multi-language support", fontSize = 14.sp)
+                        Text("• OpenAI-compatible API", fontSize = 14.sp)
+                    }
+                    ApiProvider.OPENROUTER -> {
+                        Text("OpenRouter", fontWeight = FontWeight.Medium)
+                        Text("• Access to multiple models", fontSize = 14.sp)
+                        Text("• Unified API interface", fontSize = 14.sp)
+                        Text("• Pay-per-use pricing", fontSize = 14.sp)
+                        Text("• No subscriptions", fontSize = 14.sp)
+                    }
+                    ApiProvider.GEMINI -> {
+                        Text("Google Gemini", fontWeight = FontWeight.Medium)
+                        Text("• Multimodal AI model", fontSize = 14.sp)
+                        Text("• Audio + text processing", fontSize = 14.sp)
+                        Text("• Context understanding", fontSize = 14.sp)
+                        Text("• Latest 2.0 Flash model", fontSize = 14.sp)
+                    }
+                    ApiProvider.HUGGINGFACE -> {
+                        Text("Hugging Face", fontWeight = FontWeight.Medium)
+                        Text("• Open source models", fontSize = 14.sp)
+                        Text("• Whisper variants", fontSize = 14.sp)
+                        Text("• Free inference API", fontSize = 14.sp)
+                        Text("• Community-driven", fontSize = 14.sp)
+                    }
+                }
+
+                Divider()
+
+                // Available models
+                Text(
+                    text = "Available Models:",
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                provider.defaultModels.forEach { model ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (model == modelId) Icons.Default.CheckCircle else Icons.Default.Circle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (model == modelId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            text = model,
+                            fontSize = 14.sp,
+                            fontWeight = if (model == modelId) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
             }
         }
     )

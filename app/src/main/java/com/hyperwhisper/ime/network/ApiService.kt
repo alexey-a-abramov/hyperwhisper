@@ -17,7 +17,8 @@ interface TranscriptionApiService {
     suspend fun transcribe(
         @Part file: MultipartBody.Part,
         @Part("model") model: RequestBody,
-        @Part("response_format") responseFormat: RequestBody? = null
+        @Part("response_format") responseFormat: RequestBody? = null,
+        @Part("language") language: RequestBody? = null
     ): Response<TranscriptionResponse>
 }
 
