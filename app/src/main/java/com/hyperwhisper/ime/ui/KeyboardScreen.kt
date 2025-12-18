@@ -104,7 +104,7 @@ fun KeyboardScreen(
                 // Switch to Previous Keyboard button
                 IconButton(onClick = onSwitchKeyboard) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.Default.Keyboard,
                         contentDescription = "Switch Keyboard",
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -336,11 +336,14 @@ fun ModeSelector(
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
+            singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            textStyle = MaterialTheme.typography.bodySmall,
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth()
+                .height(48.dp)
         )
 
         ExposedDropdownMenu(
@@ -453,7 +456,6 @@ fun RepeatableDeleteButton(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
 
     LaunchedEffect(isPressed) {
@@ -468,28 +470,34 @@ fun RepeatableDeleteButton(
         }
     }
 
-    OutlinedButton(
-        onClick = { /* Handled by pointer input */ },
-        modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onPress = {
-                    isPressed = true
-                    onDelete() // Immediate first delete
-                    tryAwaitRelease()
-                    isPressed = false
-                }
-            )
-        },
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.error
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    Surface(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        onDelete() // Immediate first delete
+                        tryAwaitRelease()
+                        isPressed = false
+                    }
+                )
+            },
+        shape = RoundedCornerShape(8.dp),
+        color = Color.Transparent,
+        border = ButtonDefaults.outlinedButtonBorder,
+        contentColor = MaterialTheme.colorScheme.error
     ) {
-        Icon(
-            imageVector = Icons.Default.Backspace,
-            contentDescription = "Delete",
-            modifier = Modifier.size(24.dp)
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Backspace,
+                contentDescription = "Delete",
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
     }
 }
 
