@@ -140,12 +140,20 @@ fun KeyboardScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Provider/Model Info Row with Output Language
+            // Language & Model Info Row: Input | Model | Output
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Provider/Model Info
+                // Input Language Selector (LEFT)
+                InputLanguageButton(
+                    currentLanguage = apiSettings.inputLanguage,
+                    onLanguageChange = { viewModel.setInputLanguage(it) },
+                    enabled = recordingState == RecordingState.IDLE
+                )
+
+                // Provider/Model Info (MIDDLE)
                 Surface(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
@@ -154,34 +162,41 @@ fun KeyboardScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "${apiSettings.provider.displayName} / ${apiSettings.modelId}",
-                                fontSize = 11.sp,
+                                text = "${apiSettings.provider.displayName}",
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = apiSettings.modelId,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Light,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                                 maxLines = 1
                             )
                         }
                         IconButton(
                             onClick = { showConfigInfo = true },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = "Configuration Info",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
 
-                // Output Language Quick Selector
+                // Output Language Selector (RIGHT)
                 OutputLanguageButton(
                     currentLanguage = apiSettings.outputLanguage,
                     onLanguageChange = { viewModel.setOutputLanguage(it) },
@@ -775,6 +790,49 @@ private fun ConfigInfoItem(
 }
 
 @Composable
+fun InputLanguageButton(
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val currentLang = SUPPORTED_LANGUAGES.find { it.code == currentLanguage }
+    val displayText = if (currentLanguage.isEmpty()) "Auto" else currentLang?.code?.uppercase() ?: currentLanguage.uppercase()
+
+    Surface(
+        onClick = {
+            // Cycle through common input languages: Auto, EN, ES, FR, DE, RU, ZH, JA, FA, HI
+            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja", "fa", "hi")
+            val currentIndex = commonLanguages.indexOf(currentLanguage)
+            val nextIndex = (currentIndex + 1) % commonLanguages.size
+            onLanguageChange(commonLanguages[nextIndex])
+        },
+        enabled = enabled,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "In",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Light
+            )
+            Text(
+                text = displayText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+@Composable
 fun OutputLanguageButton(
     currentLanguage: String,
     onLanguageChange: (String) -> Unit,
@@ -786,8 +844,8 @@ fun OutputLanguageButton(
 
     Surface(
         onClick = {
-            // Cycle through common languages: Auto, EN, ES, FR, DE, RU, ZH, JA
-            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja")
+            // Cycle through common output languages: Auto, EN, ES, FR, DE, RU, ZH, JA, FA, HI
+            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja", "fa", "hi")
             val currentIndex = commonLanguages.indexOf(currentLanguage)
             val nextIndex = (currentIndex + 1) % commonLanguages.size
             onLanguageChange(commonLanguages[nextIndex])

@@ -222,6 +222,18 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Set input language hint for quick switching from keyboard
+     */
+    fun setInputLanguage(languageCode: String) {
+        viewModelScope.launch {
+            val currentSettings = apiSettings.value
+            val updatedSettings = currentSettings.copy(inputLanguage = languageCode)
+            settingsRepository.saveApiSettings(updatedSettings)
+            Log.d(TAG, "Input language hint changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
+        }
+    }
+
+    /**
      * Set output language for quick switching from keyboard
      */
     fun setOutputLanguage(languageCode: String) {

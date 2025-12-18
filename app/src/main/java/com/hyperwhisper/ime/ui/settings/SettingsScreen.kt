@@ -711,7 +711,48 @@ fun LanguageSelector(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val selectedLang = SUPPORTED_LANGUAGES.find { it.code == selectedLanguage }
+
+    // Fuzzy search filter
+    val filteredLanguages = remember(searchQuery) {
+        if (searchQuery.isBlank()) {
+            SUPPORTED_LANGUAGES
+        } else {
+            val query = searchQuery.lowercase()
+            SUPPORTED_LANGUAGES.filter { language ->
+                language.name.lowercase().contains(query) ||
+                language.code.lowercase().contains(query) ||
+                // Fuzzy match: check if query letters appear in order
+                language.name.lowercase().let { name ->
+                    var queryIndex = 0
+                    name.forEach { char ->
+                        if (queryIndex < query.length && char == query[queryIndex]) {
+                            queryIndex++
+                        }
+                    }
+                    queryIndex == query.length
+                }
+            }.sortedBy { language ->
+                // Prioritize exact matches and starts-with matches
+                when {
+                    language.name.lowercase() == query -> 0
+                    language.code.lowercase() == query -> 1
+                    language.name.lowercase().startsWith(query) -> 2
+                    language.code.lowercase().startsWith(query) -> 3
+                    language.name.lowercase().contains(query) -> 4
+                    else -> 5
+                }
+            }
+        }
+    }
+
+    // Reset search when menu closes
+    LaunchedEffect(expanded) {
+        if (!expanded) {
+            searchQuery = ""
+        }
+    }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -736,7 +777,25 @@ fun LanguageSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            SUPPORTED_LANGUAGES.forEach { language ->
+            // Search field
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search languages...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
+            )
+
+            Divider()
+
+            // Filtered language list
+            filteredLanguages.forEach { language ->
                 DropdownMenuItem(
                     text = {
                         Row(
@@ -756,7 +815,17 @@ fun LanguageSelector(
                     onClick = {
                         onLanguageSelected(language.code)
                         expanded = false
+                        searchQuery = ""
                     }
+                )
+            }
+
+            if (filteredLanguages.isEmpty()) {
+                Text(
+                    text = "No languages found",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    fontSize = 14.sp
                 )
             }
         }

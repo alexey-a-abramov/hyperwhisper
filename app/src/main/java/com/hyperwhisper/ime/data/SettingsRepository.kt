@@ -194,6 +194,12 @@ class SettingsRepository @Inject constructor(
             isBuiltIn = true
         ),
         VoiceMode(
+            id = "fix_grammar",
+            name = "Fix Grammar",
+            systemPrompt = "Transcribe this audio and fix any grammar, spelling, and punctuation errors while preserving the original meaning and tone.",
+            isBuiltIn = true
+        ),
+        VoiceMode(
             id = "polite",
             name = "Polite",
             systemPrompt = "Transcribe this audio and rewrite it to be extremely polite and professional.",
@@ -203,12 +209,6 @@ class SettingsRepository @Inject constructor(
             id = "casual",
             name = "Casual",
             systemPrompt = "Transcribe this audio and rewrite it in a casual, friendly tone.",
-            isBuiltIn = true
-        ),
-        VoiceMode(
-            id = "translate_en",
-            name = "Translate to English",
-            systemPrompt = "Transcribe this audio and translate it to English.",
             isBuiltIn = true
         )
     )
