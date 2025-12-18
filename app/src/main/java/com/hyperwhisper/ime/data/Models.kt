@@ -5,20 +5,62 @@ import com.google.gson.annotations.SerializedName
 /**
  * Domain Models
  */
+data class Language(
+    val code: String, // ISO-639-1 code
+    val name: String
+)
+
+// Supported languages list
+val SUPPORTED_LANGUAGES = listOf(
+    Language("", "Auto-detect"),
+    Language("en", "English"),
+    Language("es", "Spanish"),
+    Language("fr", "French"),
+    Language("de", "German"),
+    Language("it", "Italian"),
+    Language("pt", "Portuguese"),
+    Language("ru", "Russian"),
+    Language("zh", "Chinese"),
+    Language("ja", "Japanese"),
+    Language("ko", "Korean"),
+    Language("ar", "Arabic"),
+    Language("hi", "Hindi"),
+    Language("nl", "Dutch"),
+    Language("pl", "Polish"),
+    Language("tr", "Turkish"),
+    Language("vi", "Vietnamese"),
+    Language("th", "Thai"),
+    Language("id", "Indonesian"),
+    Language("uk", "Ukrainian"),
+    Language("ro", "Romanian"),
+    Language("cs", "Czech"),
+    Language("sv", "Swedish"),
+    Language("da", "Danish"),
+    Language("fi", "Finnish"),
+    Language("no", "Norwegian"),
+    Language("el", "Greek"),
+    Language("he", "Hebrew")
+)
+
 data class VoiceMode(
     val id: String,
     val name: String,
     val systemPrompt: String,
-    val isBuiltIn: Boolean = false
+    val isBuiltIn: Boolean = false,
+    val inputLanguageHint: String = "" // Hint for input language if model supports it
 )
 
 data class ApiSettings(
     val provider: ApiProvider = ApiProvider.OPENAI,
     val baseUrl: String = "",
-    val apiKey: String = "",
+    val apiKeys: Map<ApiProvider, String> = emptyMap(), // Per-provider API keys
     val modelId: String = "whisper-1",
-    val language: String = "" // ISO-639-1 code (e.g., "en", "es", "ru") - empty for auto-detect
-)
+    val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
+    val outputLanguage: String = "" // ISO-639-1 code for output - empty to keep original
+) {
+    // Helper to get API key for current provider
+    fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
+}
 
 enum class ApiProvider(
     val displayName: String,

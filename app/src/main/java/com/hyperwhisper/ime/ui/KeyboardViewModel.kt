@@ -126,7 +126,7 @@ class KeyboardViewModel @Inject constructor(
                 val mode = selectedMode.value
 
                 // Validate settings
-                if (settings.apiKey.isBlank()) {
+                if (settings.getCurrentApiKey().isBlank()) {
                     _errorMessage.value = "Please configure API key in settings"
                     _recordingState.value = RecordingState.ERROR
                     return@launch
@@ -219,6 +219,18 @@ class KeyboardViewModel @Inject constructor(
      */
     fun clearTranscribedText() {
         _transcribedText.value = ""
+    }
+
+    /**
+     * Set output language for quick switching from keyboard
+     */
+    fun setOutputLanguage(languageCode: String) {
+        viewModelScope.launch {
+            val currentSettings = apiSettings.value
+            val updatedSettings = currentSettings.copy(outputLanguage = languageCode)
+            settingsRepository.saveApiSettings(updatedSettings)
+            Log.d(TAG, "Output language changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
+        }
     }
 
     /**

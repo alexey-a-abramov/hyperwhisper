@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +35,10 @@ fun SettingsScreen(
 
     var provider by remember { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
-    var apiKey by remember { mutableStateOf(apiSettings.apiKey) }
+    var apiKey by remember { mutableStateOf(apiSettings.getCurrentApiKey()) }
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
-    var language by remember { mutableStateOf(apiSettings.language) }
+    var inputLanguage by remember { mutableStateOf(apiSettings.inputLanguage) }
+    var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
     var showModelSelector by remember { mutableStateOf(false) }
     var showModelInfo by remember { mutableStateOf(false) }
 
@@ -48,15 +50,21 @@ fun SettingsScreen(
     LaunchedEffect(apiSettings) {
         provider = apiSettings.provider
         baseUrl = apiSettings.baseUrl
-        apiKey = apiSettings.apiKey
+        apiKey = apiSettings.getCurrentApiKey()
         modelId = apiSettings.modelId
-        language = apiSettings.language
+        inputLanguage = apiSettings.inputLanguage
+        outputLanguage = apiSettings.outputLanguage
     }
 
-    // Auto-update base URL when provider changes
+    // Update API key and defaults when provider changes
     LaunchedEffect(provider) {
+        apiKey = apiSettings.apiKeys[provider] ?: ""
         if (baseUrl.isEmpty() || baseUrl == apiSettings.provider.defaultEndpoint) {
             baseUrl = provider.defaultEndpoint
+        }
+        // Auto-select first model for provider
+        if (modelId.isEmpty() || !provider.defaultModels.contains(modelId)) {
+            modelId = provider.defaultModels.firstOrNull() ?: modelId
         }
     }
 
@@ -159,14 +167,20 @@ fun SettingsScreen(
             }
 
             item {
-                OutlinedTextField(
-                    value = language,
-                    onValueChange = { language = it },
-                    label = { Text("Language (optional)") },
-                    placeholder = { Text("en, es, ru, etc.") },
-                    supportingText = { Text("ISO-639-1 code for Whisper. Leave empty for auto-detect") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                LanguageSelector(
+                    selectedLanguage = inputLanguage,
+                    onLanguageSelected = { inputLanguage = it },
+                    label = "Input Language (Speech)",
+                    supportingText = "Hint for speech recognition. Leave as Auto-detect if unsure."
+                )
+            }
+
+            item {
+                LanguageSelector(
+                    selectedLanguage = outputLanguage,
+                    onLanguageSelected = { outputLanguage = it },
+                    label = "Output Language (Text)",
+                    supportingText = "Force output translation. Leave empty to keep original language."
                 )
             }
 
@@ -177,7 +191,7 @@ fun SettingsScreen(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, language)
+                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -685,4 +699,66 @@ fun ModelInfoDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LanguageSelector(
+    selectedLanguage: String,
+    onLanguageSelected: (String) -> Unit,
+    label: String,
+    supportingText: String,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLang = SUPPORTED_LANGUAGES.find { it.code == selectedLanguage }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedLang?.name ?: "Auto-detect",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            supportingText = { Text(supportingText, fontSize = 12.sp) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            singleLine = true
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            SUPPORTED_LANGUAGES.forEach { language ->
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(language.name)
+                            if (language.code.isNotEmpty()) {
+                                Text(
+                                    text = language.code,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onLanguageSelected(language.code)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
 }

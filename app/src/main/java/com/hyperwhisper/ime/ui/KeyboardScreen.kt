@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 
 @Composable
 fun KeyboardScreen(
@@ -139,40 +140,53 @@ fun KeyboardScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Provider/Model Info Row
-            Surface(
+            // Provider/Model Info Row with Output Language
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Provider/Model Info
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "${apiSettings.provider.displayName} / ${apiSettings.modelId}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            maxLines = 1
-                        )
-                    }
-                    IconButton(
-                        onClick = { showConfigInfo = true },
-                        modifier = Modifier.size(28.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Configuration Info",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${apiSettings.provider.displayName} / ${apiSettings.modelId}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1
+                            )
+                        }
+                        IconButton(
+                            onClick = { showConfigInfo = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Configuration Info",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
+
+                // Output Language Quick Selector
+                OutputLanguageButton(
+                    currentLanguage = apiSettings.outputLanguage,
+                    onLanguageChange = { viewModel.setOutputLanguage(it) },
+                    enabled = recordingState == RecordingState.IDLE
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -704,14 +718,14 @@ fun ConfigInfoDialog(
                     // Language
                     ConfigInfoItem(
                         label = "Language",
-                        value = if (apiSettings.language.isEmpty()) "Auto-detect" else apiSettings.language
+                        value = if (apiSettings.inputLanguage.isEmpty()) "Auto-detect" else apiSettings.inputLanguage
                     )
 
                     // API Key
                     ConfigInfoItem(
                         label = "API Key",
-                        value = if (apiSettings.apiKey.isEmpty()) "Not configured"
-                        else "${apiSettings.apiKey.take(10)}${"*".repeat(20)}",
+                        value = if (apiSettings.getCurrentApiKey().isEmpty()) "Not configured"
+                        else "${apiSettings.getCurrentApiKey().take(10)}${"*".repeat(20)}",
                         smallText = true
                     )
                 }
@@ -757,5 +771,48 @@ private fun ConfigInfoItem(
             lineHeight = if (smallText) 16.sp else 18.sp
         )
         Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+    }
+}
+
+@Composable
+fun OutputLanguageButton(
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val currentLang = SUPPORTED_LANGUAGES.find { it.code == currentLanguage }
+    val displayText = if (currentLanguage.isEmpty()) "Auto" else currentLang?.code?.uppercase() ?: currentLanguage.uppercase()
+
+    Surface(
+        onClick = {
+            // Cycle through common languages: Auto, EN, ES, FR, DE, RU, ZH, JA
+            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja")
+            val currentIndex = commonLanguages.indexOf(currentLanguage)
+            val nextIndex = (currentIndex + 1) % commonLanguages.size
+            onLanguageChange(commonLanguages[nextIndex])
+        },
+        enabled = enabled,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Out",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                fontWeight = FontWeight.Light
+            )
+            Text(
+                text = displayText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
     }
 }

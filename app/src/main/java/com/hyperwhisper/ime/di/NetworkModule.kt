@@ -62,7 +62,7 @@ object NetworkModule {
         return Interceptor { chain ->
             val apiSettings = runBlocking { settingsRepository.apiSettings.first() }
             val request = chain.request().newBuilder()
-                .addHeader("Authorization", "Bearer ${apiSettings.apiKey}")
+                .addHeader("Authorization", "Bearer ${apiSettings.getCurrentApiKey()}")
                 .addHeader("Content-Type", "application/json")
                 .build()
             chain.proceed(request)

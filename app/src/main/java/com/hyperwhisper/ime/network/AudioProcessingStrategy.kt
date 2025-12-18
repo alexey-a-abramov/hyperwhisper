@@ -56,8 +56,8 @@ class TranscriptionStrategy(
             )
             val modelPart = modelId.toRequestBody("text/plain".toMediaTypeOrNull())
             val formatPart = "json".toRequestBody("text/plain".toMediaTypeOrNull())
-            val languagePart = if (apiSettings.language.isNotEmpty()) {
-                apiSettings.language.toRequestBody("text/plain".toMediaTypeOrNull())
+            val languagePart = if (apiSettings.inputLanguage.isNotEmpty()) {
+                apiSettings.inputLanguage.toRequestBody("text/plain".toMediaTypeOrNull())
             } else null
 
             // Log request details
@@ -66,11 +66,11 @@ class TranscriptionStrategy(
             Log.d(TAG, "  Endpoint: audio/transcriptions")
             Log.d(TAG, "  Full URL: ${apiSettings.baseUrl}audio/transcriptions")
             Log.d(TAG, "  Model: $modelId")
-            Log.d(TAG, "  Language: ${if (apiSettings.language.isEmpty()) "auto-detect" else apiSettings.language}")
+            Log.d(TAG, "  Language: ${if (apiSettings.inputLanguage.isEmpty()) "auto-detect" else apiSettings.inputLanguage}")
             Log.d(TAG, "  Audio file: ${audioFile.name} (${audioFile.length()} bytes)")
             Log.d(TAG, "  Audio format: ${audioFile.extension}")
             Log.d(TAG, "  Response format: json")
-            Log.d(TAG, "  API Key: ${apiSettings.apiKey.take(10)}...")
+            Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call
             val response = apiService.transcribe(
@@ -234,7 +234,7 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  Audio file: ${audioFile.name} (${audioFile.length()} bytes)")
             Log.d(TAG, "  Audio format: $audioFormat")
             Log.d(TAG, "  Audio base64 length: ${audioBase64.length} chars")
-            Log.d(TAG, "  API Key: ${apiSettings.apiKey.take(10)}...")
+            Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call
             val response = apiService.chatCompletion(request)

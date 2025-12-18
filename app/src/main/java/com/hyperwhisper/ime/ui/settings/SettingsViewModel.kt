@@ -54,21 +54,39 @@ class SettingsViewModel @Inject constructor(
         baseUrl: String,
         apiKey: String,
         modelId: String,
-        language: String = ""
+        inputLanguage: String = "",
+        outputLanguage: String = ""
     ) {
         viewModelScope.launch {
             try {
+                // Get current settings to preserve other provider API keys
+                val currentSettings = apiSettings.value
+                val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
+                updatedApiKeys[provider] = apiKey.trim()
+
                 val settings = ApiSettings(
                     provider = provider,
                     baseUrl = baseUrl.trim(),
-                    apiKey = apiKey.trim(),
+                    apiKeys = updatedApiKeys,
                     modelId = modelId.trim(),
-                    language = language.trim()
+                    inputLanguage = inputLanguage.trim(),
+                    outputLanguage = outputLanguage.trim()
                 )
                 settingsRepository.saveApiSettings(settings)
-                Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId, language: ${language.ifEmpty { "auto" }}")
+                Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId")
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving API settings", e)
+            }
+        }
+    }
+
+    fun updateProviderApiKey(provider: ApiProvider, apiKey: String) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.updateProviderApiKey(provider, apiKey.trim())
+                Log.d(TAG, "API key updated for provider: ${provider.displayName}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating provider API key", e)
             }
         }
     }
