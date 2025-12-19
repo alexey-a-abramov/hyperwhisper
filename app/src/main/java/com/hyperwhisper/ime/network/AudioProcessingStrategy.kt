@@ -175,7 +175,7 @@ class TranscriptionStrategy(
  * Used for transformations (polite, casual, translation, etc.)
  */
 class ChatCompletionStrategy(
-    private val apiService: ChatCompletionApiService,
+    val chatCompletionApiService: ChatCompletionApiService,
     private val settingsRepository: com.hyperwhisper.data.SettingsRepository
 ) : AudioProcessingStrategy {
 
@@ -237,7 +237,7 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call
-            val response = apiService.chatCompletion(request)
+            val response = chatCompletionApiService.chatCompletion(request)
 
             // Log response details
             Log.d(TAG, "Response Details:")
