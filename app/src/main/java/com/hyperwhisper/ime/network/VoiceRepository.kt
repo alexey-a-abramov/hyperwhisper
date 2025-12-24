@@ -11,11 +11,17 @@ import javax.inject.Singleton
 class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
-    private val chatCompletionStrategy: ChatCompletionStrategy
+    private val chatCompletionStrategy: ChatCompletionStrategy,
+    private val settingsRepository: SettingsRepository
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
     }
+
+    /**
+     * Get recording duration flow
+     */
+    fun getRecordingDuration() = audioRecorderManager.recordingDuration
 
     /**
      * Process recorded audio based on voice mode and API provider
@@ -37,7 +43,7 @@ class VoiceRepository @Inject constructor(
             val audioBase64 = base64Result.getOrNull() ?: ""
 
             // Check if we need two-step processing (transcription + post-processing)
-            val needsTwoStepProcessing = needsTwoStepProcessing(voiceMode, apiSettings.provider)
+            val needsTwoStepProcessing = needsTwoStepProcessing(voiceMode, apiSettings)
 
             if (needsTwoStepProcessing) {
                 // Step 1: Transcribe audio
@@ -53,7 +59,13 @@ class VoiceRepository @Inject constructor(
                     is ApiResult.Success -> {
                         // Step 2: Post-process the transcribed text with chat model
                         Log.d(TAG, "Transcription successful, applying post-processing")
-                        return postProcessText(transcriptionResult.data, voiceMode, apiSettings)
+                        val originalTranscription = transcriptionResult.data
+                        return postProcessText(
+                            transcribedText = originalTranscription,
+                            voiceMode = voiceMode,
+                            apiSettings = apiSettings,
+                            transcriptionModel = apiSettings.modelId
+                        )
                     }
                     is ApiResult.Error -> {
                         return transcriptionResult
@@ -65,12 +77,34 @@ class VoiceRepository @Inject constructor(
             } else {
                 // Single-step processing (direct strategy)
                 val strategy = selectStrategy(voiceMode, apiSettings.provider)
-                strategy.processAudio(
+                val strategyName = if (strategy is TranscriptionStrategy) "transcription" else "chat-completion"
+                val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
+
+                val result = strategy.processAudio(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode,
                     modelId = apiSettings.modelId
                 )
+
+                // Add processing info for single-step
+                when (result) {
+                    is ApiResult.Success -> {
+                        val processingInfo = ProcessingInfo(
+                            processingMode = "single-step",
+                            strategy = strategyName,
+                            transcriptionModel = apiSettings.modelId,
+                            postProcessingModel = null,
+                            translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
+                            translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                            originalTranscription = null,
+                            voiceModeName = voiceMode.name,
+                            systemPrompt = systemPrompt
+                        )
+                        ApiResult.Success(result.data, processingInfo)
+                    }
+                    else -> result
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing audio", e)
@@ -80,23 +114,47 @@ class VoiceRepository @Inject constructor(
 
     /**
      * Determine if two-step processing is needed
-     * (transcription-only models with transformation modes)
+     * (transcription-only models with transformation modes or translation)
      */
     private fun needsTwoStepProcessing(
         voiceMode: VoiceMode,
-        provider: ApiProvider
+        apiSettings: ApiSettings
     ): Boolean {
-        // Verbatim mode never needs post-processing
-        if (voiceMode.id == "verbatim") return false
+        // If output language is specified, we need translation (post-processing)
+        // even for verbatim mode
+        val needsTranslation = apiSettings.outputLanguage.isNotEmpty()
 
-        // OpenRouter supports audio in chat completions, so single-step is fine
-        if (provider == ApiProvider.OPENROUTER) return false
+        // OpenRouter supports audio in chat completions AND translation in one step
+        if (apiSettings.provider == ApiProvider.OPENROUTER) return false
 
-        // Gemini supports audio in chat completions
-        if (provider == ApiProvider.GEMINI) return false
+        // Gemini supports audio in chat completions AND translation in one step
+        if (apiSettings.provider == ApiProvider.GEMINI) return false
+
+        // Verbatim mode only needs post-processing if translation is required
+        if (voiceMode.id == "verbatim") return needsTranslation
 
         // All other providers with transformation modes need two-step
         return true
+    }
+
+    /**
+     * Get language name from ISO code for translation instruction
+     */
+    private fun getLanguageName(languageCode: String): String {
+        val language = SUPPORTED_LANGUAGES.find { it.code == languageCode }
+        return language?.name ?: languageCode.uppercase()
+    }
+
+    /**
+     * Build system prompt with optional translation instruction
+     */
+    private fun buildSystemPrompt(basePrompt: String, outputLanguage: String): String {
+        return if (outputLanguage.isNotEmpty()) {
+            val languageName = getLanguageName(outputLanguage)
+            "$basePrompt\n\nIMPORTANT: Translate the output to $languageName. Return ONLY the $languageName translation, do not include the original text."
+        } else {
+            basePrompt
+        }
     }
 
     /**
@@ -106,19 +164,21 @@ class VoiceRepository @Inject constructor(
     private suspend fun postProcessText(
         transcribedText: String,
         voiceMode: VoiceMode,
-        apiSettings: ApiSettings
+        apiSettings: ApiSettings,
+        transcriptionModel: String
     ): ApiResult<String> {
         return try {
-            Log.d(TAG, "Post-processing text with system prompt: ${voiceMode.systemPrompt}")
+            // Build system prompt with translation if needed
+            val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
+            Log.d(TAG, "Post-processing text with system prompt: $systemPrompt")
 
             // Determine which chat model to use for post-processing
-            val postProcessModel = when (apiSettings.provider) {
-                ApiProvider.OPENAI -> "gpt-4o-mini" // Fast and cheap for post-processing
-                ApiProvider.GROQ -> "llama-3.1-8b-instant" // Fast Groq model
-                else -> "gpt-4o-mini" // Default fallback
-            }
+            val postProcessModel = "gpt-4o-mini"
 
             Log.d(TAG, "Using model for post-processing: $postProcessModel")
+            if (apiSettings.outputLanguage.isNotEmpty()) {
+                Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
+            }
 
             // Create text-only chat completion request
             val request = ChatCompletionRequest(
@@ -127,7 +187,7 @@ class VoiceRepository @Inject constructor(
                     ChatMessage(
                         role = "system",
                         content = listOf(
-                            ContentPart.TextContent(text = voiceMode.systemPrompt)
+                            ContentPart.TextContent(text = systemPrompt)
                         )
                     ),
                     ChatMessage(
@@ -148,7 +208,21 @@ class VoiceRepository @Inject constructor(
                 val processedText = result?.choices?.firstOrNull()?.message?.content
                 if (processedText != null) {
                     Log.d(TAG, "Post-processing successful")
-                    ApiResult.Success(processedText)
+
+                    // Create processing info
+                    val processingInfo = ProcessingInfo(
+                        processingMode = "two-step",
+                        strategy = "transcription + chat-completion",
+                        transcriptionModel = transcriptionModel,
+                        postProcessingModel = postProcessModel,
+                        translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
+                        translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                        originalTranscription = transcribedText,
+                        voiceModeName = voiceMode.name,
+                        systemPrompt = systemPrompt
+                    )
+
+                    ApiResult.Success(processedText, processingInfo)
                 } else {
                     Log.w(TAG, "No processed text in response, returning original")
                     ApiResult.Success(transcribedText)

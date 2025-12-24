@@ -183,6 +183,19 @@ class ChatCompletionStrategy(
         private const val TAG = "ChatCompletionStrategy"
     }
 
+    /**
+     * Build system prompt with optional translation instruction
+     */
+    private fun buildSystemPromptWithTranslation(basePrompt: String, outputLanguage: String): String {
+        return if (outputLanguage.isNotEmpty()) {
+            val language = SUPPORTED_LANGUAGES.find { it.code == outputLanguage }
+            val languageName = language?.name ?: outputLanguage.uppercase()
+            "$basePrompt\n\nIMPORTANT: Translate the output to $languageName. Return ONLY the $languageName translation, do not include the original text."
+        } else {
+            basePrompt
+        }
+    }
+
     override suspend fun processAudio(
         audioFile: File,
         audioBase64: String,
@@ -195,6 +208,12 @@ class ChatCompletionStrategy(
 
             // Get current API settings
             val apiSettings = settingsRepository.apiSettings.first()
+
+            // Build system prompt with translation if needed
+            val systemPrompt = buildSystemPromptWithTranslation(
+                voiceMode.systemPrompt,
+                apiSettings.outputLanguage
+            )
 
             // Determine audio format
             val audioFormat = when (audioFile.extension.lowercase()) {
@@ -211,7 +230,7 @@ class ChatCompletionStrategy(
                     ChatMessage(
                         role = "user",
                         content = listOf(
-                            ContentPart.TextContent(text = voiceMode.systemPrompt),
+                            ContentPart.TextContent(text = systemPrompt),
                             ContentPart.AudioContent(
                                 inputAudio = InputAudio(
                                     data = audioBase64,
@@ -230,7 +249,11 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  Full URL: ${apiSettings.baseUrl}chat/completions")
             Log.d(TAG, "  Model: $modelId")
             Log.d(TAG, "  Voice Mode: ${voiceMode.name}")
-            Log.d(TAG, "  System Prompt: ${voiceMode.systemPrompt.take(50)}...")
+            Log.d(TAG, "  System Prompt: ${systemPrompt.take(100)}...")
+            if (apiSettings.outputLanguage.isNotEmpty()) {
+                val language = SUPPORTED_LANGUAGES.find { it.code == apiSettings.outputLanguage }
+                Log.d(TAG, "  Translation enabled: ${language?.name ?: apiSettings.outputLanguage}")
+            }
             Log.d(TAG, "  Audio file: ${audioFile.name} (${audioFile.length()} bytes)")
             Log.d(TAG, "  Audio format: $audioFormat")
             Log.d(TAG, "  Audio base64 length: ${audioBase64.length} chars")

@@ -19,6 +19,7 @@ class KeyboardViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "KeyboardViewModel"
+        private const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
     }
 
     // State flows
@@ -31,6 +32,17 @@ class KeyboardViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _processingInfo = MutableStateFlow<ProcessingInfo?>(null)
+    val processingInfo: StateFlow<ProcessingInfo?> = _processingInfo.asStateFlow()
+
+    // Recording duration from repository
+    val recordingDuration: StateFlow<Long> = voiceRepository.getRecordingDuration()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+    // Transcription history
+    val transcriptionHistory: StateFlow<List<TranscriptionHistoryItem>> = settingsRepository.transcriptionHistory
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     // Settings and modes from repository
     val voiceModes: StateFlow<List<VoiceMode>> = settingsRepository.voiceModes
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -41,6 +53,9 @@ class KeyboardViewModel @Inject constructor(
     val apiSettings: StateFlow<ApiSettings> = settingsRepository.apiSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, ApiSettings())
 
+    val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
+
     // Derived state for selected mode
     val selectedMode: StateFlow<VoiceMode?> = combine(
         voiceModes,
@@ -50,7 +65,7 @@ class KeyboardViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * Start recording audio
+     * Start recording audio and monitor for timeout
      */
     fun startRecording() {
         viewModelScope.launch {
@@ -147,7 +162,11 @@ class KeyboardViewModel @Inject constructor(
                         Log.d(TAG, "Transcription successful: ${result.data}")
                         TraceLogger.trace("KeyboardViewModel", "Transcription successful, length: ${result.data.length} chars")
                         _transcribedText.value = result.data
+                        _processingInfo.value = result.processingInfo
                         _recordingState.value = RecordingState.IDLE
+
+                        // Save to history
+                        settingsRepository.addToHistory(result.data)
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "Transcription failed: ${result.message}")
@@ -222,6 +241,13 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Clear processing info
+     */
+    fun clearProcessingInfo() {
+        _processingInfo.value = null
+    }
+
+    /**
      * Set input language hint for quick switching from keyboard
      */
     fun setInputLanguage(languageCode: String) {
@@ -242,6 +268,27 @@ class KeyboardViewModel @Inject constructor(
             val updatedSettings = currentSettings.copy(outputLanguage = languageCode)
             settingsRepository.saveApiSettings(updatedSettings)
             Log.d(TAG, "Output language changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
+        }
+    }
+
+    /**
+     * Clear transcription history
+     */
+    fun clearHistory() {
+        viewModelScope.launch {
+            settingsRepository.clearHistory()
+        }
+    }
+
+    init {
+        // Monitor recording duration for timeout
+        viewModelScope.launch {
+            recordingDuration.collect { duration ->
+                if (duration >= MAX_RECORDING_DURATION_MS && recordingState.value == RecordingState.RECORDING) {
+                    Log.d(TAG, "Max recording duration reached, auto-stopping")
+                    stopRecording()
+                }
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package com.hyperwhisper.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -33,8 +34,20 @@ class SettingsRepository @Inject constructor(
         private val VOICE_MODES_KEY = stringPreferencesKey("voice_modes")
         private val SELECTED_MODE_KEY = stringPreferencesKey("selected_mode")
 
+        // Appearance settings keys
+        private val APPEARANCE_COLOR_SCHEME_KEY = stringPreferencesKey("appearance_color_scheme")
+        private val APPEARANCE_USE_DYNAMIC_COLOR_KEY = booleanPreferencesKey("appearance_use_dynamic_color")
+        private val APPEARANCE_UI_SCALE_KEY = stringPreferencesKey("appearance_ui_scale")
+        private val APPEARANCE_FONT_FAMILY_KEY = stringPreferencesKey("appearance_font_family")
+        private val APPEARANCE_AUTO_COPY_KEY = booleanPreferencesKey("appearance_auto_copy")
+
+        // Transcription history key
+        private val TRANSCRIPTION_HISTORY_KEY = stringPreferencesKey("transcription_history")
+
         // Legacy key for migration
         private val API_KEY_KEY = stringPreferencesKey("api_key")
+
+        private const val MAX_HISTORY_ITEMS = 20
     }
 
     /**
@@ -180,6 +193,97 @@ class SettingsRepository @Inject constructor(
     suspend fun setSelectedMode(modeId: String) {
         dataStore.edit { preferences ->
             preferences[SELECTED_MODE_KEY] = modeId
+        }
+    }
+
+    /**
+     * Appearance Settings Flow
+     */
+    val appearanceSettings: Flow<AppearanceSettings> = dataStore.data.map { preferences ->
+        AppearanceSettings(
+            colorScheme = preferences[APPEARANCE_COLOR_SCHEME_KEY]?.let {
+                try {
+                    ColorSchemeOption.valueOf(it)
+                } catch (e: Exception) {
+                    ColorSchemeOption.PURPLE
+                }
+            } ?: ColorSchemeOption.PURPLE,
+            useDynamicColor = preferences[APPEARANCE_USE_DYNAMIC_COLOR_KEY] ?: true,
+            uiScale = preferences[APPEARANCE_UI_SCALE_KEY]?.let {
+                try {
+                    UIScaleOption.valueOf(it)
+                } catch (e: Exception) {
+                    UIScaleOption.MEDIUM
+                }
+            } ?: UIScaleOption.MEDIUM,
+            fontFamily = preferences[APPEARANCE_FONT_FAMILY_KEY]?.let {
+                try {
+                    FontFamilyOption.valueOf(it)
+                } catch (e: Exception) {
+                    FontFamilyOption.DEFAULT
+                }
+            } ?: FontFamilyOption.DEFAULT,
+            autoCopyToClipboard = preferences[APPEARANCE_AUTO_COPY_KEY] ?: true
+        )
+    }
+
+    suspend fun saveAppearanceSettings(settings: AppearanceSettings) {
+        dataStore.edit { preferences ->
+            preferences[APPEARANCE_COLOR_SCHEME_KEY] = settings.colorScheme.name
+            preferences[APPEARANCE_USE_DYNAMIC_COLOR_KEY] = settings.useDynamicColor
+            preferences[APPEARANCE_UI_SCALE_KEY] = settings.uiScale.name
+            preferences[APPEARANCE_FONT_FAMILY_KEY] = settings.fontFamily.name
+            preferences[APPEARANCE_AUTO_COPY_KEY] = settings.autoCopyToClipboard
+        }
+    }
+
+    /**
+     * Transcription History Management
+     */
+    val transcriptionHistory: Flow<List<TranscriptionHistoryItem>> = dataStore.data.map { preferences ->
+        val historyJson = preferences[TRANSCRIPTION_HISTORY_KEY]
+        if (historyJson.isNullOrEmpty()) {
+            emptyList()
+        } else {
+            try {
+                val type = object : TypeToken<List<TranscriptionHistoryItem>>() {}.type
+                gson.fromJson(historyJson, type) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    suspend fun addToHistory(text: String) {
+        if (text.isBlank()) return
+
+        dataStore.edit { preferences ->
+            val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
+            val currentHistory = if (currentHistoryJson.isNullOrEmpty()) {
+                emptyList()
+            } else {
+                try {
+                    val type = object : TypeToken<List<TranscriptionHistoryItem>>() {}.type
+                    gson.fromJson<List<TranscriptionHistoryItem>>(currentHistoryJson, type) ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            }
+
+            // Add new item at the beginning
+            val newItem = TranscriptionHistoryItem(text = text)
+            val updatedHistory = listOf(newItem) + currentHistory
+
+            // Keep only last MAX_HISTORY_ITEMS items
+            val trimmedHistory = updatedHistory.take(MAX_HISTORY_ITEMS)
+
+            preferences[TRANSCRIPTION_HISTORY_KEY] = gson.toJson(trimmedHistory)
+        }
+    }
+
+    suspend fun clearHistory() {
+        dataStore.edit { preferences ->
+            preferences.remove(TRANSCRIPTION_HISTORY_KEY)
         }
     }
 

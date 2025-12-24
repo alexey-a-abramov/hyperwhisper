@@ -3,10 +3,18 @@ package com.hyperwhisper.audio
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.PowerManager
 import android.util.Base64
 import android.util.Log
 import com.hyperwhisper.utils.TraceLogger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -20,11 +28,20 @@ class AudioRecorderManager @Inject constructor(
     private var mediaRecorder: MediaRecorder? = null
     private var currentAudioFile: File? = null
     private var isRecording = false
+    private var recordingStartTime: Long = 0
+    private var timerJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private val _recordingDuration = MutableStateFlow(0L)
+    val recordingDuration: StateFlow<Long> = _recordingDuration.asStateFlow()
+
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     companion object {
         private const val TAG = "AudioRecorderManager"
         private const val SAMPLE_RATE = 16000
         private const val BIT_RATE = 128000
+        const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
     }
 
     /**
@@ -81,6 +98,15 @@ class AudioRecorderManager @Inject constructor(
                     }
 
                     isRecording = true
+                    recordingStartTime = System.currentTimeMillis()
+                    _recordingDuration.value = 0L
+
+                    // Acquire wake lock to keep recording during screen lock
+                    acquireWakeLock()
+
+                    // Start timer
+                    startTimer()
+
                     Log.d(TAG, "Recording started with $sourceName: ${audioFile.absolutePath}")
                     TraceLogger.trace("AudioRecorder", "Recording started successfully with $sourceName")
                     return@withContext Result.success(Unit)
@@ -134,6 +160,9 @@ class AudioRecorderManager @Inject constructor(
             mediaRecorder = null
             isRecording = false
 
+            stopTimer()
+            releaseWakeLock()
+
             val file = currentAudioFile
             if (file != null && file.exists() && file.length() > 0) {
                 Log.d(TAG, "Recording stopped: ${file.absolutePath}, size: ${file.length()} bytes")
@@ -165,9 +194,70 @@ class AudioRecorderManager @Inject constructor(
                 mediaRecorder = null
                 isRecording = false
             }
+            stopTimer()
+            releaseWakeLock()
             cleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error canceling recording", e)
+        }
+    }
+
+    /**
+     * Start recording duration timer
+     */
+    private fun startTimer() {
+        timerJob?.cancel()
+        timerJob = scope.launch {
+            while (isRecording) {
+                val elapsed = System.currentTimeMillis() - recordingStartTime
+                _recordingDuration.value = elapsed
+                delay(100) // Update every 100ms for smooth timer
+            }
+        }
+    }
+
+    /**
+     * Stop recording duration timer
+     */
+    private fun stopTimer() {
+        timerJob?.cancel()
+        timerJob = null
+        _recordingDuration.value = 0L
+    }
+
+    /**
+     * Acquire wake lock to keep recording during screen lock
+     */
+    @Suppress("DEPRECATION")
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "HyperWhisper::RecordingWakeLock"
+            ).apply {
+                acquire(MAX_RECORDING_DURATION_MS + 10000) // Extra 10 seconds for safety
+            }
+            Log.d(TAG, "Wake lock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock", e)
+        }
+    }
+
+    /**
+     * Release wake lock
+     */
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "Wake lock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing wake lock", e)
         }
     }
 

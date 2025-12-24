@@ -1,5 +1,7 @@
 package com.hyperwhisper.data
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -254,10 +256,82 @@ data class ResponseMessage(
 )
 
 /**
+ * Processing information for transparency
+ */
+data class ProcessingInfo(
+    val processingMode: String, // "single-step" or "two-step"
+    val strategy: String, // "transcription" or "chat-completion"
+    val transcriptionModel: String, // Model used for transcription
+    val postProcessingModel: String? = null, // Model used for post-processing (null if single-step)
+    val translationEnabled: Boolean = false, // Whether translation was applied
+    val translationTarget: String? = null, // Target language for translation
+    val originalTranscription: String? = null, // Original text before post-processing (null if single-step)
+    val voiceModeName: String, // Name of voice mode used
+    val systemPrompt: String // System prompt that was used
+)
+
+/**
  * Result wrapper for API calls
  */
 sealed class ApiResult<out T> {
-    data class Success<T>(val data: T) : ApiResult<T>()
+    data class Success<T>(val data: T, val processingInfo: ProcessingInfo? = null) : ApiResult<T>()
     data class Error(val message: String, val throwable: Throwable? = null) : ApiResult<Nothing>()
     object Loading : ApiResult<Nothing>()
 }
+
+/**
+ * Appearance Settings
+ */
+
+// Color scheme options
+enum class ColorSchemeOption(val displayName: String, val seedColor: Color) {
+    PURPLE("Purple", Color(0xFF6200EE)),
+    BLUE("Blue", Color(0xFF2196F3)),
+    GREEN("Green", Color(0xFF4CAF50)),
+    ORANGE("Orange", Color(0xFFFF9800)),
+    RED("Red", Color(0xFFF44336))
+}
+
+// UI scale options
+enum class UIScaleOption(val displayName: String, val scale: Float) {
+    VERY_SMALL("Very Small", 0.85f),
+    SMALL("Small", 0.92f),
+    MEDIUM("Medium", 1.0f),
+    LARGE("Large", 1.15f),
+    VERY_LARGE("Very Large", 1.3f)
+}
+
+// Font family options
+enum class FontFamilyOption(val displayName: String, val fontFamily: FontFamily) {
+    DEFAULT("Default", FontFamily.Default),
+    SERIF("Serif", FontFamily.Serif),
+    SANS_SERIF("Sans Serif", FontFamily.SansSerif),
+    MONOSPACE("Monospace", FontFamily.Monospace),
+    CURSIVE("Cursive", FontFamily.Cursive)
+}
+
+// Appearance settings data class
+data class AppearanceSettings(
+    val colorScheme: ColorSchemeOption = ColorSchemeOption.PURPLE,
+    val useDynamicColor: Boolean = true,
+    val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
+    val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
+    val autoCopyToClipboard: Boolean = true
+)
+
+/**
+ * Transcription history item
+ */
+data class TranscriptionHistoryItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+/**
+ * Recording settings
+ */
+data class RecordingSettings(
+    val maxRecordingDuration: Long = 180000L, // 3 minutes in milliseconds
+    val warnAtSecondsRemaining: Int = 30
+)

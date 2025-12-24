@@ -12,6 +12,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.hyperwhisper.data.RecordingState
+import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 
@@ -49,35 +53,68 @@ fun KeyboardScreen(
     val recordingState by viewModel.recordingState.collectAsState()
     val transcribedText by viewModel.transcribedText.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val processingInfo by viewModel.processingInfo.collectAsState()
+    val recordingDuration by viewModel.recordingDuration.collectAsState()
+    val transcriptionHistory by viewModel.transcriptionHistory.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
     val apiSettings by viewModel.apiSettings.collectAsState()
+    val appearanceSettings by viewModel.appearanceSettings.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
+    var showInputLanguageDialog by remember { mutableStateOf(false) }
+    var showOutputLanguageDialog by remember { mutableStateOf(false) }
+    var showHistoryPanel by remember { mutableStateOf(false) }
 
-    // Get clipboard preview
+    // Track last transcribed text for paste button
+    var lastTranscribedText by remember { mutableStateOf("") }
+
+    // Get clipboard manager
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
-    var clipboardPreview by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        // Update clipboard preview periodically
-        while (true) {
-            val clip = clipboardManager.primaryClip
-            val text = clip?.getItemAt(0)?.text?.toString() ?: ""
-            clipboardPreview = if (text.length > 20) {
-                text.take(20) + "..."
-            } else {
-                text
-            }
-            kotlinx.coroutines.delay(1000) // Check every second
-        }
-    }
 
     // Auto-commit transcribed text
     LaunchedEffect(transcribedText) {
         if (transcribedText.isNotEmpty()) {
+            // Save for paste button
+            lastTranscribedText = transcribedText
+
+            // Auto-copy to clipboard if enabled
+            if (appearanceSettings.autoCopyToClipboard) {
+                val clip = ClipData.newPlainText("Transcribed Text", transcribedText)
+                clipboardManager.setPrimaryClip(clip)
+            }
+
             onTextCommit(transcribedText)
             viewModel.clearTranscribedText()
+        }
+    }
+
+    // Show processing info as Toast
+    LaunchedEffect(processingInfo) {
+        processingInfo?.let { info ->
+            // Build toast message
+            val message = buildString {
+                append("✓ ${info.processingMode.uppercase()}")
+                if (info.translationEnabled && info.translationTarget != null) {
+                    append(" • Translated to ${info.translationTarget}")
+                }
+                append("\n")
+                if (info.processingMode == "two-step") {
+                    append("1️⃣ ${info.transcriptionModel}")
+                    if (info.originalTranscription != null && info.originalTranscription.length <= 50) {
+                        append(" → \"${info.originalTranscription}\"")
+                    }
+                    append("\n2️⃣ ${info.postProcessingModel ?: "unknown"}")
+                } else {
+                    append("${info.transcriptionModel} (${info.strategy})")
+                }
+            }
+
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
+            // Auto-dismiss after showing Toast
+            delay(5000)
+            viewModel.clearProcessingInfo()
         }
     }
 
@@ -96,7 +133,7 @@ fun KeyboardScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-            // Top Row: Switch Keyboard + Mode Selector + Settings Button
+            // Top Row: Switch Keyboard + Mode Selector + Help + Settings Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -122,6 +159,21 @@ fun KeyboardScreen(
                 )
 
                 Spacer(modifier = Modifier.width(4.dp))
+
+                // Help/About button
+                IconButton(
+                    onClick = {
+                        val intent = Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Help,
+                        contentDescription = "Help & About",
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
 
                 IconButton(
                     onClick = {
@@ -149,7 +201,7 @@ fun KeyboardScreen(
                 // Input Language Selector (LEFT)
                 InputLanguageButton(
                     currentLanguage = apiSettings.inputLanguage,
-                    onLanguageChange = { viewModel.setInputLanguage(it) },
+                    onClick = { showInputLanguageDialog = true },
                     enabled = recordingState == RecordingState.IDLE
                 )
 
@@ -199,41 +251,75 @@ fun KeyboardScreen(
                 // Output Language Selector (RIGHT)
                 OutputLanguageButton(
                     currentLanguage = apiSettings.outputLanguage,
-                    onLanguageChange = { viewModel.setOutputLanguage(it) },
+                    onClick = { showOutputLanguageDialog = true },
                     enabled = recordingState == RecordingState.IDLE
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Middle section: Mic (left) + Controls (right)
+            // Middle section: Cancel (far left) + Mic (center) + Controls (right)
             Row(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left side: Microphone Button + Cancel Button
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f)
+                // Far left: Cancel button (shown during recording)
+                Box(
+                    modifier = Modifier.width(80.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    MicrophoneButton(
-                        recordingState = recordingState,
-                        onStartRecording = { viewModel.startRecording() },
-                        onStopRecording = { viewModel.stopRecording() },
-                        modifier = Modifier
-                    )
-
-                    // Show Cancel button during recording
                     if (recordingState == RecordingState.RECORDING) {
                         OutlinedButton(
                             onClick = { viewModel.cancelRecording() },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
-                            )
+                            ),
+                            contentPadding = PaddingValues(4.dp)
                         ) {
-                            Text("CANCEL", fontWeight = FontWeight.Bold)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Cancel,
+                                    contentDescription = "Cancel",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "CANCEL",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Center: Microphone Button + Timer
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        MicrophoneButton(
+                            recordingState = recordingState,
+                            onStartRecording = { viewModel.startRecording() },
+                            onStopRecording = { viewModel.stopRecording() },
+                            modifier = Modifier
+                        )
+
+                        // Timer display (right of mic)
+                        if (recordingState == RecordingState.RECORDING) {
+                            Spacer(Modifier.width(12.dp))
+                            RecordingTimer(
+                                durationMs = recordingDuration,
+                                maxDurationMs = 180000L
+                            )
                         }
                     }
                 }
@@ -242,18 +328,18 @@ fun KeyboardScreen(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.End,
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.width(80.dp)
                 ) {
                     // Delete button with repeat functionality
                     RepeatableDeleteButton(
                         onDelete = onDelete,
-                        modifier = Modifier.width(80.dp).height(50.dp)
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
                     )
 
                     // Enter button
                     Button(
                         onClick = onEnter,
-                        modifier = Modifier.width(80.dp).height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         ),
@@ -276,42 +362,63 @@ fun KeyboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Paste clipboard button (left side)
-                if (clipboardPreview.isNotEmpty()) {
-                    Button(
-                        onClick = onInsertClipboard,
-                        modifier = Modifier.height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                // Paste last transcribed text button with long press for history
+                if (lastTranscribedText.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { onTextCommit(lastTranscribedText) },
+                                    onLongPress = { showHistoryPanel = true }
+                                )
+                            },
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Paste",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Column(horizontalAlignment = Alignment.Start) {
-                            Text(
-                                "PASTE",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = "Paste Last",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Text(
-                                clipboardPreview,
-                                fontSize = 9.sp,
-                                maxLines = 1,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column(
+                                horizontalAlignment = Alignment.Start,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    "PASTE LAST (hold: history)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    if (lastTranscribedText.length > 25) {
+                                        lastTranscribedText.take(25) + "..."
+                                    } else {
+                                        lastTranscribedText
+                                    },
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
 
-                // Space button (takes remaining width)
+                // Space button (takes remaining width or full width if no paste button)
                 Button(
                     onClick = onSpace,
-                    modifier = Modifier.weight(1f).height(48.dp),
+                    modifier = Modifier
+                        .weight(if (lastTranscribedText.isEmpty()) 1f else 0.6f)
+                        .height(56.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -338,6 +445,45 @@ fun KeyboardScreen(
             ConfigInfoDialog(
                 apiSettings = apiSettings,
                 onDismiss = { showConfigInfo = false }
+            )
+        }
+
+        // Show Input Language Dialog
+        if (showInputLanguageDialog) {
+            LanguageSelectorDialog(
+                title = "Input Language (Speech)",
+                currentLanguage = apiSettings.inputLanguage,
+                onLanguageSelected = { languageCode ->
+                    viewModel.setInputLanguage(languageCode)
+                    showInputLanguageDialog = false
+                },
+                onDismiss = { showInputLanguageDialog = false }
+            )
+        }
+
+        // Show Output Language Dialog
+        if (showOutputLanguageDialog) {
+            LanguageSelectorDialog(
+                title = "Output Language (Translation)",
+                currentLanguage = apiSettings.outputLanguage,
+                onLanguageSelected = { languageCode ->
+                    viewModel.setOutputLanguage(languageCode)
+                    showOutputLanguageDialog = false
+                },
+                onDismiss = { showOutputLanguageDialog = false }
+            )
+        }
+
+        // Show History Panel
+        if (showHistoryPanel) {
+            TranscriptionHistoryPanel(
+                history = transcriptionHistory,
+                onSelect = { text ->
+                    onTextCommit(text)
+                    showHistoryPanel = false
+                },
+                onClearAll = { viewModel.clearHistory() },
+                onDismiss = { showHistoryPanel = false }
             )
         }
     }
@@ -706,9 +852,11 @@ fun ConfigInfoDialog(
 
                 Divider()
 
-                // Content (scrollable if needed)
+                // Content (scrollable)
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Provider
@@ -717,10 +865,16 @@ fun ConfigInfoDialog(
                         value = apiSettings.provider.displayName
                     )
 
-                    // Model
+                    // Transcription Model
                     ConfigInfoItem(
-                        label = "Model",
+                        label = "Transcription Model",
                         value = apiSettings.modelId
+                    )
+
+                    // Post-Processing Model
+                    ConfigInfoItem(
+                        label = "Post-Processing Model",
+                        value = "gpt-4o-mini (for non-verbatim modes & translation)"
                     )
 
                     // Endpoint
@@ -730,10 +884,26 @@ fun ConfigInfoDialog(
                         smallText = true
                     )
 
-                    // Language
+                    // Input Language
                     ConfigInfoItem(
-                        label = "Language",
-                        value = if (apiSettings.inputLanguage.isEmpty()) "Auto-detect" else apiSettings.inputLanguage
+                        label = "Input Language (Speech)",
+                        value = if (apiSettings.inputLanguage.isEmpty()) {
+                            "Auto-detect"
+                        } else {
+                            val lang = SUPPORTED_LANGUAGES.find { it.code == apiSettings.inputLanguage }
+                            "${lang?.name ?: apiSettings.inputLanguage} (${apiSettings.inputLanguage})"
+                        }
+                    )
+
+                    // Output Language
+                    ConfigInfoItem(
+                        label = "Output Language (Translation)",
+                        value = if (apiSettings.outputLanguage.isEmpty()) {
+                            "None (keep original)"
+                        } else {
+                            val lang = SUPPORTED_LANGUAGES.find { it.code == apiSettings.outputLanguage }
+                            "${lang?.name ?: apiSettings.outputLanguage} (${apiSettings.outputLanguage})"
+                        }
                     )
 
                     // API Key
@@ -792,7 +962,7 @@ private fun ConfigInfoItem(
 @Composable
 fun InputLanguageButton(
     currentLanguage: String,
-    onLanguageChange: (String) -> Unit,
+    onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -800,13 +970,7 @@ fun InputLanguageButton(
     val displayText = if (currentLanguage.isEmpty()) "Auto" else currentLang?.code?.uppercase() ?: currentLanguage.uppercase()
 
     Surface(
-        onClick = {
-            // Cycle through common input languages: Auto, EN, ES, FR, DE, RU, ZH, JA, FA, HI
-            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja", "fa", "hi")
-            val currentIndex = commonLanguages.indexOf(currentLanguage)
-            val nextIndex = (currentIndex + 1) % commonLanguages.size
-            onLanguageChange(commonLanguages[nextIndex])
-        },
+        onClick = onClick,
         enabled = enabled,
         modifier = modifier,
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
@@ -835,7 +999,7 @@ fun InputLanguageButton(
 @Composable
 fun OutputLanguageButton(
     currentLanguage: String,
-    onLanguageChange: (String) -> Unit,
+    onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -843,13 +1007,7 @@ fun OutputLanguageButton(
     val displayText = if (currentLanguage.isEmpty()) "Auto" else currentLang?.code?.uppercase() ?: currentLanguage.uppercase()
 
     Surface(
-        onClick = {
-            // Cycle through common output languages: Auto, EN, ES, FR, DE, RU, ZH, JA, FA, HI
-            val commonLanguages = listOf("", "en", "es", "fr", "de", "ru", "zh", "ja", "fa", "hi")
-            val currentIndex = commonLanguages.indexOf(currentLanguage)
-            val nextIndex = (currentIndex + 1) % commonLanguages.size
-            onLanguageChange(commonLanguages[nextIndex])
-        },
+        onClick = onClick,
         enabled = enabled,
         modifier = modifier,
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
@@ -871,6 +1029,310 @@ fun OutputLanguageButton(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onTertiaryContainer
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LanguageSelectorDialog(
+    title: String,
+    currentLanguage: String,
+    onLanguageSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Fuzzy search filter
+    val filteredLanguages = remember(searchQuery) {
+        if (searchQuery.isBlank()) {
+            SUPPORTED_LANGUAGES
+        } else {
+            val query = searchQuery.lowercase()
+            SUPPORTED_LANGUAGES.filter { language ->
+                language.name.lowercase().contains(query) ||
+                language.code.lowercase().contains(query) ||
+                // Fuzzy match: check if query letters appear in order
+                language.name.lowercase().let { name ->
+                    var queryIndex = 0
+                    name.forEach { char ->
+                        if (queryIndex < query.length && char == query[queryIndex]) {
+                            queryIndex++
+                        }
+                    }
+                    queryIndex == query.length
+                }
+            }.sortedBy { language ->
+                // Prioritize exact matches and starts-with matches
+                when {
+                    language.name.lowercase() == query -> 0
+                    language.code.lowercase() == query -> 1
+                    language.name.lowercase().startsWith(query) -> 2
+                    language.code.lowercase().startsWith(query) -> 3
+                    language.name.lowercase().contains(query) -> 4
+                    else -> 5
+                }
+            }
+        }
+    }
+
+    // Full-screen overlay within keyboard
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 16.dp
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Title
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Search field
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search...", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+
+                Divider()
+
+                // Language list (scrollable, compact)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(filteredLanguages.size) { index ->
+                        val language = filteredLanguages[index]
+                        Surface(
+                            onClick = { onLanguageSelected(language.code) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (language.code == currentLanguage) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                Color.Transparent
+                            },
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = language.name,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (language.code == currentLanguage) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (language.code.isNotEmpty()) {
+                                    Text(
+                                        text = language.code,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (filteredLanguages.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No languages found",
+                                modifier = Modifier.padding(12.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                // Cancel button (compact)
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(40.dp)
+                ) {
+                    Text("CANCEL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Recording timer display
+ */
+@Composable
+fun RecordingTimer(
+    durationMs: Long,
+    maxDurationMs: Long
+) {
+    val seconds = (durationMs / 1000) % 60
+    val minutes = (durationMs / 1000) / 60
+    val isWarning = (maxDurationMs - durationMs) <= 30000 // Last 30 seconds
+
+    Text(
+        text = "$minutes:${seconds.toString().padStart(2, '0')}",
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold,
+        color = if (isWarning) Color.Red else MaterialTheme.colorScheme.primary
+    )
+}
+
+/**
+ * Transcription history panel
+ */
+@Composable
+fun TranscriptionHistoryPanel(
+    history: List<TranscriptionHistoryItem>,
+    onSelect: (String) -> Unit,
+    onClearAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Full-screen overlay
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 16.dp
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Title
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Transcription History",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "${history.size}/20",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+
+                Divider()
+
+                // History list
+                if (history.isEmpty()) {
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No history yet",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(history.size) { index ->
+                            val item = history[index]
+                            val dateTime = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                                .format(java.util.Date(item.timestamp))
+
+                            Surface(
+                                onClick = { onSelect(item.text) },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        dateTime,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        item.text,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 3
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (history.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = onClearAll,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("CLEAR ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("CLOSE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }
