@@ -63,6 +63,7 @@ fun SettingsScreen(
     var showInputLanguageInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
+    var showLogsDialog by remember { mutableStateOf(false) }
 
     val connectionTestState by viewModel.connectionTestState.collectAsState()
     val context = LocalContext.current
@@ -232,14 +233,32 @@ fun SettingsScreen(
             }
 
             item {
-                OutlinedButton(
-                    onClick = {
-                        viewModel.testConnection(baseUrl, apiKey, modelId)
-                    },
-                    modifier = Modifier.fillMaxWidth(), // Changed to fill width
-                    enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Test Connection")
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.testConnection(baseUrl, apiKey, modelId)
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
+                    ) {
+                        Text("Test Connection")
+                    }
+
+                    OutlinedButton(
+                        onClick = { showLogsDialog = true },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "View Logs",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Logs")
+                    }
                 }
             }
 
@@ -396,6 +415,12 @@ fun SettingsScreen(
             onDismiss = { showInputLanguageInfo = false }
         )
     }
+
+    if (showLogsDialog) {
+        LogsInfoDialog(
+            onDismiss = { showLogsDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -431,6 +456,78 @@ fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
                 Text(
                     "If your transcriptions are inaccurate, try setting this to your native language.",
                     fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
+            }
+        }
+    )
+}
+
+@Composable
+fun LogsInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text("View API Logs")
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "HyperWhisper logs all API requests and responses for debugging.",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Divider()
+
+                Text(
+                    "Viewing Logs:",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text("• Use ADB: adb logcat | grep HyperWhisper", fontSize = 13.sp)
+                Text("• Install a logcat app from Play Store", fontSize = 13.sp)
+                Text("• Filter by: ChatCompletionStrategy, VoiceRepository", fontSize = 13.sp)
+
+                Divider()
+
+                Text(
+                    "Logged Information:",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text("• API request details (URL, model, prompts)", fontSize = 13.sp)
+                Text("• Response status and content", fontSize = 13.sp)
+                Text("• Token usage (input/output/total)", fontSize = 13.sp)
+                Text("• Audio file information", fontSize = 13.sp)
+                Text("• Error messages and traces", fontSize = 13.sp)
+
+                Divider()
+
+                Text(
+                    "Note: Logs show first 10 chars of API keys only.",
+                    fontSize = 12.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
         },
@@ -1089,6 +1186,71 @@ fun AppearanceSection(
                 onSettingsChange(newSettings)
             }
         )
+
+        Divider()
+
+        // Feature Toggles
+        Text(
+            text = "Features",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        // Auto-copy to clipboard toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Auto-copy to Clipboard",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Automatically copy transcribed text to clipboard",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = localSettings.autoCopyToClipboard,
+                onCheckedChange = { enabled ->
+                    val newSettings = localSettings.copy(autoCopyToClipboard = enabled)
+                    localSettings = newSettings
+                    onSettingsChange(newSettings)
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // History panel toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable History Panel",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Long press paste button to view last 20 transcriptions",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = localSettings.enableHistoryPanel,
+                onCheckedChange = { enabled ->
+                    val newSettings = localSettings.copy(enableHistoryPanel = enabled)
+                    localSettings = newSettings
+                    onSettingsChange(newSettings)
+                }
+            )
+        }
     }
 }
 

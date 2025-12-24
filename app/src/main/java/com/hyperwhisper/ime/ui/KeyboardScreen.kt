@@ -661,20 +661,19 @@ fun RepeatableDeleteButton(
                     }
                 )
             },
-        shape = RoundedCornerShape(8.dp),
-        color = Color.Transparent,
-        border = ButtonDefaults.outlinedButtonBorder,
-        contentColor = MaterialTheme.colorScheme.error
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFE57373), // Reddish color (Material Red 300)
+        tonalElevation = if (isPressed) 8.dp else 2.dp
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Backspace,
-                contentDescription = "Delete",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.error
+            Text(
+                text = "Backspace",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
             )
         }
     }
