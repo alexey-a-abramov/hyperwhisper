@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.addCallback
+import androidx.core.content.pm.PackageInfoCompat
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import kotlin.system.exitProcess
 
@@ -47,9 +49,14 @@ class CrashActivity : ComponentActivity() {
         // Get version info
         versionInfo = try {
             val packageInfo = packageManager.getPackageInfo(packageName, 0)
-            "v${packageInfo.versionName} (Build ${packageInfo.versionCode})"
+            "v${packageInfo.versionName} (Build ${PackageInfoCompat.getLongVersionCode(packageInfo)})"
         } catch (e: Exception) {
             "Version unknown"
+        }
+
+        onBackPressedDispatcher.addCallback(this) {
+            finish()
+            exitProcess(0)
         }
 
         setContent {
@@ -61,7 +68,10 @@ class CrashActivity : ComponentActivity() {
                     onCopy = { copyToClipboard() },
                     onCopyTraces = { copyTracesToClipboard() },
                     onSwitchKeyboard = { openKeyboardSettings() },
-                    onClose = { finish() }
+                    onClose = {
+                        finish()
+                        exitProcess(0)
+                    }
                 )
             }
         }
@@ -90,11 +100,6 @@ class CrashActivity : ComponentActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "Could not open keyboard settings", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    override fun onBackPressed() {
-        super.onBackPressed()
-        exitProcess(0)
     }
 }
 

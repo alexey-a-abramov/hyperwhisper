@@ -3,6 +3,7 @@ package com.hyperwhisper.utils
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -85,7 +86,7 @@ class CrashHandler private constructor(
         try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             sb.appendLine("  Package: ${packageInfo.packageName}")
-            sb.appendLine("  Version: ${packageInfo.versionName} (Build ${packageInfo.versionCode})")
+            sb.appendLine("  Version: ${packageInfo.versionName} (Build ${PackageInfoCompat.getLongVersionCode(packageInfo)})")
 
             // Build timestamp (from package install time as proxy)
             val buildDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())

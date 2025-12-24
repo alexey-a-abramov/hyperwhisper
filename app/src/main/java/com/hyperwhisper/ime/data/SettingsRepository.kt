@@ -40,9 +40,13 @@ class SettingsRepository @Inject constructor(
         private val APPEARANCE_UI_SCALE_KEY = stringPreferencesKey("appearance_ui_scale")
         private val APPEARANCE_FONT_FAMILY_KEY = stringPreferencesKey("appearance_font_family")
         private val APPEARANCE_AUTO_COPY_KEY = booleanPreferencesKey("appearance_auto_copy")
+        private val APPEARANCE_ENABLE_HISTORY_KEY = booleanPreferencesKey("appearance_enable_history")
 
         // Transcription history key
         private val TRANSCRIPTION_HISTORY_KEY = stringPreferencesKey("transcription_history")
+
+        // Usage statistics key
+        private val USAGE_STATISTICS_KEY = stringPreferencesKey("usage_statistics")
 
         // Legacy key for migration
         private val API_KEY_KEY = stringPreferencesKey("api_key")
@@ -223,7 +227,8 @@ class SettingsRepository @Inject constructor(
                     FontFamilyOption.DEFAULT
                 }
             } ?: FontFamilyOption.DEFAULT,
-            autoCopyToClipboard = preferences[APPEARANCE_AUTO_COPY_KEY] ?: true
+            autoCopyToClipboard = preferences[APPEARANCE_AUTO_COPY_KEY] ?: true,
+            enableHistoryPanel = preferences[APPEARANCE_ENABLE_HISTORY_KEY] ?: true
         )
     }
 
@@ -234,6 +239,7 @@ class SettingsRepository @Inject constructor(
             preferences[APPEARANCE_UI_SCALE_KEY] = settings.uiScale.name
             preferences[APPEARANCE_FONT_FAMILY_KEY] = settings.fontFamily.name
             preferences[APPEARANCE_AUTO_COPY_KEY] = settings.autoCopyToClipboard
+            preferences[APPEARANCE_ENABLE_HISTORY_KEY] = settings.enableHistoryPanel
         }
     }
 
@@ -288,6 +294,68 @@ class SettingsRepository @Inject constructor(
     }
 
     /**
+     * Usage Statistics Management
+     */
+    val usageStatistics: Flow<UsageStatistics> = dataStore.data.map { preferences ->
+        val statsJson = preferences[USAGE_STATISTICS_KEY]
+        if (statsJson.isNullOrEmpty()) {
+            UsageStatistics()
+        } else {
+            try {
+                gson.fromJson(statsJson, UsageStatistics::class.java) ?: UsageStatistics()
+            } catch (e: Exception) {
+                UsageStatistics()
+            }
+        }
+    }
+
+    suspend fun recordUsage(
+        modelId: String,
+        inputTokens: Int,
+        outputTokens: Int,
+        totalTokens: Int,
+        audioDurationSeconds: Double
+    ) {
+        dataStore.edit { preferences ->
+            val currentStatsJson = preferences[USAGE_STATISTICS_KEY]
+            val currentStats = if (currentStatsJson.isNullOrEmpty()) {
+                UsageStatistics()
+            } else {
+                try {
+                    gson.fromJson(currentStatsJson, UsageStatistics::class.java) ?: UsageStatistics()
+                } catch (e: Exception) {
+                    UsageStatistics()
+                }
+            }
+
+            // Update model usage
+            val currentModelUsage = currentStats.modelUsage[modelId] ?: ModelUsage()
+            val newModelUsage = ModelUsage(
+                inputTokens = currentModelUsage.inputTokens + inputTokens,
+                outputTokens = currentModelUsage.outputTokens + outputTokens,
+                totalTokens = currentModelUsage.totalTokens + totalTokens
+            )
+
+            val updatedModelUsage = currentStats.modelUsage.toMutableMap()
+            updatedModelUsage[modelId] = newModelUsage
+
+            // Update total audio seconds
+            val updatedStats = UsageStatistics(
+                modelUsage = updatedModelUsage,
+                totalAudioSeconds = currentStats.totalAudioSeconds + audioDurationSeconds
+            )
+
+            preferences[USAGE_STATISTICS_KEY] = gson.toJson(updatedStats)
+        }
+    }
+
+    suspend fun clearStatistics() {
+        dataStore.edit { preferences ->
+            preferences.remove(USAGE_STATISTICS_KEY)
+        }
+    }
+
+    /**
      * Default built-in modes
      */
     private fun getDefaultModes(): List<VoiceMode> = listOf(
@@ -313,6 +381,12 @@ class SettingsRepository @Inject constructor(
             id = "casual",
             name = "Casual",
             systemPrompt = "Transcribe this audio and rewrite it in a casual, friendly tone.",
+            isBuiltIn = true
+        ),
+        VoiceMode(
+            id = "llm_response",
+            name = "LLM Response",
+            systemPrompt = "The user is asking a question. Provide a direct, concise answer to the question without any additional explanation or context. Return ONLY the answer itself.",
             isBuiltIn = true
         )
     )

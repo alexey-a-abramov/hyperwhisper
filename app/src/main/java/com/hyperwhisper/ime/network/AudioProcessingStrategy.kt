@@ -269,12 +269,37 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  Headers: ${response.headers()}")
 
             if (response.isSuccessful) {
-                val result = response.body()?.choices?.firstOrNull()?.message?.content ?: ""
+                val responseBody = response.body()
+                val result = responseBody?.choices?.firstOrNull()?.message?.content ?: ""
+                val tokenUsage = responseBody?.usage
+
                 Log.d(TAG, "✓ Chat completion successful")
                 Log.d(TAG, "  Result length: ${result.length} chars")
                 Log.d(TAG, "  Result preview: ${result.take(100)}...")
+                tokenUsage?.let {
+                    Log.d(TAG, "  Token usage: in=${it.promptTokens}, out=${it.completionTokens}, total=${it.totalTokens}")
+                }
                 Log.d(TAG, "========== END REQUEST ==========")
-                ApiResult.Success(result)
+
+                // Create ProcessingInfo with token usage
+                val processingInfo = tokenUsage?.let {
+                    ProcessingInfo(
+                        processingMode = "single-step",
+                        strategy = "chat-completion",
+                        transcriptionModel = modelId,
+                        postProcessingModel = null,
+                        translationEnabled = false,
+                        translationTarget = null,
+                        originalTranscription = null,
+                        voiceModeName = voiceMode.name,
+                        systemPrompt = "",
+                        audioDurationSeconds = 0.0,
+                        transcriptionTokens = it,
+                        postProcessingTokens = null
+                    )
+                }
+
+                ApiResult.Success(result, processingInfo)
             } else {
                 val errorBody = response.errorBody()?.string() ?: "No error details"
                 val statusCode = response.code()

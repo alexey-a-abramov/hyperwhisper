@@ -5,22 +5,40 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import android.os.Build
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.data.AppearanceSettings
+import com.hyperwhisper.data.ColorSchemeOption
+import com.hyperwhisper.data.FontFamilyOption
+import com.hyperwhisper.data.UIScaleOption
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 
@@ -32,6 +50,7 @@ fun SettingsScreen(
 ) {
     val apiSettings by viewModel.apiSettings.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
+    val appearanceSettings by viewModel.appearanceSettings.collectAsState()
 
     var provider by remember { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
@@ -41,10 +60,12 @@ fun SettingsScreen(
     var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
     var showModelSelector by remember { mutableStateOf(false) }
     var showModelInfo by remember { mutableStateOf(false) }
+    var showInputLanguageInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
 
     val connectionTestState by viewModel.connectionTestState.collectAsState()
+    val context = LocalContext.current
 
     // Update fields when settings change
     LaunchedEffect(apiSettings) {
@@ -72,9 +93,22 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("HyperWhisper Settings") },
+                actions = {
+                    IconButton(onClick = {
+                        val intent = android.content.Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
+                        context.startActivity(intent)
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "About",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -167,12 +201,25 @@ fun SettingsScreen(
             }
 
             item {
-                LanguageSelector(
-                    selectedLanguage = inputLanguage,
-                    onLanguageSelected = { inputLanguage = it },
-                    label = "Input Language (Speech)",
-                    supportingText = "Hint for speech recognition. Leave as Auto-detect if unsure."
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LanguageSelector(
+                        selectedLanguage = inputLanguage,
+                        onLanguageSelected = { inputLanguage = it },
+                        label = "Input Language (Speech)",
+                        supportingText = "Hint for speech recognition. Leave as Auto-detect if unsure.",
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { showInputLanguageInfo = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Input Language Info",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
 
             item {
@@ -185,28 +232,14 @@ fun SettingsScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                OutlinedButton(
+                    onClick = {
+                        viewModel.testConnection(baseUrl, apiKey, modelId)
+                    },
+                    modifier = Modifier.fillMaxWidth(), // Changed to fill width
+                    enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
                 ) {
-                    Button(
-                        onClick = {
-                            viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Save Settings")
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.testConnection(baseUrl, apiKey, modelId)
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
-                    ) {
-                        Text("Test Connection")
-                    }
+                    Text("Test Connection")
                 }
             }
 
@@ -277,6 +310,25 @@ fun SettingsScreen(
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
+            // Appearance Section
+            item {
+                SectionCard(
+                    title = "Appearance",
+                    icon = Icons.Default.Palette
+                ) {
+                    AppearanceSection(
+                        appearanceSettings = appearanceSettings,
+                        onSettingsChange = { newSettings ->
+                            viewModel.saveAppearanceSettings(newSettings)
+                        }
+                    )
+                }
+            }
+
+            item {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
             // Voice Modes Section
             item {
                 Row(
@@ -306,6 +358,18 @@ fun SettingsScreen(
                     onDelete = { viewModel.deleteVoiceMode(mode.id) }
                 )
             }
+
+            item { // Moved Save Settings button to the bottom
+                Button(
+                    onClick = {
+                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
+                        (context as? android.app.Activity)?.finish() // Close settings after saving
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save & Close Settings")
+                }
+            }
         }
     }
 
@@ -326,6 +390,56 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (showInputLanguageInfo) {
+        InputLanguageInfoDialog(
+            onDismiss = { showInputLanguageInfo = false }
+        )
+    }
+}
+
+@Composable
+fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text("Input Language Hint")
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "This setting provides a hint to the speech recognition model about the language being spoken. While 'Auto-detect' works well in most cases, providing a specific language can improve accuracy:",
+                    fontSize = 14.sp
+                )
+                Text("• For speakers with strong accents.", fontSize = 14.sp)
+                Text("• For less common languages or dialects.", fontSize = 14.sp)
+                Text("• In noisy environments.", fontSize = 14.sp)
+                Divider()
+                Text(
+                    "If your transcriptions are inaccurate, try setting this to your native language.",
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE")
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -826,6 +940,279 @@ fun LanguageSelector(
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SectionCard(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Section header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                text = title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Section content card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppearanceSection(
+    appearanceSettings: AppearanceSettings,
+    onSettingsChange: (AppearanceSettings) -> Unit
+) {
+    var localSettings by remember { mutableStateOf(appearanceSettings) }
+
+    // Update when settings change externally
+    LaunchedEffect(appearanceSettings) {
+        localSettings = appearanceSettings
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Color Scheme Selector
+        Text(
+            text = "Color Scheme",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        ColorSchemeSelector(
+            selectedScheme = localSettings.colorScheme,
+            onSchemeSelected = { scheme ->
+                val newSettings = localSettings.copy(colorScheme = scheme)
+                localSettings = newSettings
+                onSettingsChange(newSettings)
+            }
+        )
+
+        // Dynamic Color Toggle (Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Use Dynamic Color",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Match system wallpaper colors",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                Switch(
+                    checked = localSettings.useDynamicColor,
+                    onCheckedChange = { enabled ->
+                        val newSettings = localSettings.copy(useDynamicColor = enabled)
+                        localSettings = newSettings
+                        onSettingsChange(newSettings)
+                    }
+                )
+            }
+        }
+
+        Divider()
+
+        // UI Scale Selector
+        Text(
+            text = "Text Size",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        UIScaleSelector(
+            selectedScale = localSettings.uiScale,
+            onScaleSelected = { scale ->
+                val newSettings = localSettings.copy(uiScale = scale)
+                localSettings = newSettings
+                onSettingsChange(newSettings)
+            }
+        )
+
+        Divider()
+
+        // Font Family Selector
+        Text(
+            text = "Font Family",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        FontFamilySelector(
+            selectedFont = localSettings.fontFamily,
+            onFontSelected = { font ->
+                val newSettings = localSettings.copy(fontFamily = font)
+                localSettings = newSettings
+                onSettingsChange(newSettings)
+            }
+        )
+    }
+}
+
+@Composable
+fun ColorSchemeSelector(
+    selectedScheme: ColorSchemeOption,
+    onSchemeSelected: (ColorSchemeOption) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        ColorSchemeOption.values().forEach { option ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clickable { onSchemeSelected(option) }
+                    .padding(8.dp)
+            ) {
+                // Color circle preview
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = option.seedColor,
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = if (option == selectedScheme) 3.dp else 0.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (option == selectedScheme) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = option.displayName,
+                    fontSize = 12.sp,
+                    fontWeight = if (option == selectedScheme) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun UIScaleSelector(
+    selectedScale: UIScaleOption,
+    onScaleSelected: (UIScaleOption) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        UIScaleOption.values().forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = option == selectedScale,
+                        onClick = { onScaleSelected(option) }
+                    )
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = option.displayName,
+                    fontSize = (16.sp.value * option.scale).sp,
+                    fontWeight = if (option == selectedScale) FontWeight.Bold else FontWeight.Normal
+                )
+                RadioButton(
+                    selected = option == selectedScale,
+                    onClick = { onScaleSelected(option) }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FontFamilySelector(
+    selectedFont: FontFamilyOption,
+    onFontSelected: (FontFamilyOption) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selectedFont.displayName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Font") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            FontFamilyOption.values().forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.displayName,
+                            fontFamily = option.fontFamily
+                        )
+                    },
+                    onClick = {
+                        onFontSelected(option)
+                        expanded = false
+                    }
                 )
             }
         }

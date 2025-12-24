@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
+import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.network.ChatCompletionApiService
@@ -45,6 +46,9 @@ class SettingsViewModel @Inject constructor(
 
     val voiceModes: StateFlow<List<VoiceMode>> = settingsRepository.voiceModes
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
 
     private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
     val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
@@ -98,6 +102,17 @@ class SettingsViewModel @Inject constructor(
                 Log.d(TAG, "Reset settings to defaults for provider: ${provider.displayName}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error resetting to defaults", e)
+            }
+        }
+    }
+
+    fun saveAppearanceSettings(settings: AppearanceSettings) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.saveAppearanceSettings(settings)
+                Log.d(TAG, "Appearance settings saved: $settings")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving appearance settings", e)
             }
         }
     }

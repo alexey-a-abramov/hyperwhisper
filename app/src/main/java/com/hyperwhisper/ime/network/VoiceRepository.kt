@@ -35,6 +35,11 @@ class VoiceRepository @Inject constructor(
         return try {
             Log.d(TAG, "Processing audio with mode: ${voiceMode.name}, provider: ${apiSettings.provider}")
 
+            // Calculate audio duration in seconds (approximate based on file size and format)
+            // For m4a at 128kbps: ~16KB per second
+            val audioDurationSeconds = calculateAudioDuration(audioFile)
+            Log.d(TAG, "Audio duration: $audioDurationSeconds seconds")
+
             // Convert audio to base64
             val base64Result = audioRecorderManager.audioFileToBase64(audioFile)
             if (base64Result.isFailure) {
@@ -64,7 +69,9 @@ class VoiceRepository @Inject constructor(
                             transcribedText = originalTranscription,
                             voiceMode = voiceMode,
                             apiSettings = apiSettings,
-                            transcriptionModel = apiSettings.modelId
+                            transcriptionModel = apiSettings.modelId,
+                            audioDurationSeconds = audioDurationSeconds,
+                            transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens
                         )
                     }
                     is ApiResult.Error -> {
@@ -99,8 +106,23 @@ class VoiceRepository @Inject constructor(
                             translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
                             originalTranscription = null,
                             voiceModeName = voiceMode.name,
-                            systemPrompt = systemPrompt
+                            systemPrompt = systemPrompt,
+                            audioDurationSeconds = audioDurationSeconds,
+                            transcriptionTokens = result.processingInfo?.transcriptionTokens,
+                            postProcessingTokens = null
                         )
+
+                        // Record usage statistics
+                        result.processingInfo?.transcriptionTokens?.let { tokens ->
+                            settingsRepository.recordUsage(
+                                modelId = apiSettings.modelId,
+                                inputTokens = tokens.promptTokens ?: 0,
+                                outputTokens = tokens.completionTokens ?: 0,
+                                totalTokens = tokens.totalTokens ?: 0,
+                                audioDurationSeconds = audioDurationSeconds
+                            )
+                        }
+
                         ApiResult.Success(result.data, processingInfo)
                     }
                     else -> result
@@ -120,9 +142,10 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): Boolean {
-        // If output language is specified, we need translation (post-processing)
-        // even for verbatim mode
-        val needsTranslation = apiSettings.outputLanguage.isNotEmpty()
+        // Translation is only needed if output language is set AND different from input
+        // If both are the same (e.g., both "en"), no translation is needed
+        val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
+            apiSettings.outputLanguage != apiSettings.inputLanguage
 
         // OpenRouter supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.OPENROUTER) return false
@@ -165,7 +188,9 @@ class VoiceRepository @Inject constructor(
         transcribedText: String,
         voiceMode: VoiceMode,
         apiSettings: ApiSettings,
-        transcriptionModel: String
+        transcriptionModel: String,
+        audioDurationSeconds: Double,
+        transcriptionTokens: TokenUsage?
     ): ApiResult<String> {
         return try {
             // Build system prompt with translation if needed
@@ -206,6 +231,8 @@ class VoiceRepository @Inject constructor(
             if (response.isSuccessful) {
                 val result = response.body()
                 val processedText = result?.choices?.firstOrNull()?.message?.content
+                val postProcessingTokens = result?.usage
+
                 if (processedText != null) {
                     Log.d(TAG, "Post-processing successful")
 
@@ -219,8 +246,32 @@ class VoiceRepository @Inject constructor(
                         translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
                         originalTranscription = transcribedText,
                         voiceModeName = voiceMode.name,
-                        systemPrompt = systemPrompt
+                        systemPrompt = systemPrompt,
+                        audioDurationSeconds = audioDurationSeconds,
+                        transcriptionTokens = transcriptionTokens,
+                        postProcessingTokens = postProcessingTokens
                     )
+
+                    // Record usage statistics for both models
+                    transcriptionTokens?.let { tokens ->
+                        settingsRepository.recordUsage(
+                            modelId = transcriptionModel,
+                            inputTokens = tokens.promptTokens ?: 0,
+                            outputTokens = tokens.completionTokens ?: 0,
+                            totalTokens = tokens.totalTokens ?: 0,
+                            audioDurationSeconds = audioDurationSeconds
+                        )
+                    }
+
+                    postProcessingTokens?.let { tokens ->
+                        settingsRepository.recordUsage(
+                            modelId = postProcessModel,
+                            inputTokens = tokens.promptTokens ?: 0,
+                            outputTokens = tokens.completionTokens ?: 0,
+                            totalTokens = tokens.totalTokens ?: 0,
+                            audioDurationSeconds = 0.0 // Don't double-count audio duration
+                        )
+                    }
 
                     ApiResult.Success(processedText, processingInfo)
                 } else {
@@ -298,5 +349,21 @@ class VoiceRepository @Inject constructor(
      */
     fun isRecording(): Boolean {
         return audioRecorderManager.isCurrentlyRecording()
+    }
+
+    /**
+     * Calculate audio duration in seconds from file
+     * Approximation based on file size and bitrate
+     */
+    private fun calculateAudioDuration(audioFile: File): Double {
+        return try {
+            // For m4a at 128kbps (16KB/s), approximate duration
+            val fileSizeBytes = audioFile.length()
+            val durationSeconds = fileSizeBytes / 16000.0 // ~16KB per second at 128kbps
+            durationSeconds
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating audio duration", e)
+            0.0
+        }
     }
 }

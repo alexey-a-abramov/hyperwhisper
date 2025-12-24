@@ -8,6 +8,8 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Recomposer
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.compositionContext
@@ -28,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.hyperwhisper.audio.AudioRecorderManager
+import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.network.ChatCompletionStrategy
 import com.hyperwhisper.network.TranscriptionStrategy
@@ -67,6 +70,7 @@ class VoiceInputMethodService : InputMethodService(),
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
+    private var currentEditorInfo: EditorInfo? = null
 
     // Lifecycle for Compose integration
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -170,7 +174,11 @@ class VoiceInputMethodService : InputMethodService(),
 
     @Composable
     private fun KeyboardContent() {
-        HyperWhisperTheme {
+        val appearanceSettings by settingsRepository.appearanceSettings.collectAsState(
+            initial = AppearanceSettings()
+        )
+
+        HyperWhisperTheme(appearanceSettings = appearanceSettings) {
             KeyboardScreen(
                 viewModel = viewModel,
                 onTextCommit = { text ->
@@ -183,7 +191,7 @@ class VoiceInputMethodService : InputMethodService(),
                     commitText(" ")
                 },
                 onEnter = {
-                    commitText("\n")
+                    handleEnter()
                 },
                 onInsertClipboard = {
                     insertClipboard()
@@ -255,8 +263,39 @@ class VoiceInputMethodService : InputMethodService(),
         }
     }
 
+    /**
+     * Handles enter key press, sending an action or a newline
+     */
+    private fun handleEnter() {
+        val action = currentEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
+        val isMultiLine = currentEditorInfo?.inputType?.and(android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+
+        when {
+            // Always insert newline in multi-line fields if no specific action is set
+            isMultiLine && (action == EditorInfo.IME_ACTION_NONE || action == EditorInfo.IME_ACTION_UNSPECIFIED) -> {
+                commitText("\n")
+                Log.d(TAG, "handleEnter: newline in multi-line")
+            }
+            // Perform the editor action if specified
+            action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED -> {
+                if (!sendDefaultEditorAction(true)) {
+                    Log.w(TAG, "handleEnter: sendDefaultEditorAction failed, falling back to newline.")
+                    commitText("\n")
+                } else {
+                    Log.d(TAG, "handleEnter: sent editor action $action")
+                }
+            }
+            // Default to newline
+            else -> {
+                commitText("\n")
+                Log.d(TAG, "handleEnter: newline default")
+            }
+        }
+    }
+
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        this.currentEditorInfo = attribute
         Log.d(TAG, "onStartInput - inputType: ${attribute?.inputType}, restarting: $restarting")
         TraceLogger.lifecycle("IME", "onStartInput", "inputType=${attribute?.inputType}, restarting=$restarting")
     }
@@ -274,10 +313,10 @@ class VoiceInputMethodService : InputMethodService(),
         TraceLogger.lifecycle("IME", "onFinishInputView", "finishing=$finishingInput")
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
-        // Cancel any ongoing recording when keyboard is dismissed
+        // Allow recording to continue in background (screen lock, keyboard dismiss, etc.)
+        // The 3-minute timeout will auto-stop-and-process if needed
         if (voiceRepository.isRecording()) {
-            TraceLogger.trace("IME", "Canceling ongoing recording on keyboard dismiss")
-            viewModel.cancelRecording()
+            TraceLogger.trace("IME", "Recording continues in background (screen lock/keyboard dismiss)")
         }
     }
 

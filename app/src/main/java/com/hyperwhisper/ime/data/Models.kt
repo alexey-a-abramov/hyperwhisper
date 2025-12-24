@@ -242,7 +242,8 @@ data class InputAudio(
 
 data class ChatCompletionResponse(
     @SerializedName("id") val id: String,
-    @SerializedName("choices") val choices: List<Choice>
+    @SerializedName("choices") val choices: List<Choice>,
+    @SerializedName("usage") val usage: TokenUsage? = null
 )
 
 data class Choice(
@@ -267,7 +268,10 @@ data class ProcessingInfo(
     val translationTarget: String? = null, // Target language for translation
     val originalTranscription: String? = null, // Original text before post-processing (null if single-step)
     val voiceModeName: String, // Name of voice mode used
-    val systemPrompt: String // System prompt that was used
+    val systemPrompt: String, // System prompt that was used
+    val audioDurationSeconds: Double = 0.0, // Audio duration in seconds
+    val transcriptionTokens: TokenUsage? = null, // Tokens used for transcription
+    val postProcessingTokens: TokenUsage? = null // Tokens used for post-processing (if applicable)
 )
 
 /**
@@ -316,7 +320,8 @@ data class AppearanceSettings(
     val useDynamicColor: Boolean = true,
     val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
     val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
-    val autoCopyToClipboard: Boolean = true
+    val autoCopyToClipboard: Boolean = true,
+    val enableHistoryPanel: Boolean = true
 )
 
 /**
@@ -334,4 +339,38 @@ data class TranscriptionHistoryItem(
 data class RecordingSettings(
     val maxRecordingDuration: Long = 180000L, // 3 minutes in milliseconds
     val warnAtSecondsRemaining: Int = 30
+)
+
+/**
+ * Usage statistics for a specific model
+ */
+data class ModelUsage(
+    val inputTokens: Long = 0,
+    val outputTokens: Long = 0,
+    val totalTokens: Long = 0
+) {
+    operator fun plus(other: ModelUsage): ModelUsage {
+        return ModelUsage(
+            inputTokens = this.inputTokens + other.inputTokens,
+            outputTokens = this.outputTokens + other.outputTokens,
+            totalTokens = this.totalTokens + other.totalTokens
+        )
+    }
+}
+
+/**
+ * Overall usage statistics
+ */
+data class UsageStatistics(
+    val modelUsage: Map<String, ModelUsage> = emptyMap(), // modelId -> usage
+    val totalAudioSeconds: Double = 0.0
+)
+
+/**
+ * Token usage from API response
+ */
+data class TokenUsage(
+    @SerializedName("prompt_tokens") val promptTokens: Int? = null,
+    @SerializedName("completion_tokens") val completionTokens: Int? = null,
+    @SerializedName("total_tokens") val totalTokens: Int? = null
 )

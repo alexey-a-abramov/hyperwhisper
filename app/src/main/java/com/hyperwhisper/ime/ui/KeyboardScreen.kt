@@ -368,10 +368,14 @@ fun KeyboardScreen(
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp)
-                            .pointerInput(Unit) {
+                            .pointerInput(appearanceSettings.enableHistoryPanel) {
                                 detectTapGestures(
                                     onTap = { onTextCommit(lastTranscribedText) },
-                                    onLongPress = { showHistoryPanel = true }
+                                    onLongPress = {
+                                        if (appearanceSettings.enableHistoryPanel) {
+                                            showHistoryPanel = true
+                                        }
+                                    }
                                 )
                             },
                         color = MaterialTheme.colorScheme.secondaryContainer,

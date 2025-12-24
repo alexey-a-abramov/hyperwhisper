@@ -1,3 +1,9 @@
+import java.util.Properties
+import java.io.FileInputStream
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,8 +20,8 @@ android {
         applicationId = "com.hyperwhisper"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (project.findProperty("VERSION_CODE") as String).toInt()
+        versionName = project.findProperty("VERSION_NAME") as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -40,9 +46,7 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-Xjvm-default=all"
-        )
+        freeCompilerArgs += "-Xjvm-default=all"
     }
 
     buildFeatures {
@@ -53,6 +57,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    lint {
+        disable.add("MutableCollectionMutableState")
+        disable.add("AutoboxingStateCreation")
     }
 }
 
@@ -103,4 +112,34 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Auto-increment version code on every build
+tasks.register("incrementVersionCode") {
+    doLast {
+        val propertiesFile = file("../gradle.properties")
+        if (propertiesFile.exists()) {
+            val properties = Properties()
+            FileInputStream(propertiesFile).use { properties.load(it) }
+
+            val currentVersionCode = properties.getProperty("VERSION_CODE")?.toIntOrNull() ?: 1
+            val newVersionCode = currentVersionCode + 1
+
+            properties.setProperty("VERSION_CODE", newVersionCode.toString())
+
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())
+            FileWriter(propertiesFile).use {
+                properties.store(it, "Auto-incremented by Gradle on $timestamp")
+            }
+
+            println("✓ Version code incremented: $currentVersionCode → $newVersionCode")
+        }
+    }
+}
+
+// Run incrementVersionCode before assembling debug or release builds
+tasks.whenTaskAdded {
+    if (name == "assembleDebug" || name == "assembleRelease") {
+        dependsOn("incrementVersionCode")
+    }
 }
