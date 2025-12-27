@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.animation.core.*
@@ -37,12 +38,16 @@ import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
+import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.components.InputFieldInfo
 
 @Composable
 fun KeyboardScreen(
     viewModel: KeyboardViewModel,
+    editorInfo: EditorInfo? = null,
     onTextCommit: (String) -> Unit,
     onDelete: () -> Unit = {},
+    onDeleteAll: () -> Unit = {},
     onSpace: () -> Unit = {},
     onEnter: () -> Unit = {},
     onInsertClipboard: () -> Unit = {},
@@ -50,6 +55,7 @@ fun KeyboardScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val recordingState by viewModel.recordingState.collectAsState()
     val transcribedText by viewModel.transcribedText.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -60,11 +66,13 @@ fun KeyboardScreen(
     val selectedModeId by viewModel.selectedModeId.collectAsState()
     val apiSettings by viewModel.apiSettings.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
+    val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
     var showOutputLanguageDialog by remember { mutableStateOf(false) }
     var showHistoryPanel by remember { mutableStateOf(false) }
+    var showTimerText by remember { mutableStateOf(true) }
 
     // Track last transcribed text for paste button
     var lastTranscribedText by remember { mutableStateOf("") }
@@ -143,7 +151,7 @@ fun KeyboardScreen(
                 IconButton(onClick = onSwitchKeyboard) {
                     Icon(
                         imageVector = Icons.Default.Keyboard,
-                        contentDescription = "Switch Keyboard",
+                        contentDescription = strings.switchKeyboardDesc,
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -160,6 +168,21 @@ fun KeyboardScreen(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
+                // Logs button
+                IconButton(
+                    onClick = {
+                        val intent = Intent(context, com.hyperwhisper.ui.logs.LogsActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Assignment,
+                        contentDescription = strings.viewLogsDesc,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
                 // Help/About button
                 IconButton(
                     onClick = {
@@ -170,7 +193,7 @@ fun KeyboardScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Help,
-                        contentDescription = "Help & About",
+                        contentDescription = strings.helpAndAboutDesc,
                         tint = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -184,7 +207,7 @@ fun KeyboardScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = strings.settingsDesc,
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -264,34 +287,44 @@ fun KeyboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Far left: Cancel button (shown during recording)
+                // Far left: Input field info OR Cancel button
                 Box(
                     modifier = Modifier.width(80.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    if (recordingState == RecordingState.RECORDING) {
-                        OutlinedButton(
-                            onClick = { viewModel.cancelRecording() },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            ),
-                            contentPadding = PaddingValues(4.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
+                    when (recordingState) {
+                        RecordingState.RECORDING -> {
+                            // Show cancel button during recording
+                            OutlinedButton(
+                                onClick = { viewModel.cancelRecording() },
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                                contentPadding = PaddingValues(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Cancel,
-                                    contentDescription = "Cancel",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "CANCEL",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Cancel,
+                                        contentDescription = strings.cancelDesc,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        strings.cancel.uppercase(),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
+                        }
+                        else -> {
+                            // Show input field info when not recording
+                            InputFieldInfo(
+                                editorInfo = editorInfo,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -310,15 +343,18 @@ fun KeyboardScreen(
                             recordingState = recordingState,
                             onStartRecording = { viewModel.startRecording() },
                             onStopRecording = { viewModel.stopRecording() },
+                            recordingDuration = recordingDuration,
                             modifier = Modifier
                         )
 
-                        // Timer display (right of mic)
+                        // Timer display (right of mic) - clickable to toggle
                         if (recordingState == RecordingState.RECORDING) {
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(8.dp))
                             RecordingTimer(
                                 durationMs = recordingDuration,
-                                maxDurationMs = 180000L
+                                maxDurationMs = 180000L,
+                                isVisible = showTimerText,
+                                onToggle = { showTimerText = !showTimerText }
                             )
                         }
                     }
@@ -333,23 +369,29 @@ fun KeyboardScreen(
                     // Delete button with repeat functionality
                     RepeatableDeleteButton(
                         onDelete = onDelete,
+                        onDeleteAll = onDeleteAll,
                         modifier = Modifier.fillMaxWidth().height(50.dp)
                     )
 
-                    // Enter button
-                    Button(
+                    // Enter button (minimal with just icon)
+                    Surface(
                         onClick = onEnter,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardReturn,
-                            contentDescription = "Enter",
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardReturn,
+                                contentDescription = strings.enterDesc,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -387,7 +429,7 @@ fun KeyboardScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentPaste,
-                                contentDescription = "Paste Last",
+                                contentDescription = strings.pasteLastTranscription,
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -397,7 +439,7 @@ fun KeyboardScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    "PASTE LAST (hold: history)",
+                                    strings.pasteLastHold.uppercase(),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -417,18 +459,26 @@ fun KeyboardScreen(
                     }
                 }
 
-                // Space button (takes remaining width or full width if no paste button)
+                // Space button (minimal elongated bar like a space bar)
                 Button(
                     onClick = onSpace,
                     modifier = Modifier
                         .weight(if (lastTranscribedText.isEmpty()) 1f else 0.6f)
                         .height(56.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Text(
-                        "SPACE",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
+                        text = strings.space,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFeatureSettings = "smcp" // Small caps
+                        )
                     )
                 }
             }
@@ -457,6 +507,7 @@ fun KeyboardScreen(
             LanguageSelectorDialog(
                 title = "Input Language (Speech)",
                 currentLanguage = apiSettings.inputLanguage,
+                recentlyUsedLanguages = recentlyUsedLanguages,
                 onLanguageSelected = { languageCode ->
                     viewModel.setInputLanguage(languageCode)
                     showInputLanguageDialog = false
@@ -470,6 +521,7 @@ fun KeyboardScreen(
             LanguageSelectorDialog(
                 title = "Output Language (Translation)",
                 currentLanguage = apiSettings.outputLanguage,
+                recentlyUsedLanguages = recentlyUsedLanguages,
                 onLanguageSelected = { languageCode ->
                     viewModel.setOutputLanguage(languageCode)
                     showOutputLanguageDialog = false
@@ -505,6 +557,11 @@ fun ModeSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedMode = modes.firstOrNull { it.id == selectedModeId }
 
+    // Reset expanded state when mode changes
+    androidx.compose.runtime.LaunchedEffect(selectedModeId) {
+        expanded = false
+    }
+
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = it },
@@ -518,11 +575,11 @@ fun ModeSelector(
             singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            textStyle = MaterialTheme.typography.bodySmall,
+            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
             modifier = Modifier
                 .menuAnchor()
                 .fillMaxWidth()
-                .height(48.dp)
+                .heightIn(min = 48.dp)
         )
 
         ExposedDropdownMenu(
@@ -547,6 +604,7 @@ fun MicrophoneButton(
     recordingState: RecordingState,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
+    recordingDuration: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -558,7 +616,10 @@ fun MicrophoneButton(
                 IdleMicButton(onClick = onStartRecording)
             }
             RecordingState.RECORDING -> {
-                RecordingMicButton(onClick = onStopRecording)
+                RecordingMicButton(
+                    onClick = onStopRecording,
+                    recordingDuration = recordingDuration
+                )
             }
             RecordingState.PROCESSING -> {
                 ProcessingIndicator()
@@ -587,7 +648,7 @@ fun IdleMicButton(onClick: () -> Unit) {
 }
 
 @Composable
-fun RecordingMicButton(onClick: () -> Unit) {
+fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
     // Pulsing animation
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -600,6 +661,11 @@ fun RecordingMicButton(onClick: () -> Unit) {
         label = "scale"
     )
 
+    // Calculate minutes and seconds
+    val seconds = (recordingDuration / 1000) % 60
+    val minutes = (recordingDuration / 1000) / 60
+    val timeText = "$minutes:${seconds.toString().padStart(2, '0')}"
+
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier
@@ -608,11 +674,23 @@ fun RecordingMicButton(onClick: () -> Unit) {
         containerColor = Color(0xFFE53935), // Red
         contentColor = Color.White
     ) {
-        Icon(
-            imageVector = Icons.Default.Stop,
-            contentDescription = "Stop Recording",
-            modifier = Modifier.size(36.dp)
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Stop,
+                contentDescription = "Stop Recording",
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = timeText,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
     }
 }
 
@@ -633,22 +711,54 @@ fun ProcessingIndicator() {
 @Composable
 fun RepeatableDeleteButton(
     onDelete: () -> Unit,
+    onDeleteAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    var pressStartTime by remember { mutableStateOf(0L) }
+    var hasTriggeredDeleteAll by remember { mutableStateOf(false) }
 
     LaunchedEffect(isPressed) {
         if (isPressed) {
+            pressStartTime = System.currentTimeMillis()
+            hasTriggeredDeleteAll = false
+
             // Initial delay before repeat starts (500ms like typical keyboards)
             delay(500)
+
             // Repeat deletion while pressed (50ms between deletions for fast repeat)
             while (isPressed) {
+                val pressDuration = System.currentTimeMillis() - pressStartTime
+
+                // After 5 seconds of holding, delete all text
+                if (pressDuration >= 5000 && !hasTriggeredDeleteAll) {
+                    onDeleteAll()
+                    hasTriggeredDeleteAll = true
+                    // Stop repeating after delete all
+                    break
+                }
+
                 onDelete()
                 delay(50)
             }
         }
     }
 
+    // Determine button color based on press duration
+    val pressDuration = if (isPressed) {
+        System.currentTimeMillis() - pressStartTime
+    } else {
+        0L
+    }
+
+    val backgroundColor = when {
+        pressDuration >= 5000 -> MaterialTheme.colorScheme.error
+        pressDuration >= 3000 -> MaterialTheme.colorScheme.errorContainer
+        isPressed -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surface
+    }
+
+    // Minimal circular button with left arrow icon
     Surface(
         modifier = modifier
             .pointerInput(Unit) {
@@ -661,19 +771,19 @@ fun RepeatableDeleteButton(
                     }
                 )
             },
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFFE57373), // Reddish color (Material Red 300)
+        shape = CircleShape,
+        color = backgroundColor,
         tonalElevation = if (isPressed) 8.dp else 2.dp
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = "Backspace",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Backspace",
+                tint = if (pressDuration >= 3000) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -685,6 +795,7 @@ fun ErrorOverlay(
     onDismiss: () -> Unit,
     context: Context
 ) {
+    val strings = LocalStrings.current
     val isPermissionError = errorMessage.contains("permission", ignoreCase = true)
 
     // Full-screen overlay within keyboard (not a separate Dialog window)
@@ -710,7 +821,7 @@ fun ErrorOverlay(
             ) {
                 // Title
                 Text(
-                    text = "Error",
+                    text = strings.error,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -752,7 +863,7 @@ fun ErrorOverlay(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "COPY ERROR",
+                            strings.copyError.uppercase(),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -781,7 +892,7 @@ fun ErrorOverlay(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "OPEN SETTINGS",
+                                strings.openSettings.uppercase(),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -797,7 +908,7 @@ fun ErrorOverlay(
                         )
                     ) {
                         Text(
-                            "DISMISS",
+                            strings.dismiss.uppercase(),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -813,6 +924,7 @@ fun ConfigInfoDialog(
     apiSettings: com.hyperwhisper.data.ApiSettings,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalStrings.current
     // Full-screen overlay within keyboard (not a separate Dialog window)
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -846,7 +958,7 @@ fun ConfigInfoDialog(
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        "Current Configuration",
+                        strings.currentConfiguration,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -864,20 +976,20 @@ fun ConfigInfoDialog(
                 ) {
                     // Provider
                     ConfigInfoItem(
-                        label = "Provider",
+                        label = strings.provider,
                         value = apiSettings.provider.displayName
                     )
 
                     // Transcription Model
                     ConfigInfoItem(
-                        label = "Transcription Model",
+                        label = strings.transcriptionModel,
                         value = apiSettings.modelId
                     )
 
                     // Post-Processing Model
                     ConfigInfoItem(
-                        label = "Post-Processing Model",
-                        value = "gpt-4o-mini (for non-verbatim modes & translation)"
+                        label = strings.postProcessingModel,
+                        value = strings.postProcessingModelDesc
                     )
 
                     // Endpoint
@@ -1041,42 +1153,24 @@ fun OutputLanguageButton(
 fun LanguageSelectorDialog(
     title: String,
     currentLanguage: String,
+    recentlyUsedLanguages: List<String>,
     onLanguageSelected: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    val strings = LocalStrings.current
 
-    // Fuzzy search filter
-    val filteredLanguages = remember(searchQuery) {
-        if (searchQuery.isBlank()) {
-            SUPPORTED_LANGUAGES
-        } else {
-            val query = searchQuery.lowercase()
-            SUPPORTED_LANGUAGES.filter { language ->
-                language.name.lowercase().contains(query) ||
-                language.code.lowercase().contains(query) ||
-                // Fuzzy match: check if query letters appear in order
-                language.name.lowercase().let { name ->
-                    var queryIndex = 0
-                    name.forEach { char ->
-                        if (queryIndex < query.length && char == query[queryIndex]) {
-                            queryIndex++
-                        }
-                    }
-                    queryIndex == query.length
-                }
-            }.sortedBy { language ->
-                // Prioritize exact matches and starts-with matches
-                when {
-                    language.name.lowercase() == query -> 0
-                    language.code.lowercase() == query -> 1
-                    language.name.lowercase().startsWith(query) -> 2
-                    language.code.lowercase().startsWith(query) -> 3
-                    language.name.lowercase().contains(query) -> 4
-                    else -> 5
-                }
-            }
+    // Reorder languages with recently used at top (after Auto-detect and English)
+    val reorderedLanguages = remember(recentlyUsedLanguages) {
+        val autoDetect = SUPPORTED_LANGUAGES.firstOrNull { it.code.isEmpty() }
+        val english = SUPPORTED_LANGUAGES.firstOrNull { it.code == "en" }
+        val recentLanguages = recentlyUsedLanguages.mapNotNull { code ->
+            SUPPORTED_LANGUAGES.firstOrNull { it.code == code }
         }
+        val remainingLanguages = SUPPORTED_LANGUAGES.filter {
+            it.code.isNotEmpty() && it.code != "en" && !recentlyUsedLanguages.contains(it.code)
+        }
+
+        listOfNotNull(autoDetect, english) + recentLanguages + remainingLanguages
     }
 
     // Full-screen overlay within keyboard
@@ -1108,29 +1202,16 @@ fun LanguageSelectorDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Search field
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search...", fontSize = 12.sp) },
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
-                )
-
                 Divider()
 
                 // Language list (scrollable, compact)
+                // Use Voice Commands mode to change languages hands-free
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(filteredLanguages.size) { index ->
-                        val language = filteredLanguages[index]
+                    items(reorderedLanguages.size) { index ->
+                        val language = reorderedLanguages[index]
                         Surface(
                             onClick = { onLanguageSelected(language.code) },
                             modifier = Modifier.fillMaxWidth(),
@@ -1164,17 +1245,6 @@ fun LanguageSelectorDialog(
                             }
                         }
                     }
-
-                    if (filteredLanguages.isEmpty()) {
-                        item {
-                            Text(
-                                text = "No languages found",
-                                modifier = Modifier.padding(12.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
                 }
 
                 // Cancel button (compact)
@@ -1182,7 +1252,7 @@ fun LanguageSelectorDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().height(40.dp)
                 ) {
-                    Text("CANCEL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(strings.cancel.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1195,18 +1265,42 @@ fun LanguageSelectorDialog(
 @Composable
 fun RecordingTimer(
     durationMs: Long,
-    maxDurationMs: Long
+    maxDurationMs: Long,
+    isVisible: Boolean,
+    onToggle: () -> Unit
 ) {
     val seconds = (durationMs / 1000) % 60
     val minutes = (durationMs / 1000) / 60
     val isWarning = (maxDurationMs - durationMs) <= 30000 // Last 30 seconds
 
-    Text(
-        text = "$minutes:${seconds.toString().padStart(2, '0')}",
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold,
-        color = if (isWarning) Color.Red else MaterialTheme.colorScheme.primary
-    )
+    Surface(
+        onClick = onToggle,
+        modifier = Modifier.size(48.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = if (isWarning) Color(0xFFE53935).copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 2.dp
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (isVisible) {
+                Text(
+                    text = "$minutes:${seconds.toString().padStart(2, '0')}",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isWarning) Color.Red else MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AccessTime,
+                    contentDescription = "Show Timer",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -1219,6 +1313,7 @@ fun TranscriptionHistoryPanel(
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalStrings.current
     // Full-screen overlay
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -1247,13 +1342,13 @@ fun TranscriptionHistoryPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Transcription History",
+                        strings.transcriptionHistory,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "${history.size}/20",
+                        strings.historyCount.replace("{count}", history.size.toString()),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -1268,7 +1363,7 @@ fun TranscriptionHistoryPanel(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "No history yet",
+                            strings.noHistoryYet,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     }

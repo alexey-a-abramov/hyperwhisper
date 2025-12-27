@@ -14,7 +14,8 @@ import javax.inject.Inject
 @HiltViewModel
 class KeyboardViewModel @Inject constructor(
     private val voiceRepository: VoiceRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
 ) : ViewModel() {
 
     companion object {
@@ -55,6 +56,10 @@ class KeyboardViewModel @Inject constructor(
 
     val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
+
+    // Recently used languages
+    val recentlyUsedLanguages: StateFlow<List<String>> = settingsRepository.recentlyUsedLanguages
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Derived state for selected mode
     val selectedMode: StateFlow<VoiceMode?> = combine(
@@ -161,12 +166,43 @@ class KeyboardViewModel @Inject constructor(
                     is ApiResult.Success -> {
                         Log.d(TAG, "Transcription successful: ${result.data}")
                         TraceLogger.trace("KeyboardViewModel", "Transcription successful, length: ${result.data.length} chars")
-                        _transcribedText.value = result.data
+
+                        // Check if in voice commands mode
+                        if (mode.id == "voice_commands") {
+                            // Process as voice command
+                            viewModelScope.launch {
+                                try {
+                                    val commandResult = voiceCommandProcessor.executeCommand(
+                                        result.data,
+                                        viewModelScope
+                                    )
+
+                                    // Show notification
+                                    voiceCommandProcessor.showNotification(commandResult)
+
+                                    // Don't commit command text to input field
+                                    // Just log it
+                                    Log.d(TAG, "Voice command executed: ${commandResult.message}")
+                                    TraceLogger.trace("KeyboardViewModel", "Voice command: ${commandResult.message}")
+
+                                    // Clear transcribed text so it doesn't get committed
+                                    _transcribedText.value = ""
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error processing voice command", e)
+                                    TraceLogger.error("KeyboardViewModel", "Voice command error", e)
+                                    _errorMessage.value = "Voice command error: ${e.message}"
+                                }
+                            }
+                        } else {
+                            // Normal transcription mode
+                            _transcribedText.value = result.data
+
+                            // Save to history
+                            settingsRepository.addToHistory(result.data)
+                        }
+
                         _processingInfo.value = result.processingInfo
                         _recordingState.value = RecordingState.IDLE
-
-                        // Save to history
-                        settingsRepository.addToHistory(result.data)
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "Transcription failed: ${result.message}")
@@ -255,6 +291,8 @@ class KeyboardViewModel @Inject constructor(
             val currentSettings = apiSettings.value
             val updatedSettings = currentSettings.copy(inputLanguage = languageCode)
             settingsRepository.saveApiSettings(updatedSettings)
+            // Track language usage
+            settingsRepository.trackLanguageUsage(languageCode)
             Log.d(TAG, "Input language hint changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
         }
     }
@@ -267,6 +305,8 @@ class KeyboardViewModel @Inject constructor(
             val currentSettings = apiSettings.value
             val updatedSettings = currentSettings.copy(outputLanguage = languageCode)
             settingsRepository.saveApiSettings(updatedSettings)
+            // Track language usage
+            settingsRepository.trackLanguageUsage(languageCode)
             Log.d(TAG, "Output language changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
         }
     }

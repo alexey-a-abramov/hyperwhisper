@@ -145,6 +145,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun updateVoiceMode(mode: VoiceMode) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.updateVoiceMode(mode)
+                Log.d(TAG, "Voice mode updated: ${mode.id}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating voice mode", e)
+            }
+        }
+    }
+
     fun testConnection(baseUrl: String, apiKey: String, modelId: String) {
         viewModelScope.launch {
             _connectionTestState.value = ConnectionTestState.Testing

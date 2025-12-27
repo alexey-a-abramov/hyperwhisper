@@ -1,51 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        NOTE: HyperWhisper uses a Kotlin-based localization system for UI strings.
+        This file contains only Android-required system strings.
+
+        For UI translations, see:
+        - app/src/main/java/com/hyperwhisper/ime/localization/Strings.kt
+        - app/src/main/java/com/hyperwhisper/ime/localization/EnglishStrings.kt
+        - app/src/main/java/com/hyperwhisper/ime/localization/RussianStrings.kt
+        - app/src/main/java/com/hyperwhisper/ime/localization/ArabicStrings.kt
+
+        See LOCALIZATION.md for details on adding new languages.
+    -->
+
+    <!-- Android System Strings (Required) -->
     <string name="app_name">HyperWhisper</string>
     <string name="ime_name">HyperWhisper Voice Keyboard</string>
+
+    <!-- Activity Labels (Required by AndroidManifest) -->
     <string name="settings_title">HyperWhisper Settings</string>
-
-    <!-- Keyboard UI -->
-    <string name="mic_button_description">Voice Input Button</string>
-    <string name="settings_button_description">Settings</string>
-    <string name="recording">Recording...</string>
-    <string name="processing">Processing...</string>
-    <string name="tap_to_speak">Tap to speak</string>
-    <string name="cancel">Cancel</string>
-    <string name="send">Send</string>
-
-    <!-- Settings -->
-    <string name="api_settings_title">API Configuration</string>
-    <string name="api_provider">API Provider</string>
-    <string name="api_base_url">Base URL</string>
-    <string name="api_key">API Key</string>
-    <string name="model_id">Model ID</string>
-    <string name="save">Save</string>
-
-    <string name="modes_title">Voice Modes</string>
-    <string name="add_mode">Add Mode</string>
-    <string name="mode_name">Mode Name</string>
-    <string name="system_prompt">System Prompt</string>
-    <string name="edit_mode">Edit Mode</string>
-    <string name="delete_mode">Delete</string>
-
-    <!-- Default Modes -->
-    <string name="mode_verbatim">Verbatim</string>
-    <string name="mode_verbatim_prompt">Transcribe the audio exactly as spoken.</string>
-    <string name="mode_polite">Polite</string>
-    <string name="mode_polite_prompt">Transcribe this audio and rewrite it to be extremely polite and professional.</string>
-    <string name="mode_casual">Casual</string>
-    <string name="mode_casual_prompt">Transcribe this audio and rewrite it in a casual, friendly tone.</string>
-    <string name="mode_translate_en">Translate to English</string>
-    <string name="mode_translate_en_prompt">Transcribe this audio and translate it to English.</string>
-
-    <!-- Permissions -->
-    <string name="permission_required">Microphone Permission Required</string>
-    <string name="permission_rationale">HyperWhisper needs microphone access to record your voice.</string>
-    <string name="grant_permission">Grant Permission</string>
-
-    <!-- Errors -->
-    <string name="error_api_key_missing">Please configure your API key in settings</string>
-    <string name="error_recording_failed">Recording failed</string>
-    <string name="error_network_failed">Network error. Please check your connection.</string>
-    <string name="error_api_failed">API request failed</string>
+    <string name="about_title">About HyperWhisper</string>
+    <string name="logs_title">Trace Logs</string>
 </resources>

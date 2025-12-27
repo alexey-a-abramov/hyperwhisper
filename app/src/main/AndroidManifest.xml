@@ -52,7 +52,14 @@
         <!-- About Activity -->
         <activity
             android:name=".ui.about.AboutActivity"
-            android:label="About HyperWhisper"
+            android:label="@string/about_title"
+            android:theme="@style/Theme.HyperWhisper"
+            android:exported="false" />
+
+        <!-- Logs Activity -->
+        <activity
+            android:name=".ui.logs.LogsActivity"
+            android:label="@string/logs_title"
             android:theme="@style/Theme.HyperWhisper"
             android:exported="false" />
 

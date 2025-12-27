@@ -37,6 +37,8 @@ class SettingsRepository @Inject constructor(
         // Appearance settings keys
         private val APPEARANCE_COLOR_SCHEME_KEY = stringPreferencesKey("appearance_color_scheme")
         private val APPEARANCE_USE_DYNAMIC_COLOR_KEY = booleanPreferencesKey("appearance_use_dynamic_color")
+        private val APPEARANCE_DARK_MODE_KEY = stringPreferencesKey("appearance_dark_mode")
+        private val APPEARANCE_UI_LANGUAGE_KEY = stringPreferencesKey("appearance_ui_language")
         private val APPEARANCE_UI_SCALE_KEY = stringPreferencesKey("appearance_ui_scale")
         private val APPEARANCE_FONT_FAMILY_KEY = stringPreferencesKey("appearance_font_family")
         private val APPEARANCE_AUTO_COPY_KEY = booleanPreferencesKey("appearance_auto_copy")
@@ -48,10 +50,14 @@ class SettingsRepository @Inject constructor(
         // Usage statistics key
         private val USAGE_STATISTICS_KEY = stringPreferencesKey("usage_statistics")
 
+        // Recently used languages key
+        private val RECENTLY_USED_LANGUAGES_KEY = stringPreferencesKey("recently_used_languages")
+
         // Legacy key for migration
         private val API_KEY_KEY = stringPreferencesKey("api_key")
 
         private const val MAX_HISTORY_ITEMS = 20
+        private const val MAX_RECENT_LANGUAGES = 5
     }
 
     /**
@@ -187,6 +193,22 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun updateVoiceMode(mode: VoiceMode) {
+        dataStore.edit { preferences ->
+            val currentModesJson = preferences[VOICE_MODES_KEY]
+            val currentModes = if (currentModesJson.isNullOrEmpty()) {
+                getDefaultModes()
+            } else {
+                val type = object : TypeToken<List<VoiceMode>>() {}.type
+                gson.fromJson<List<VoiceMode>>(currentModesJson, type)
+            }
+            val updatedModes = currentModes.map {
+                if (it.id == mode.id) mode else it
+            }
+            preferences[VOICE_MODES_KEY] = gson.toJson(updatedModes)
+        }
+    }
+
     /**
      * Selected Mode
      */
@@ -209,10 +231,18 @@ class SettingsRepository @Inject constructor(
                 try {
                     ColorSchemeOption.valueOf(it)
                 } catch (e: Exception) {
-                    ColorSchemeOption.PURPLE
+                    ColorSchemeOption.OCEAN_DEEP
                 }
-            } ?: ColorSchemeOption.PURPLE,
+            } ?: ColorSchemeOption.OCEAN_DEEP,
             useDynamicColor = preferences[APPEARANCE_USE_DYNAMIC_COLOR_KEY] ?: true,
+            darkModePreference = preferences[APPEARANCE_DARK_MODE_KEY]?.let {
+                try {
+                    DarkModePreference.valueOf(it)
+                } catch (e: Exception) {
+                    DarkModePreference.SYSTEM
+                }
+            } ?: DarkModePreference.SYSTEM,
+            uiLanguage = preferences[APPEARANCE_UI_LANGUAGE_KEY] ?: "en",
             uiScale = preferences[APPEARANCE_UI_SCALE_KEY]?.let {
                 try {
                     UIScaleOption.valueOf(it)
@@ -236,10 +266,56 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { preferences ->
             preferences[APPEARANCE_COLOR_SCHEME_KEY] = settings.colorScheme.name
             preferences[APPEARANCE_USE_DYNAMIC_COLOR_KEY] = settings.useDynamicColor
+            preferences[APPEARANCE_DARK_MODE_KEY] = settings.darkModePreference.name
+            preferences[APPEARANCE_UI_LANGUAGE_KEY] = settings.uiLanguage
             preferences[APPEARANCE_UI_SCALE_KEY] = settings.uiScale.name
             preferences[APPEARANCE_FONT_FAMILY_KEY] = settings.fontFamily.name
             preferences[APPEARANCE_AUTO_COPY_KEY] = settings.autoCopyToClipboard
             preferences[APPEARANCE_ENABLE_HISTORY_KEY] = settings.enableHistoryPanel
+        }
+    }
+
+    /**
+     * Recently Used Languages Flow
+     */
+    val recentlyUsedLanguages: Flow<List<String>> = dataStore.data.map { preferences ->
+        val languagesJson = preferences[RECENTLY_USED_LANGUAGES_KEY]
+        if (languagesJson.isNullOrEmpty()) {
+            emptyList()
+        } else {
+            try {
+                val type = object : TypeToken<List<String>>() {}.type
+                gson.fromJson(languagesJson, type) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    suspend fun trackLanguageUsage(languageCode: String) {
+        // Don't track empty (auto-detect) or "en" (English) as they're always at the top
+        if (languageCode.isEmpty() || languageCode == "en") {
+            return
+        }
+
+        dataStore.edit { preferences ->
+            val currentJson = preferences[RECENTLY_USED_LANGUAGES_KEY]
+            val currentList = if (currentJson.isNullOrEmpty()) {
+                emptyList()
+            } else {
+                try {
+                    val type = object : TypeToken<List<String>>() {}.type
+                    gson.fromJson<List<String>>(currentJson, type) ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            }
+
+            // Remove language if it already exists, then add it at the front
+            val updatedList = (listOf(languageCode) + currentList.filter { it != languageCode })
+                .take(MAX_RECENT_LANGUAGES)
+
+            preferences[RECENTLY_USED_LANGUAGES_KEY] = gson.toJson(updatedList)
         }
     }
 
@@ -356,38 +432,73 @@ class SettingsRepository @Inject constructor(
     }
 
     /**
-     * Default built-in modes
+     * Default modes - all editable for prompt database functionality
      */
     private fun getDefaultModes(): List<VoiceMode> = listOf(
         VoiceMode(
             id = "verbatim",
             name = "Verbatim",
             systemPrompt = "Transcribe the audio exactly as spoken.",
-            isBuiltIn = true
+            isBuiltIn = false
         ),
         VoiceMode(
             id = "fix_grammar",
             name = "Fix Grammar",
             systemPrompt = "Transcribe this audio and fix any grammar, spelling, and punctuation errors while preserving the original meaning and tone.",
-            isBuiltIn = true
+            isBuiltIn = false
         ),
         VoiceMode(
             id = "polite",
             name = "Polite",
-            systemPrompt = "Transcribe this audio and rewrite it to be extremely polite and professional.",
-            isBuiltIn = true
+            systemPrompt = "Transcribe this audio and reformulate it to be socially acceptable, polite, and conversational. Make it slightly better than neutral tone - professional yet friendly. Remove any harsh language or potential insults while preserving the core message and intent.",
+            isBuiltIn = false
         ),
         VoiceMode(
-            id = "casual",
-            name = "Casual",
-            systemPrompt = "Transcribe this audio and rewrite it in a casual, friendly tone.",
-            isBuiltIn = true
+            id = "prompt_formatter",
+            name = "Prompt Formatter",
+            systemPrompt = "Reformulate the user's input into a clear, effective prompt suitable for LLM processing. Enhance clarity, add necessary context, and structure it for optimal AI understanding. Maintain the user's intent while making it more precise and actionable.",
+            isBuiltIn = false
         ),
         VoiceMode(
             id = "llm_response",
             name = "LLM Response",
             systemPrompt = "The user is asking a question. Provide a direct, concise answer to the question without any additional explanation or context. Return ONLY the answer itself.",
-            isBuiltIn = true
+            isBuiltIn = false
+        ),
+        VoiceMode(
+            id = "voice_commands",
+            name = "Voice Commands",
+            systemPrompt = """You are a voice command interpreter for a keyboard app. Parse the user's voice command and output ONLY a JSON object in this exact format:
+{
+  "command": "change_setting",
+  "setting": "SETTING_NAME",
+  "value": "VALUE"
+}
+
+Supported settings:
+- input_language: Change speech input language (values: language codes like "en", "ru", "es", or language names)
+- output_language: Change translation output language (values: language codes or names)
+- voice_mode: Change voice processing mode (values: "verbatim", "fix_grammar", "prompt_formatter", "llm_response", or phonetically similar names)
+- enable_history: Enable/disable transcription history (values: "true", "false", "on", "off", "enable", "disable")
+- ui_language: Change interface language (values: "en" for English, "ru" for Russian, "ar" for Arabic, or language names)
+- theme: Change app theme (values: "system", "light", "dark")
+- enable_voice_commands: Enable/disable this voice command mode (values: "true", "false", "on", "off")
+
+Examples:
+User: "Change input language to Spanish"
+Output: {"command": "change_setting", "setting": "input_language", "value": "spanish"}
+
+User: "Switch to dark mode"
+Output: {"command": "change_setting", "setting": "theme", "value": "dark"}
+
+User: "Enable history"
+Output: {"command": "change_setting", "setting": "enable_history", "value": "true"}
+
+User: "Change mode to verbatim"
+Output: {"command": "change_setting", "setting": "voice_mode", "value": "verbatim"}
+
+IMPORTANT: Return ONLY the JSON object, no additional text.""",
+            isBuiltIn = false
         )
     )
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -37,10 +38,12 @@ import android.os.Build
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.ColorSchemeOption
+import com.hyperwhisper.data.DarkModePreference
 import com.hyperwhisper.data.FontFamilyOption
 import com.hyperwhisper.data.UIScaleOption
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,10 +66,12 @@ fun SettingsScreen(
     var showInputLanguageInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
+    var editingMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showLogsDialog by remember { mutableStateOf(false) }
 
     val connectionTestState by viewModel.connectionTestState.collectAsState()
     val context = LocalContext.current
+    val strings = LocalStrings.current
 
     // Update fields when settings change
     LaunchedEffect(apiSettings) {
@@ -93,7 +98,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("HyperWhisper Settings") },
+                title = { Text(strings.settingsTitle) },
                 actions = {
                     IconButton(onClick = {
                         val intent = android.content.Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
@@ -147,9 +152,9 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = baseUrl,
                         onValueChange = { baseUrl = it },
-                        label = { Text("Base URL") },
+                        label = { Text(strings.baseUrl) },
                         placeholder = { Text(provider.defaultEndpoint) },
-                        supportingText = { Text("Must end with /") },
+                        supportingText = { Text(strings.baseUrlHint) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -161,7 +166,7 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("RESET")
+                        Text(strings.reset.uppercase())
                     }
                 }
             }
@@ -170,8 +175,8 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API Key") },
-                    placeholder = { Text("sk-...") },
+                    label = { Text(strings.apiKey) },
+                    placeholder = { Text(strings.apiKeyPlaceholder) },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -244,7 +249,7 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f),
                         enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
                     ) {
-                        Text("Test Connection")
+                        Text(strings.testConnection)
                     }
 
                     OutlinedButton(
@@ -257,7 +262,7 @@ fun SettingsScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Logs")
+                        Text(strings.viewApiLogs)
                     }
                 }
             }
@@ -281,7 +286,7 @@ fun SettingsScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(12.dp))
-                                Text("Testing connection...")
+                                Text(strings.testingConnection)
                             }
                         }
                     }
@@ -332,7 +337,7 @@ fun SettingsScreen(
             // Appearance Section
             item {
                 SectionCard(
-                    title = "Appearance",
+                    title = strings.appearanceSettings,
                     icon = Icons.Default.Palette
                 ) {
                     AppearanceSection(
@@ -374,6 +379,7 @@ fun SettingsScreen(
             items(voiceModes) { mode ->
                 ModeCard(
                     mode = mode,
+                    onEdit = { editingMode = mode },
                     onDelete = { viewModel.deleteVoiceMode(mode.id) }
                 )
             }
@@ -386,7 +392,7 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Save & Close Settings")
+                    Text(strings.saveAndCloseSettings)
                 }
             }
         }
@@ -406,6 +412,17 @@ fun SettingsScreen(
             onAdd = { name, prompt ->
                 viewModel.addVoiceMode(name, prompt)
                 showAddModeDialog = false
+            }
+        )
+    }
+
+    editingMode?.let { mode ->
+        EditModeDialog(
+            mode = mode,
+            onDismiss = { editingMode = null },
+            onUpdate = { updatedMode ->
+                viewModel.updateVoiceMode(updatedMode)
+                editingMode = null
             }
         )
     }
@@ -638,6 +655,7 @@ fun ModelSelector(
 @Composable
 fun ModeCard(
     mode: VoiceMode,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -661,20 +679,20 @@ fun ModeCard(
                 Text(
                     text = mode.systemPrompt,
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-                if (mode.isBuiltIn) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Built-in",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
 
-            if (!mode.isBuiltIn) {
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Edit Mode",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -729,6 +747,58 @@ fun AddModeDialog(
                 enabled = name.isNotBlank() && systemPrompt.isNotBlank()
             ) {
                 Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditModeDialog(
+    mode: VoiceMode,
+    onDismiss: () -> Unit,
+    onUpdate: (VoiceMode) -> Unit
+) {
+    var name by remember { mutableStateOf(mode.name) }
+    var systemPrompt by remember { mutableStateOf(mode.systemPrompt) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Voice Mode") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Mode Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = systemPrompt,
+                    onValueChange = { systemPrompt = it },
+                    label = { Text("System Prompt") },
+                    placeholder = { Text("Enter the system prompt for this mode") },
+                    minLines = 4,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (name.isNotBlank() && systemPrompt.isNotBlank()) {
+                        onUpdate(mode.copy(name = name, systemPrompt = systemPrompt))
+                    }
+                },
+                enabled = name.isNotBlank() && systemPrompt.isNotBlank()
+            ) {
+                Text("Save")
             }
         },
         dismissButton = {
@@ -1153,6 +1223,24 @@ fun AppearanceSection(
 
         Divider()
 
+        // Dark Mode Preference Selector
+        Text(
+            text = "Theme Mode",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        DarkModeSelector(
+            selectedMode = localSettings.darkModePreference,
+            onModeSelected = { mode ->
+                val newSettings = localSettings.copy(darkModePreference = mode)
+                localSettings = newSettings
+                onSettingsChange(newSettings)
+            }
+        )
+
+        Divider()
+
         // UI Scale Selector
         Text(
             text = "Text Size",
@@ -1182,6 +1270,24 @@ fun AppearanceSection(
             selectedFont = localSettings.fontFamily,
             onFontSelected = { font ->
                 val newSettings = localSettings.copy(fontFamily = font)
+                localSettings = newSettings
+                onSettingsChange(newSettings)
+            }
+        )
+
+        Divider()
+
+        // UI Language Selector
+        Text(
+            text = "Interface Language",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        UILanguageSelector(
+            selectedLanguageCode = localSettings.uiLanguage,
+            onLanguageSelected = { languageCode ->
+                val newSettings = localSettings.copy(uiLanguage = languageCode)
                 localSettings = newSettings
                 onSettingsChange(newSettings)
             }
@@ -1259,47 +1365,103 @@ fun ColorSchemeSelector(
     selectedScheme: ColorSchemeOption,
     onSchemeSelected: (ColorSchemeOption) -> Unit
 ) {
-    Row(
+    // Grid layout with 2 columns for better fit
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ColorSchemeOption.values().forEach { option ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clickable { onSchemeSelected(option) }
-                    .padding(8.dp)
+        ColorSchemeOption.values().toList().chunked(2).forEach { rowThemes ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Color circle preview
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            color = option.seedColor,
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = if (option == selectedScheme) 3.dp else 0.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (option == selectedScheme) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                rowThemes.forEach { option ->
+                    Column(
+                        horizontalAlignment = Alignment.Start,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onSchemeSelected(option) }
+                            .background(
+                                color = if (option == selectedScheme)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(12.dp)
+                    ) {
+                        // Three color circles in a row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Primary color
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = option.primaryColor,
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.Black.copy(alpha = 0.1f),
+                                        shape = CircleShape
+                                    )
+                            )
+                            // Secondary color
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = option.secondaryColor,
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.Black.copy(alpha = 0.1f),
+                                        shape = CircleShape
+                                    )
+                            )
+                            // Tertiary color
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(
+                                        color = option.tertiaryColor,
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.Black.copy(alpha = 0.1f),
+                                        shape = CircleShape
+                                    )
+                            )
+
+                            // Check mark if selected
+                            if (option == selectedScheme) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // Theme name
+                        Text(
+                            text = option.displayName,
+                            fontSize = 11.sp,
+                            fontWeight = if (option == selectedScheme) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = option.displayName,
-                    fontSize = 12.sp,
-                    fontWeight = if (option == selectedScheme) FontWeight.Bold else FontWeight.Normal
-                )
+                // Fill empty space if odd number of themes
+                if (rowThemes.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -1373,6 +1535,97 @@ fun FontFamilySelector(
                     },
                     onClick = {
                         onFontSelected(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DarkModeSelector(
+    selectedMode: DarkModePreference,
+    onModeSelected: (DarkModePreference) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selectedMode.displayName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Dark Mode") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DarkModePreference.values().forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.displayName) },
+                    onClick = {
+                        onModeSelected(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UILanguageSelector(
+    selectedLanguageCode: String,
+    onLanguageSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLanguage = com.hyperwhisper.localization.getLanguageByCode(selectedLanguageCode)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selectedLanguage.nativeName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Language") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            com.hyperwhisper.localization.AppLanguage.values().forEach { language ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = language.nativeName,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = language.displayName,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    },
+                    onClick = {
+                        onLanguageSelected(language.code)
                         expanded = false
                     }
                 )

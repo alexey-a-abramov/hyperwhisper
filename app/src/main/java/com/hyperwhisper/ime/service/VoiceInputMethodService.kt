@@ -62,6 +62,9 @@ class VoiceInputMethodService : InputMethodService(),
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
+    lateinit var voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
+
+    @Inject
     lateinit var transcriptionStrategy: TranscriptionStrategy
 
     @Inject
@@ -106,7 +109,7 @@ class VoiceInputMethodService : InputMethodService(),
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
             // Initialize ViewModel using ViewModelProvider
-            viewModel = KeyboardViewModel(voiceRepository, settingsRepository)
+            viewModel = KeyboardViewModel(voiceRepository, settingsRepository, voiceCommandProcessor)
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)
@@ -181,11 +184,15 @@ class VoiceInputMethodService : InputMethodService(),
         HyperWhisperTheme(appearanceSettings = appearanceSettings) {
             KeyboardScreen(
                 viewModel = viewModel,
+                editorInfo = currentEditorInfo,
                 onTextCommit = { text ->
                     commitText(text)
                 },
                 onDelete = {
-                    deleteText()
+                    deleteSelectedText() // Prioritize deleting selected text
+                },
+                onDeleteAll = {
+                    deleteAllText()
                 },
                 onSpace = {
                     commitText(" ")
@@ -228,6 +235,49 @@ class VoiceInputMethodService : InputMethodService(),
             Log.d(TAG, "Deleted character")
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting text", e)
+        }
+    }
+
+    /**
+     * Delete all text in the current input field
+     */
+    private fun deleteAllText() {
+        val ic = currentInputConnection ?: return
+        try {
+            // Get text before and after cursor
+            val textBefore = ic.getTextBeforeCursor(100000, 0)
+            val textAfter = ic.getTextAfterCursor(100000, 0)
+
+            val beforeLength = textBefore?.length ?: 0
+            val afterLength = textAfter?.length ?: 0
+
+            if (beforeLength > 0 || afterLength > 0) {
+                ic.deleteSurroundingText(beforeLength, afterLength)
+                Log.d(TAG, "Deleted all text (before: $beforeLength, after: $afterLength)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting all text", e)
+        }
+    }
+
+    /**
+     * Delete selected text if any exists
+     */
+    private fun deleteSelectedText() {
+        val ic = currentInputConnection ?: return
+        try {
+            val selectedText = ic.getSelectedText(0)
+            if (!selectedText.isNullOrEmpty()) {
+                ic.commitText("", 1) // This replaces selected text with empty string
+                Log.d(TAG, "Deleted selected text: ${selectedText.take(50)}")
+            } else {
+                // If no selection, delete one character as fallback
+                deleteText()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting selected text", e)
+            // Fallback to normal delete
+            deleteText()
         }
     }
 

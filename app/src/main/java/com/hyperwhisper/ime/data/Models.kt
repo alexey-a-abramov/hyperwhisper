@@ -9,102 +9,98 @@ import com.google.gson.annotations.SerializedName
  */
 data class Language(
     val code: String, // ISO-639-1 code
-    val name: String
+    val name: String,
+    val isRTL: Boolean = false // Right-to-Left language support
 )
 
-// Supported languages list - comprehensive for most ASR models
+// Supported languages list - sorted alphabetically with Auto-detect first, English second
 val SUPPORTED_LANGUAGES = listOf(
     Language("", "Auto-detect"),
-    // Major languages
     Language("en", "English"),
-    Language("zh", "Chinese (Mandarin)"),
-    Language("es", "Spanish"),
-    Language("hi", "Hindi"),
-    Language("ar", "Arabic"),
+    Language("af", "Afrikaans"),
+    Language("sq", "Albanian"),
+    Language("am", "Amharic"),
+    Language("ar", "Arabic", isRTL = true),
+    Language("hy", "Armenian"),
+    Language("az", "Azerbaijani"),
+    Language("eu", "Basque"),
+    Language("be", "Belarusian"),
     Language("bn", "Bengali"),
-    Language("pt", "Portuguese"),
-    Language("ru", "Russian"),
-    Language("ja", "Japanese"),
-    Language("pa", "Punjabi"),
-    Language("de", "German"),
-    Language("jv", "Javanese"),
-    Language("ko", "Korean"),
-    Language("fr", "French"),
-    Language("te", "Telugu"),
-    Language("mr", "Marathi"),
-    Language("tr", "Turkish"),
-    Language("ta", "Tamil"),
-    Language("vi", "Vietnamese"),
-    Language("ur", "Urdu"),
-    Language("it", "Italian"),
-    Language("th", "Thai"),
-    Language("gu", "Gujarati"),
-    Language("fa", "Persian (Farsi)"),
-    Language("pl", "Polish"),
-    Language("uk", "Ukrainian"),
-    Language("kn", "Kannada"),
-    Language("ml", "Malayalam"),
-    Language("or", "Odia"),
-    Language("my", "Burmese"),
-    Language("si", "Sinhala"),
-    // European languages
-    Language("nl", "Dutch"),
-    Language("ro", "Romanian"),
-    Language("cs", "Czech"),
-    Language("sv", "Swedish"),
-    Language("da", "Danish"),
-    Language("fi", "Finnish"),
-    Language("no", "Norwegian"),
-    Language("el", "Greek"),
-    Language("he", "Hebrew"),
-    Language("hu", "Hungarian"),
+    Language("bs", "Bosnian"),
     Language("bg", "Bulgarian"),
+    Language("my", "Burmese"),
+    Language("ca", "Catalan"),
+    Language("ceb", "Cebuano"),
+    Language("zh", "Chinese (Mandarin)"),
     Language("hr", "Croatian"),
+    Language("cs", "Czech"),
+    Language("da", "Danish"),
+    Language("nl", "Dutch"),
+    Language("et", "Estonian"),
+    Language("fi", "Finnish"),
+    Language("fr", "French"),
+    Language("gl", "Galician"),
+    Language("ka", "Georgian"),
+    Language("de", "German"),
+    Language("el", "Greek"),
+    Language("gu", "Gujarati"),
+    Language("ha", "Hausa"),
+    Language("he", "Hebrew", isRTL = true),
+    Language("hi", "Hindi"),
+    Language("hu", "Hungarian"),
+    Language("is", "Icelandic"),
+    Language("ig", "Igbo"),
+    Language("id", "Indonesian"),
+    Language("ga", "Irish"),
+    Language("it", "Italian"),
+    Language("ja", "Japanese"),
+    Language("jv", "Javanese"),
+    Language("kn", "Kannada"),
+    Language("kk", "Kazakh"),
+    Language("km", "Khmer"),
+    Language("ko", "Korean"),
+    Language("ky", "Kyrgyz"),
+    Language("lo", "Lao"),
+    Language("lv", "Latvian"),
+    Language("lt", "Lithuanian"),
+    Language("mk", "Macedonian"),
+    Language("ms", "Malay"),
+    Language("ml", "Malayalam"),
+    Language("mt", "Maltese"),
+    Language("mr", "Marathi"),
+    Language("mn", "Mongolian"),
+    Language("ne", "Nepali"),
+    Language("no", "Norwegian"),
+    Language("or", "Odia"),
+    Language("fa", "Persian (Farsi)", isRTL = true),
+    Language("pl", "Polish"),
+    Language("pt", "Portuguese"),
+    Language("pa", "Punjabi"),
+    Language("ro", "Romanian"),
+    Language("ru", "Russian"),
     Language("sr", "Serbian"),
+    Language("si", "Sinhala"),
     Language("sk", "Slovak"),
     Language("sl", "Slovenian"),
-    Language("lt", "Lithuanian"),
-    Language("lv", "Latvian"),
-    Language("et", "Estonian"),
-    Language("ga", "Irish"),
-    Language("is", "Icelandic"),
-    Language("mt", "Maltese"),
-    Language("cy", "Welsh"),
-    // Asian languages
-    Language("km", "Khmer"),
-    Language("lo", "Lao"),
-    Language("ne", "Nepali"),
-    Language("am", "Amharic"),
-    Language("az", "Azerbaijani"),
-    Language("ka", "Georgian"),
-    Language("hy", "Armenian"),
-    Language("kk", "Kazakh"),
-    Language("uz", "Uzbek"),
-    Language("tg", "Tajik"),
-    Language("tk", "Turkmen"),
-    Language("ky", "Kyrgyz"),
-    Language("mn", "Mongolian"),
-    // African languages
-    Language("sw", "Swahili"),
-    Language("ha", "Hausa"),
-    Language("yo", "Yoruba"),
-    Language("ig", "Igbo"),
-    Language("zu", "Zulu"),
-    Language("xh", "Xhosa"),
-    Language("af", "Afrikaans"),
     Language("so", "Somali"),
-    // Other
-    Language("ms", "Malay"),
-    Language("id", "Indonesian"),
+    Language("es", "Spanish"),
+    Language("sw", "Swahili"),
+    Language("sv", "Swedish"),
     Language("tl", "Tagalog"),
-    Language("ceb", "Cebuano"),
-    Language("bs", "Bosnian"),
-    Language("mk", "Macedonian"),
-    Language("sq", "Albanian"),
-    Language("be", "Belarusian"),
-    Language("eu", "Basque"),
-    Language("ca", "Catalan"),
-    Language("gl", "Galician")
+    Language("tg", "Tajik"),
+    Language("ta", "Tamil"),
+    Language("te", "Telugu"),
+    Language("th", "Thai"),
+    Language("tr", "Turkish"),
+    Language("tk", "Turkmen"),
+    Language("uk", "Ukrainian"),
+    Language("ur", "Urdu", isRTL = true),
+    Language("uz", "Uzbek"),
+    Language("vi", "Vietnamese"),
+    Language("cy", "Welsh"),
+    Language("xh", "Xhosa"),
+    Language("yo", "Yoruba"),
+    Language("zu", "Zulu")
 )
 
 data class VoiceMode(
@@ -287,13 +283,28 @@ sealed class ApiResult<out T> {
  * Appearance Settings
  */
 
-// Color scheme options
-enum class ColorSchemeOption(val displayName: String, val seedColor: Color) {
-    PURPLE("Purple", Color(0xFF6200EE)),
-    BLUE("Blue", Color(0xFF2196F3)),
-    GREEN("Green", Color(0xFF4CAF50)),
-    ORANGE("Orange", Color(0xFFFF9800)),
-    RED("Red", Color(0xFFF44336))
+// Color scheme options with environment themes
+enum class ColorSchemeOption(
+    val displayName: String,
+    val primaryColor: Color,
+    val secondaryColor: Color,
+    val tertiaryColor: Color
+) {
+    TERMINAL_DARK("Terminal Dark", Color(0xFF1E1E1E), Color(0xFF00FF00), Color(0xFF0080FF)),
+    OCEAN_DEEP("Ocean Deep", Color(0xFF006994), Color(0xFF00B4D8), Color(0xFF90E0EF)),
+    FOREST_NIGHT("Forest Night", Color(0xFF2D5016), Color(0xFF4A7C3B), Color(0xFF6FA05D)),
+    SUNSET_HORIZON("Sunset Horizon", Color(0xFFFF6B35), Color(0xFFF7931E), Color(0xFFFDC435)),
+    ARCTIC_FROST("Arctic Frost", Color(0xFF4A90A4), Color(0xFF87C9DD), Color(0xFFD4F1F4)),
+    DESERT_STORM("Desert Storm", Color(0xFFD4A574), Color(0xFFE8B86D), Color(0xFFF4E5D3)),
+    NEON_CITY("Neon City", Color(0xFFFF10F0), Color(0xFF00F0FF), Color(0xFFFFFF00)),
+    CHERRY_BLOSSOM("Cherry Blossom", Color(0xFFFFB7C5), Color(0xFFF4A8C1), Color(0xFFE899DC)),
+    MIDNIGHT_SKY("Midnight Sky", Color(0xFF191970), Color(0xFF4B0082), Color(0xFF6A5ACD)),
+    LAVA_FLOW("Lava Flow", Color(0xFFFF4500), Color(0xFFFF6347), Color(0xFFFF8C00)),
+    MISTY_MOUNTAIN("Misty Mountain", Color(0xFF5F6A6A), Color(0xFF85929E), Color(0xFFAEB6BF)),
+    AUTUMN_LEAVES("Autumn Leaves", Color(0xFF8B4513), Color(0xFFD2691E), Color(0xFFFFAF4D));
+
+    // For backwards compatibility with existing Material3 dynamic theming
+    val seedColor: Color get() = primaryColor
 }
 
 // UI scale options
@@ -314,10 +325,19 @@ enum class FontFamilyOption(val displayName: String, val fontFamily: FontFamily)
     CURSIVE("Cursive", FontFamily.Cursive)
 }
 
+// Dark mode preference options
+enum class DarkModePreference(val displayName: String) {
+    SYSTEM("Follow System"),
+    LIGHT("Always Light"),
+    DARK("Always Dark")
+}
+
 // Appearance settings data class
 data class AppearanceSettings(
-    val colorScheme: ColorSchemeOption = ColorSchemeOption.PURPLE,
+    val colorScheme: ColorSchemeOption = ColorSchemeOption.OCEAN_DEEP,
     val useDynamicColor: Boolean = true,
+    val darkModePreference: DarkModePreference = DarkModePreference.SYSTEM,
+    val uiLanguage: String = "en", // UI language code (en, ru, etc.)
     val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
     val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
     val autoCopyToClipboard: Boolean = true,
@@ -374,3 +394,85 @@ data class TokenUsage(
     @SerializedName("completion_tokens") val completionTokens: Int? = null,
     @SerializedName("total_tokens") val totalTokens: Int? = null
 )
+
+/**
+ * Model pricing information (per 1M tokens or per minute)
+ */
+data class ModelPricing(
+    val inputPricePer1M: Double = 0.0,  // Price per 1M input tokens
+    val outputPricePer1M: Double = 0.0, // Price per 1M output tokens
+    val audioPerMinute: Double = 0.0     // Price per minute of audio (for audio-based models)
+)
+
+/**
+ * Calculate estimated cost based on usage
+ */
+fun calculateCost(
+    modelId: String,
+    inputTokens: Long,
+    outputTokens: Long,
+    audioSeconds: Double
+): Double {
+    val pricing = getModelPricing(modelId)
+
+    val tokenCost = (inputTokens / 1_000_000.0) * pricing.inputPricePer1M +
+                    (outputTokens / 1_000_000.0) * pricing.outputPricePer1M
+
+    val audioCost = (audioSeconds / 60.0) * pricing.audioPerMinute
+
+    return tokenCost + audioCost
+}
+
+/**
+ * Get pricing for a specific model
+ */
+fun getModelPricing(modelId: String): ModelPricing {
+    return when {
+        // OpenAI Whisper - $0.006 per minute
+        modelId.contains("whisper", ignoreCase = true) && !modelId.contains("groq", ignoreCase = true) ->
+            ModelPricing(audioPerMinute = 0.006)
+
+        // Groq Whisper - Free tier, very low cost
+        modelId.contains("groq", ignoreCase = true) || modelId.contains("distil-whisper", ignoreCase = true) ->
+            ModelPricing(audioPerMinute = 0.0)
+
+        // GPT-4 models
+        modelId.contains("gpt-4o", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 2.50, outputPricePer1M = 10.0)
+        modelId.contains("gpt-4-turbo", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 10.0, outputPricePer1M = 30.0)
+        modelId.contains("gpt-4", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 30.0, outputPricePer1M = 60.0)
+
+        // GPT-3.5 models
+        modelId.contains("gpt-3.5", ignoreCase = true) || modelId.contains("gpt-35", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.50, outputPricePer1M = 1.50)
+
+        // Gemini models
+        modelId.contains("gemini-2.0-flash", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.10, outputPricePer1M = 0.40, audioPerMinute = 0.006)
+        modelId.contains("gemini-1.5-flash", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.075, outputPricePer1M = 0.30, audioPerMinute = 0.006)
+        modelId.contains("gemini-1.5-pro", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 1.25, outputPricePer1M = 5.0, audioPerMinute = 0.03)
+
+        // Claude models
+        modelId.contains("claude-3-opus", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 15.0, outputPricePer1M = 75.0)
+        modelId.contains("claude-3-sonnet", ignoreCase = true) || modelId.contains("claude-3.5-sonnet", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 3.0, outputPricePer1M = 15.0)
+        modelId.contains("claude-3-haiku", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.25, outputPricePer1M = 1.25)
+
+        // Deepgram - $0.0043 per minute
+        modelId.contains("nova", ignoreCase = true) || modelId.contains("deepgram", ignoreCase = true) ->
+            ModelPricing(audioPerMinute = 0.0043)
+
+        // AssemblyAI - ~$0.00025 per second = $0.015 per minute
+        modelId.contains("assemblyai", ignoreCase = true) || modelId == "best" || modelId == "nano" ->
+            ModelPricing(audioPerMinute = 0.015)
+
+        // Default: assume token-based pricing
+        else -> ModelPricing(inputPricePer1M = 1.0, outputPricePer1M = 2.0)
+    }
+}
