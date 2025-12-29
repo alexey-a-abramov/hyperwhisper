@@ -27,6 +27,21 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // NDK configuration for whisper.cpp
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_PLATFORM=android-26"
+                )
+            }
+        }
     }
 
     buildTypes {
@@ -51,6 +66,14 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     packaging {

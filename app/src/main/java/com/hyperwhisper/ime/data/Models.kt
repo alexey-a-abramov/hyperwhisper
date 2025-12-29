@@ -3,6 +3,7 @@ package com.hyperwhisper.data
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import com.google.gson.annotations.SerializedName
+import java.io.File
 
 /**
  * Domain Models
@@ -182,6 +183,11 @@ enum class ApiProvider(
         displayName = "Hugging Face",
         defaultEndpoint = "https://api-inference.huggingface.co/models/",
         defaultModels = listOf("openai/whisper-large-v3", "openai/whisper-medium", "openai/whisper-small")
+    ),
+    LOCAL(
+        displayName = "Local (On-Device)",
+        defaultEndpoint = "",
+        defaultModels = listOf("tiny", "base", "small")
     )
 }
 
@@ -476,3 +482,63 @@ fun getModelPricing(modelId: String): ModelPricing {
         else -> ModelPricing(inputPricePer1M = 1.0, outputPricePer1M = 2.0)
     }
 }
+
+/**
+ * Local Whisper Model Information
+ */
+enum class WhisperModel(
+    val modelName: String,
+    val displayName: String,
+    val fileSize: Long, // Bytes
+    val fileName: String,
+    val downloadUrl: String,
+    val isRecommended: Boolean = false
+) {
+    TINY(
+        modelName = "tiny",
+        displayName = "Tiny (Fast)",
+        fileSize = 75L * 1024 * 1024, // ~75 MB
+        fileName = "ggml-tiny.bin",
+        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+        isRecommended = true
+    ),
+    BASE(
+        modelName = "base",
+        displayName = "Base (Balanced)",
+        fileSize = 142L * 1024 * 1024, // ~142 MB
+        fileName = "ggml-base.bin",
+        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+        isRecommended = true
+    ),
+    SMALL(
+        modelName = "small",
+        displayName = "Small (Accurate)",
+        fileSize = 466L * 1024 * 1024, // ~466 MB
+        fileName = "ggml-small.bin",
+        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+    );
+
+    fun getFormattedSize(): String {
+        val mb = fileSize / (1024.0 * 1024.0)
+        return "%.0f MB".format(mb)
+    }
+}
+
+/**
+ * Model download state
+ */
+sealed class ModelDownloadState {
+    object NotDownloaded : ModelDownloadState()
+    data class Downloading(val progress: Float) : ModelDownloadState() // 0.0 - 1.0
+    object Downloaded : ModelDownloadState()
+    data class Error(val message: String) : ModelDownloadState()
+}
+
+/**
+ * Model info with download state
+ */
+data class WhisperModelInfo(
+    val model: WhisperModel,
+    val downloadState: ModelDownloadState,
+    val localPath: File? = null
+)
