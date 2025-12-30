@@ -82,7 +82,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Create Android debug keystore directory
-        run: mkdir -p $HOME/.config/.android
+        run: |
+          mkdir -p $HOME/.config
+          chmod 777 $HOME/.config
+          mkdir -p $HOME/.config/.android
+          chmod 777 $HOME/.config/.android
 
       - name: Build local debug APK
         run: ./gradlew assembleLocalDebug --stacktrace
