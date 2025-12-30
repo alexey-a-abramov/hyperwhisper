@@ -1908,11 +1908,9 @@ fun SecondStageProcessingCard(
 
                 ProviderSelector(
                     selectedProvider = localSettings.secondStageProvider,
-                    availableProviders = availableProviders.filter { it != ApiProvider.LOCAL },
                     onProviderSelected = { provider ->
                         onLocalSettingsChanged(localSettings.copy(secondStageProvider = provider))
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                    }
                 )
 
                 ModelSelector(
