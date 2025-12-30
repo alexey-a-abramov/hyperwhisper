@@ -5,6 +5,7 @@ import com.hyperwhisper.data.ModelRepository
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.native_whisper.AudioConverter
 import com.hyperwhisper.native_whisper.WhisperContext
+import com.hyperwhisper.network.AudioProcessingStrategy
 import com.hyperwhisper.network.LocalWhisperStrategy
 import dagger.Module
 import dagger.Provides
