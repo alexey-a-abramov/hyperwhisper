@@ -1,0 +1,36 @@
+
+X master Build APKs · 20586592404
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+X Build Cloud Flavor (Debug) in 10s (ID 59124016605)
+  ✓ Set up job
+  ✓ Checkout code
+  ✓ Set up JDK 17
+  ✓ Setup Gradle
+  X Grant execute permission for gradlew
+  - Build cloud debug APK
+  - Upload cloud APK artifact
+  ✓ Post Setup Gradle
+  ✓ Post Set up JDK 17
+  ✓ Post Checkout code
+  ✓ Complete job
+- Build Local Flavor (Debug) in 0s (ID 59124016664)
+✓ Build Summary in 4s (ID 59124023047)
+
+ANNOTATIONS
+! Failed to save cache entry with path '/home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle' and key: gradle-home-v1|Linux|build-cloud[b967d5b45d6bdff08bcc7cd36bdadf52]-3a85d3013d9d9b2c5d5e8c75aa0ee5a3a3e2de7a: Error: <h2>Our services aren't available right now</h2><p>We're working to restore all services as soon as possible. Please check back soon.</p>0yipTaQAAAAB7ItZULKVbQI4PdO8kx+qhQ0hJMzBFREdFMDIxMABFZGdl
+Build Cloud Flavor (Debug): .github#10
+
+! This job uses deprecated functionality from the 'gradle/gradle-build-action' action. Consult the Job Summary for more details.
+Build Cloud Flavor (Debug): .github#3
+
+X Process completed with exit code 1.
+Build Cloud Flavor (Debug): .github#14
+
+! Failed to restore gradle-home-v1|Linux|build-cloud[b967d5b45d6bdff08bcc7cd36bdadf52]-3a85d3013d9d9b2c5d5e8c75aa0ee5a3a3e2de7a: Error: Cache service responded with 400
+Build Cloud Flavor (Debug): .github#52
+
+
+To see what failed, try: gh run view 20586592404 --log-failed
+View this run on GitHub: https://github.com/alexey-a-abramov/hyperwhisper/actions/runs/20586592404
