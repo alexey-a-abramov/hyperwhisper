@@ -112,16 +112,30 @@ data class VoiceMode(
     val inputLanguageHint: String = "" // Hint for input language if model supports it
 )
 
+/**
+ * Settings specific to LOCAL provider
+ */
+data class LocalSettings(
+    val selectedModel: WhisperModel = WhisperModel.BASE,
+    val enableSecondStageProcessing: Boolean = false,
+    val secondStageProvider: ApiProvider = ApiProvider.OPENAI,
+    val secondStageModel: String = "gpt-4o-mini"
+)
+
 data class ApiSettings(
     val provider: ApiProvider = ApiProvider.OPENAI,
     val baseUrl: String = "",
     val apiKeys: Map<ApiProvider, String> = emptyMap(), // Per-provider API keys
     val modelId: String = "whisper-1",
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
-    val outputLanguage: String = "" // ISO-639-1 code for output - empty to keep original
+    val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
+    val localSettings: LocalSettings = LocalSettings()
 ) {
     // Helper to get API key for current provider
     fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
+
+    // Helper to get API key for second-stage processing
+    fun getSecondStageApiKey(): String = apiKeys[localSettings.secondStageProvider] ?: ""
 }
 
 enum class ApiProvider(

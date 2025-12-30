@@ -16,11 +16,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,8 +44,11 @@ import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.ColorSchemeOption
 import com.hyperwhisper.data.DarkModePreference
 import com.hyperwhisper.data.FontFamilyOption
+import com.hyperwhisper.data.LocalSettings
+import com.hyperwhisper.data.ModelDownloadState
 import com.hyperwhisper.data.UIScaleOption
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.data.WhisperModel
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 
@@ -55,6 +62,7 @@ fun SettingsScreen(
     val apiSettings by viewModel.apiSettings.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
+    val modelStates by viewModel.modelStates.collectAsState()
 
     var provider by remember { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
@@ -62,6 +70,7 @@ fun SettingsScreen(
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
     var inputLanguage by remember { mutableStateOf(apiSettings.inputLanguage) }
     var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
+    var localSettings by remember { mutableStateOf(apiSettings.localSettings) }
     var showModelSelector by remember { mutableStateOf(false) }
     var showModelInfo by remember { mutableStateOf(false) }
     var showInputLanguageInfo by remember { mutableStateOf(false) }
@@ -82,6 +91,7 @@ fun SettingsScreen(
         modelId = apiSettings.modelId
         inputLanguage = apiSettings.inputLanguage
         outputLanguage = apiSettings.outputLanguage
+        localSettings = apiSettings.localSettings
     }
 
     // Update API key and defaults when provider changes
@@ -145,8 +155,43 @@ fun SettingsScreen(
                 )
             }
 
-            item {
-                Row(
+            // LOCAL provider configuration
+            if (provider == ApiProvider.LOCAL && isLocalFlavorEnabled) {
+                item {
+                    LocalModelSelector(
+                        selectedModel = localSettings.selectedModel,
+                        modelStates = modelStates,
+                        onModelSelected = { model ->
+                            localSettings = localSettings.copy(selectedModel = model)
+                        }
+                    )
+                }
+
+                item {
+                    LocalPrerequisitesCard(
+                        selectedModel = localSettings.selectedModel,
+                        modelState = modelStates[localSettings.selectedModel] ?: ModelDownloadState.NotDownloaded,
+                        onDownloadModel = {
+                            viewModel.downloadModel(localSettings.selectedModel)
+                        }
+                    )
+                }
+
+                item {
+                    SecondStageProcessingCard(
+                        localSettings = localSettings,
+                        onLocalSettingsChanged = { newSettings ->
+                            localSettings = newSettings
+                        },
+                        availableProviders = ApiProvider.values().toList()
+                    )
+                }
+            }
+
+            // Cloud provider configuration
+            if (provider != ApiProvider.LOCAL) {
+                item {
+                    Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Top
@@ -331,6 +376,7 @@ fun SettingsScreen(
                     else -> {}
                 }
             }
+            }  // End of cloud provider configuration
 
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -400,17 +446,34 @@ fun SettingsScreen(
             }
 
             items(voiceModes) { mode ->
-                ModeCard(
+                val isVerbatim = mode.id == "verbatim"
+                val isLocalProvider = provider == ApiProvider.LOCAL
+                val secondStageEnabled = localSettings.enableSecondStageProcessing
+
+                val isEnabled = when {
+                    !isLocalProvider -> true
+                    isVerbatim -> true
+                    secondStageEnabled -> true
+                    else -> false
+                }
+
+                val disabledReason = if (!isEnabled) {
+                    "Enable 'Cloud Processing' in the API Configuration section above to use transformation modes with local transcription"
+                } else null
+
+                ModeCardWithTooltip(
                     mode = mode,
-                    onEdit = { editingMode = mode },
-                    onDelete = { viewModel.deleteVoiceMode(mode.id) }
+                    isEnabled = isEnabled,
+                    disabledReason = disabledReason,
+                    onEdit = { if (isEnabled) editingMode = mode },
+                    onDelete = { if (isEnabled) viewModel.deleteVoiceMode(mode.id) }
                 )
             }
 
             item { // Moved Save Settings button to the bottom
                 Button(
                     onClick = {
-                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
+                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
                         (context as? android.app.Activity)?.finish() // Close settings after saving
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -1673,5 +1736,425 @@ fun UILanguageSelector(
                 )
             }
         }
+    }
+}
+
+/**
+ * Local model selector for choosing between Tiny/Base/Small models
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LocalModelSelector(
+    selectedModel: WhisperModel,
+    modelStates: Map<WhisperModel, ModelDownloadState>,
+    onModelSelected: (WhisperModel) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selectedModel.displayName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Local Model") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            leadingIcon = {
+                val state = modelStates[selectedModel] ?: ModelDownloadState.NotDownloaded
+                when (state) {
+                    is ModelDownloadState.Downloaded -> Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Downloaded",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    else -> Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Not downloaded",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            supportingText = {
+                Text(selectedModel.getFormattedSize())
+            },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            WhisperModel.values().forEach { model ->
+                val state = modelStates[model] ?: ModelDownloadState.NotDownloaded
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(model.displayName)
+                                Text(
+                                    text = model.getFormattedSize(),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                            when (state) {
+                                is ModelDownloadState.Downloaded -> Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Downloaded",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                else -> Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Not downloaded",
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onModelSelected(model)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Card showing second-stage cloud processing option for LOCAL provider
+ */
+@Composable
+fun SecondStageProcessingCard(
+    localSettings: LocalSettings,
+    onLocalSettingsChanged: (LocalSettings) -> Unit,
+    availableProviders: List<ApiProvider>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Title and switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Cloud Processing (Optional)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Enable cloud API for transformations and translations",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                Switch(
+                    checked = localSettings.enableSecondStageProcessing,
+                    onCheckedChange = { enabled ->
+                        onLocalSettingsChanged(localSettings.copy(enableSecondStageProcessing = enabled))
+                    }
+                )
+            }
+
+            // Explanation text
+            if (!localSettings.enableSecondStageProcessing) {
+                Text(
+                    text = "Only VERBATIM mode available. Enable cloud processing to use transformations.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp)
+                )
+            }
+
+            // Cloud provider selector (shown when enabled)
+            if (localSettings.enableSecondStageProcessing) {
+                Divider()
+
+                Text(
+                    text = "Hybrid Workflow: Local transcription → Cloud transformation",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+
+                ProviderSelector(
+                    selectedProvider = localSettings.secondStageProvider,
+                    availableProviders = availableProviders.filter { it != ApiProvider.LOCAL },
+                    onProviderSelected = { provider ->
+                        onLocalSettingsChanged(localSettings.copy(secondStageProvider = provider))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                ModelSelector(
+                    selectedModel = localSettings.secondStageModel,
+                    availableModels = localSettings.secondStageProvider.defaultModels,
+                    onModelSelected = { model ->
+                        onLocalSettingsChanged(localSettings.copy(secondStageModel = model))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Cost warning
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Cloud processing will use API credits. Costs apply based on usage.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Prerequisites status card for LOCAL provider
+ */
+@Composable
+fun LocalPrerequisitesCard(
+    selectedModel: WhisperModel,
+    modelState: ModelDownloadState,
+    onDownloadModel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isReady = modelState is ModelDownloadState.Downloaded
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isReady) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            } else {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isReady) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = if (isReady) "Ready to Use" else "Download Required",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${selectedModel.displayName} (${selectedModel.getFormattedSize()})",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+
+                // Show progress for downloading state
+                if (modelState is ModelDownloadState.Downloading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = modelState.progress,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "${(modelState.progress * 100).toInt()}% complete",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                // Show error message
+                if (modelState is ModelDownloadState.Error) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = modelState.message,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            // Download button (shown when not ready)
+            if (!isReady && modelState !is ModelDownloadState.Downloading) {
+                Button(
+                    onClick = onDownloadModel,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Download")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Enhanced ModeCard with tooltip for disabled states
+ */
+@Composable
+fun ModeCardWithTooltip(
+    mode: VoiceMode,
+    isEnabled: Boolean,
+    disabledReason: String?,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showTooltip by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(if (isEnabled) 1f else 0.5f)
+            .clickable(enabled = !isEnabled) { showTooltip = true },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Lock icon for disabled modes
+                if (!isEnabled) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Disabled",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = mode.name,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = mode.systemPrompt,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Row {
+                IconButton(
+                    onClick = onEdit,
+                    enabled = isEnabled
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Edit Mode",
+                        tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                }
+                IconButton(
+                    onClick = onDelete,
+                    enabled = isEnabled
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Mode",
+                        tint = if (isEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        }
+    }
+
+    // Tooltip dialog
+    if (showTooltip && disabledReason != null) {
+        AlertDialog(
+            onDismissRequest = { showTooltip = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = { Text("Mode Disabled") },
+            text = { Text(disabledReason) },
+            confirmButton = {
+                TextButton(onClick = { showTooltip = false }) {
+                    Text("OK")
+                }
+            }
+        )
     }
 }

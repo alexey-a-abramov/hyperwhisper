@@ -34,6 +34,12 @@ class SettingsRepository @Inject constructor(
         private val VOICE_MODES_KEY = stringPreferencesKey("voice_modes")
         private val SELECTED_MODE_KEY = stringPreferencesKey("selected_mode")
 
+        // Local settings keys
+        private val LOCAL_SELECTED_MODEL_KEY = stringPreferencesKey("local_selected_model")
+        private val LOCAL_ENABLE_SECOND_STAGE_KEY = booleanPreferencesKey("local_enable_second_stage")
+        private val LOCAL_SECOND_STAGE_PROVIDER_KEY = stringPreferencesKey("local_second_stage_provider")
+        private val LOCAL_SECOND_STAGE_MODEL_KEY = stringPreferencesKey("local_second_stage_model")
+
         // Appearance settings keys
         private val APPEARANCE_COLOR_SCHEME_KEY = stringPreferencesKey("appearance_color_scheme")
         private val APPEARANCE_USE_DYNAMIC_COLOR_KEY = booleanPreferencesKey("appearance_use_dynamic_color")
@@ -87,13 +93,35 @@ class SettingsRepository @Inject constructor(
             emptyMap()
         }
 
+        // Parse LocalSettings
+        val localSettings = try {
+            val selectedModel = preferences[LOCAL_SELECTED_MODEL_KEY]?.let {
+                WhisperModel.valueOf(it)
+            } ?: WhisperModel.BASE
+            val enableSecondStage = preferences[LOCAL_ENABLE_SECOND_STAGE_KEY] ?: false
+            val secondStageProvider = preferences[LOCAL_SECOND_STAGE_PROVIDER_KEY]?.let {
+                ApiProvider.valueOf(it)
+            } ?: ApiProvider.OPENAI
+            val secondStageModel = preferences[LOCAL_SECOND_STAGE_MODEL_KEY] ?: "gpt-4o-mini"
+
+            LocalSettings(
+                selectedModel = selectedModel,
+                enableSecondStageProcessing = enableSecondStage,
+                secondStageProvider = secondStageProvider,
+                secondStageModel = secondStageModel
+            )
+        } catch (e: Exception) {
+            LocalSettings()
+        }
+
         ApiSettings(
             provider = provider,
             baseUrl = preferences[BASE_URL_KEY] ?: provider.defaultEndpoint,
             apiKeys = apiKeysMap,
             modelId = preferences[MODEL_ID_KEY] ?: provider.defaultModels.firstOrNull() ?: "whisper-1",
             inputLanguage = preferences[INPUT_LANGUAGE_KEY] ?: "",
-            outputLanguage = preferences[OUTPUT_LANGUAGE_KEY] ?: ""
+            outputLanguage = preferences[OUTPUT_LANGUAGE_KEY] ?: "",
+            localSettings = localSettings
         )
     }
 
@@ -115,6 +143,24 @@ class SettingsRepository @Inject constructor(
             preferences[MODEL_ID_KEY] = settings.modelId
             preferences[INPUT_LANGUAGE_KEY] = settings.inputLanguage
             preferences[OUTPUT_LANGUAGE_KEY] = settings.outputLanguage
+
+            // Save local settings
+            preferences[LOCAL_SELECTED_MODEL_KEY] = settings.localSettings.selectedModel.name
+            preferences[LOCAL_ENABLE_SECOND_STAGE_KEY] = settings.localSettings.enableSecondStageProcessing
+            preferences[LOCAL_SECOND_STAGE_PROVIDER_KEY] = settings.localSettings.secondStageProvider.name
+            preferences[LOCAL_SECOND_STAGE_MODEL_KEY] = settings.localSettings.secondStageModel
+        }
+    }
+
+    /**
+     * Save local settings (convenience method for updating only local settings)
+     */
+    suspend fun saveLocalSettings(localSettings: LocalSettings) {
+        dataStore.edit { preferences ->
+            preferences[LOCAL_SELECTED_MODEL_KEY] = localSettings.selectedModel.name
+            preferences[LOCAL_ENABLE_SECOND_STAGE_KEY] = localSettings.enableSecondStageProcessing
+            preferences[LOCAL_SECOND_STAGE_PROVIDER_KEY] = localSettings.secondStageProvider.name
+            preferences[LOCAL_SECOND_STAGE_MODEL_KEY] = localSettings.secondStageModel
         }
     }
 

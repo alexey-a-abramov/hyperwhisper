@@ -145,13 +145,19 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): Boolean {
-        // Local processing doesn't support two-step
-        if (apiSettings.provider == ApiProvider.LOCAL) return false
-
         // Translation is only needed if output language is set AND different from input
         // If both are the same (e.g., both "en"), no translation is needed
         val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
             apiSettings.outputLanguage != apiSettings.inputLanguage
+
+        // LOCAL provider: check second-stage flag
+        if (apiSettings.provider == ApiProvider.LOCAL) {
+            if (!apiSettings.localSettings.enableSecondStageProcessing) {
+                return false // No cloud processing
+            }
+            // Second-stage enabled: need two-step unless verbatim without translation
+            return voiceMode.id != "verbatim" || needsTranslation
+        }
 
         // OpenRouter supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.OPENROUTER) return false
@@ -204,9 +210,14 @@ class VoiceRepository @Inject constructor(
             Log.d(TAG, "Post-processing text with system prompt: $systemPrompt")
 
             // Determine which chat model to use for post-processing
-            val postProcessModel = "gpt-4o-mini"
+            // Use second-stage settings for LOCAL provider
+            val (postProcessProvider, postProcessModel) = if (apiSettings.provider == ApiProvider.LOCAL) {
+                Pair(apiSettings.localSettings.secondStageProvider, apiSettings.localSettings.secondStageModel)
+            } else {
+                Pair(apiSettings.provider, "gpt-4o-mini")
+            }
 
-            Log.d(TAG, "Using model for post-processing: $postProcessModel")
+            Log.d(TAG, "Using provider for post-processing: ${postProcessProvider.displayName}, model: $postProcessModel")
             if (apiSettings.outputLanguage.isNotEmpty()) {
                 Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
             }
