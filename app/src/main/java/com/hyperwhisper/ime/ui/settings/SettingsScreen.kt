@@ -353,6 +353,24 @@ fun SettingsScreen(
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
+            // Local Models Section
+            item {
+                Text(
+                    text = "Local Models",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                ModelManagementCard()
+            }
+
+            item {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
             // Voice Modes Section
             item {
                 Row(
@@ -943,6 +961,14 @@ fun ModelInfoDialog(
                         Text("• Whisper variants", fontSize = 14.sp)
                         Text("• Free inference API", fontSize = 14.sp)
                         Text("• Community-driven", fontSize = 14.sp)
+                    }
+                    ApiProvider.LOCAL -> {
+                        Text("Local (whisper.cpp)", fontWeight = FontWeight.Medium)
+                        Text("• 100% offline - no internet required", fontSize = 14.sp)
+                        Text("• Complete privacy - data never leaves device", fontSize = 14.sp)
+                        Text("• No API costs", fontSize = 14.sp)
+                        Text("• Multiple model sizes (tiny, base, small)", fontSize = 14.sp)
+                        Text("• Fast inference on mobile devices", fontSize = 14.sp)
                     }
                 }
 

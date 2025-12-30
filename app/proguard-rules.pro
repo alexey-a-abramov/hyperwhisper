@@ -36,3 +36,24 @@
 
 # Keep data models
 -keep class com.hyperwhisper.data.** { *; }
+
+# Keep JNI methods for whisper.cpp
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep WhisperContext and its native methods
+-keep class com.hyperwhisper.native_whisper.WhisperContext {
+    native <methods>;
+    *;
+}
+
+# Keep AudioConverter
+-keep class com.hyperwhisper.native_whisper.AudioConverter { *; }
+
+# Keep Whisper model classes
+-keep class com.hyperwhisper.data.WhisperModel { *; }
+-keep class com.hyperwhisper.data.WhisperModel$* { *; }
+-keep class com.hyperwhisper.data.ModelDownloadState { *; }
+-keep class com.hyperwhisper.data.ModelDownloadState$* { *; }
+-keep class com.hyperwhisper.data.WhisperModelInfo { *; }

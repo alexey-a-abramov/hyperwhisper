@@ -107,6 +107,7 @@ dependencies {
     // Hilt Dependency Injection
     implementation("com.google.dagger:hilt-android:2.52")
     ksp("com.google.dagger:hilt-compiler:2.52")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     // Networking
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

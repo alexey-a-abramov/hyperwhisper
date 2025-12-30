@@ -12,6 +12,7 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
+    private val localWhisperStrategy: LocalWhisperStrategy,
     private val settingsRepository: SettingsRepository
 ) {
     companion object {
@@ -142,6 +143,9 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): Boolean {
+        // Local processing doesn't support two-step
+        if (apiSettings.provider == ApiProvider.LOCAL) return false
+
         // Translation is only needed if output language is set AND different from input
         // If both are the same (e.g., both "en"), no translation is needed
         val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
@@ -296,6 +300,7 @@ class VoiceRepository @Inject constructor(
      * Select appropriate strategy based on voice mode and API provider
      *
      * Logic:
+     * - For LOCAL provider: Use Local Whisper Strategy (whisper.cpp)
      * - For "Verbatim" mode with OpenAI/Groq: Use Transcription Strategy
      * - For transformation modes (Polite, Casual, etc.): Use Chat Completion Strategy
      * - For OpenRouter: Always use Chat Completion Strategy
@@ -305,6 +310,11 @@ class VoiceRepository @Inject constructor(
         provider: ApiProvider
     ): AudioProcessingStrategy {
         return when {
+            // LOCAL provider uses whisper.cpp
+            provider == ApiProvider.LOCAL -> {
+                Log.d(TAG, "Selected LocalWhisperStrategy (On-Device)")
+                localWhisperStrategy
+            }
             // OpenRouter always uses chat completion
             provider == ApiProvider.OPENROUTER -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (OpenRouter)")

@@ -162,4 +162,43 @@ object NetworkModule {
     ): ChatCompletionStrategy {
         return ChatCompletionStrategy(apiService, settingsRepository)
     }
+
+    // Local whisper.cpp providers
+
+    @Provides
+    @Singleton
+    fun provideWhisperContext(): com.hyperwhisper.native_whisper.WhisperContext {
+        return com.hyperwhisper.native_whisper.WhisperContext()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAudioConverter(): com.hyperwhisper.native_whisper.AudioConverter {
+        return com.hyperwhisper.native_whisper.AudioConverter()
+    }
+
+    @Provides
+    @Singleton
+    fun provideModelRepository(
+        @ApplicationContext context: Context,
+        okHttpClient: OkHttpClient
+    ): com.hyperwhisper.data.ModelRepository {
+        return com.hyperwhisper.data.ModelRepository(context, okHttpClient)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLocalWhisperStrategy(
+        whisperContext: com.hyperwhisper.native_whisper.WhisperContext,
+        audioConverter: com.hyperwhisper.native_whisper.AudioConverter,
+        modelRepository: com.hyperwhisper.data.ModelRepository,
+        settingsRepository: SettingsRepository
+    ): LocalWhisperStrategy {
+        return LocalWhisperStrategy(
+            whisperContext,
+            audioConverter,
+            modelRepository,
+            settingsRepository
+        )
+    }
 }
