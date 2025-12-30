@@ -1,6 +1,6 @@
 package com.hyperwhisper.di
 
-import com.hyperwhisper.ime.network.AudioProcessingStrategy
+import com.hyperwhisper.network.AudioProcessingStrategy
 import com.hyperwhisper.network.LocalWhisperStrategyStub
 import dagger.Module
 import dagger.Provides
