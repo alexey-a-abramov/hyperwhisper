@@ -103,12 +103,14 @@ android {
         prefab = true
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    // External native build commented out for cloud flavor builds
+    // Uncomment for local development with native whisper.cpp
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
 
     lint {
         disable.add("MutableCollectionMutableState")
