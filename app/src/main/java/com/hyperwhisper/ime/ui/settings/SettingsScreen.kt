@@ -49,7 +49,8 @@ import com.hyperwhisper.localization.LocalStrings
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLocalFlavorEnabled: Boolean = true  // Default to local flavor, cloud builds will pass false
 ) {
     val apiSettings by viewModel.apiSettings.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
@@ -139,7 +140,8 @@ fun SettingsScreen(
             item {
                 ProviderSelector(
                     selectedProvider = provider,
-                    onProviderSelected = { provider = it }
+                    onProviderSelected = { provider = it },
+                    isLocalFlavorEnabled = isLocalFlavorEnabled
                 )
             }
 
@@ -363,12 +365,15 @@ fun SettingsScreen(
                 )
             }
 
-            item {
-                ModelManagementCard()
-            }
+            // Show model management only for local flavor
+            if (isLocalFlavorEnabled) {
+                item {
+                    ModelManagementCard()
+                }
 
-            item {
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                item {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                }
             }
 
             // Voice Modes Section
@@ -578,9 +583,19 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
 @Composable
 fun ProviderSelector(
     selectedProvider: ApiProvider,
-    onProviderSelected: (ApiProvider) -> Unit
+    onProviderSelected: (ApiProvider) -> Unit,
+    isLocalFlavorEnabled: Boolean = true  // Default to local flavor
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    // Filter available providers based on build flavor
+    val availableProviders = remember(isLocalFlavorEnabled) {
+        if (isLocalFlavorEnabled) {
+            ApiProvider.values().toList()
+        } else {
+            ApiProvider.values().filter { it != ApiProvider.LOCAL }
+        }
+    }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -602,7 +617,7 @@ fun ProviderSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            ApiProvider.values().forEach { provider ->
+            availableProviders.forEach { provider ->
                 DropdownMenuItem(
                     text = { Text(provider.displayName) },
                     onClick = {
@@ -831,7 +846,8 @@ fun EditModeDialog(
 fun ModelInfoDialog(
     provider: ApiProvider,
     modelId: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isLocalFlavorEnabled: Boolean = true  // Default to local flavor
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -27,19 +27,53 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
 
-        // NDK configuration for whisper.cpp
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+    // Product flavors for local (with native) and cloud (APIs only) variants
+    flavorDimensions += "mode"
+
+    productFlavors {
+        create("local") {
+            dimension = "mode"
+            applicationIdSuffix = ".local"
+            versionNameSuffix = "-local"
+
+            // NDK configuration for whisper.cpp (local flavor only)
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+
+            // CMake configuration (local flavor only)
+            externalNativeBuild {
+                cmake {
+                    cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
+                    arguments += listOf(
+                        "-DANDROID_STL=c++_shared",
+                        "-DANDROID_PLATFORM=android-26"
+                    )
+                }
+            }
         }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
-                    "-DANDROID_PLATFORM=android-26"
-                )
+        create("cloud") {
+            dimension = "mode"
+            applicationIdSuffix = ".cloud"
+            versionNameSuffix = "-cloud"
+            // No NDK/CMake configuration - cloud APIs only
+        }
+    }
+
+    // Note: Native whisper code is included in both flavors but:
+    // - Local flavor: Uses real native implementations via FlavorModule
+    // - Cloud flavor: Uses stub implementations, ProGuard/R8 removes unused native code
+    // - Model assets (75MB) are excluded from cloud via packaging options below
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Exclude model assets from cloud flavor
+            if (project.findProperty("buildFlavor") == "cloud") {
+                excludes += "models/**"
             }
         }
     }
@@ -73,12 +107,6 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
-        }
-    }
-
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
 

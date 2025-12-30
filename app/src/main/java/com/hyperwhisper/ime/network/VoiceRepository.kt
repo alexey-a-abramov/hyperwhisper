@@ -5,6 +5,7 @@ import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
 import java.io.File
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
@@ -12,8 +13,9 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
-    private val localWhisperStrategy: LocalWhisperStrategy,
-    private val settingsRepository: SettingsRepository
+    @Named("localWhisperStrategy") private val localWhisperStrategy: AudioProcessingStrategy,
+    private val settingsRepository: SettingsRepository,
+    @Named("isLocalFlavorEnabled") private val isLocalFlavorEnabled: Boolean
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
@@ -310,8 +312,15 @@ class VoiceRepository @Inject constructor(
         provider: ApiProvider
     ): AudioProcessingStrategy {
         return when {
-            // LOCAL provider uses whisper.cpp
+            // LOCAL provider uses whisper.cpp (only if local flavor is enabled)
             provider == ApiProvider.LOCAL -> {
+                if (!isLocalFlavorEnabled) {
+                    throw IllegalStateException(
+                        "Local processing is not available in this build variant. " +
+                        "Use the 'local' flavor to enable on-device processing with whisper.cpp, " +
+                        "or select a cloud-based API provider (OpenAI, Groq, etc.)."
+                    )
+                }
                 Log.d(TAG, "Selected LocalWhisperStrategy (On-Device)")
                 localWhisperStrategy
             }

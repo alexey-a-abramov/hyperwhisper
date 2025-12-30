@@ -1,0 +1,114 @@
+name: Build APKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_local:
+        description: 'Build local flavor (with native code)'
+        required: true
+        default: true
+        type: boolean
+      build_cloud:
+        description: 'Build cloud flavor (cloud APIs only)'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build-cloud:
+    name: Build Cloud Flavor (Debug)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.build_cloud }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # Don't need whisper.cpp for cloud
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          cache-read-only: false
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build cloud debug APK
+        run: ./gradlew assembleCloudDebug --stacktrace
+
+      - name: Upload cloud APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperwhisper-cloud-debug
+          path: app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
+          retention-days: 30
+
+  build-local:
+    name: Build Local Flavor (Debug)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.build_local }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true  # Need whisper.cpp submodule
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install NDK and CMake
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;26.1.10909125" \
+            "cmake;3.22.1"
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          cache-read-only: false
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build local debug APK
+        run: ./gradlew assembleLocalDebug --stacktrace
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
+
+      - name: Upload local APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperwhisper-local-debug
+          path: app/build/outputs/apk/local/debug/app-local-debug.apk
+          retention-days: 30
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-cloud, build-local]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifact info
+        run: |
+          echo "=== Build Artifacts ==="
+          find artifacts -type f -name "*.apk" -exec ls -lh {} \; || echo "No APK files found"
+          echo ""
+          echo "=== APK Sizes ==="
+          find artifacts -type f -name "*.apk" -exec du -h {} \; || echo "No APK files found"
