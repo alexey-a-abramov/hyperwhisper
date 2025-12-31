@@ -102,19 +102,19 @@ echo "📥 Downloading artifacts to: $BUILD_DIR/"
 echo ""
 
 # Download cloud APK artifact
-echo "   Downloading cloud-debug.apk..."
-if gh run download "$RUN_ID" --repo "$REPO" --name "cloud-debug" --dir "$BUILD_DIR" 2>/dev/null; then
-    echo "   ✅ Downloaded cloud-debug.apk"
+echo "   Downloading cloud APK..."
+if gh run download "$RUN_ID" --repo "$REPO" --name "hyperwhisper-cloud-debug" --dir "$BUILD_DIR/cloud" 2>/dev/null; then
+    echo "   ✅ Downloaded cloud APK"
 else
-    echo "   ⚠️  Warning: cloud-debug.apk not found (build may have failed for this variant)"
+    echo "   ⚠️  Warning: cloud APK not found (build may have failed for this variant)"
 fi
 
 # Download local APK artifact (if it exists)
-echo "   Downloading local-debug.apk (if available)..."
-if gh run download "$RUN_ID" --repo "$REPO" --name "local-debug" --dir "$BUILD_DIR" 2>/dev/null; then
-    echo "   ✅ Downloaded local-debug.apk"
+echo "   Downloading local APK..."
+if gh run download "$RUN_ID" --repo "$REPO" --name "hyperwhisper-local-debug" --dir "$BUILD_DIR/local" 2>/dev/null; then
+    echo "   ✅ Downloaded local APK"
 else
-    echo "   ℹ️  local-debug.apk not available (expected if only cloud variant built)"
+    echo "   ℹ️  local APK not available (build may have failed for this variant)"
 fi
 
 # Download build summary
@@ -136,17 +136,11 @@ echo ""
 
 # Show downloaded files
 echo "📦 Downloaded files:"
-for file in "$BUILD_DIR"/*; do
+find "$BUILD_DIR" -name "*.apk" -o -name "summary.txt" | while read file; do
     if [ -f "$file" ]; then
         SIZE=$(du -h "$file" | cut -f1)
-        FILENAME=$(basename "$file")
-        echo "   $FILENAME ($SIZE)"
-
-        # Show full path for APK files
-        if [[ "$FILENAME" == *.apk ]]; then
-            ABS_PATH=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
-            echo "   📍 Full path: $ABS_PATH"
-        fi
+        RELPATH=$(echo "$file" | sed "s|$BUILD_DIR/||")
+        echo "   $RELPATH ($SIZE)"
     fi
 done
 
@@ -155,14 +149,25 @@ echo "📂 Build directory: $BUILD_DIR/"
 echo "🔗 Latest symlink: $OUTPUT_DIR/latest -> $TIMESTAMP"
 echo ""
 
-# If cloud APK exists, show its path prominently
-CLOUD_APK="$BUILD_DIR/cloud-debug.apk"
+# Show APK paths
+CLOUD_APK="$BUILD_DIR/cloud/app-cloud-debug.apk"
+LOCAL_APK="$BUILD_DIR/local/app-local-debug.apk"
+
 if [ -f "$CLOUD_APK" ]; then
-    ABS_APK_PATH=$(cd "$(dirname "$CLOUD_APK")" && pwd)/$(basename "$CLOUD_APK")
-    echo "🎯 Cloud APK ready for installation:"
-    echo "   $ABS_APK_PATH"
+    ABS_CLOUD_PATH=$(cd "$(dirname "$CLOUD_APK")" && pwd)/$(basename "$CLOUD_APK")
+    echo "☁️  Cloud APK (cloud APIs only):"
+    echo "   $ABS_CLOUD_PATH"
+fi
+
+if [ -f "$LOCAL_APK" ]; then
+    ABS_LOCAL_PATH=$(cd "$(dirname "$LOCAL_APK")" && pwd)/$(basename "$LOCAL_APK")
+    echo "📱 Local APK (on-device whisper.cpp):"
+    echo "   $ABS_LOCAL_PATH"
+fi
+
+if [ -f "$CLOUD_APK" ] || [ -f "$LOCAL_APK" ]; then
     echo ""
-    echo "📱 Install with: adb install \"$ABS_APK_PATH\""
+    echo "📲 Install with: adb install \"<path-to-apk>\""
 fi
 
 echo ""
