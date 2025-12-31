@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -148,11 +151,18 @@ fun SettingsScreen(
             }
 
             item {
-                ProviderSelector(
-                    selectedProvider = provider,
-                    onProviderSelected = { provider = it },
-                    isLocalFlavorEnabled = isLocalFlavorEnabled
+                ProcessingModeToggle(
+                    isLocalMode = provider == ApiProvider.LOCAL,
+                    onModeChanged = { isLocal ->
+                        provider = if (isLocal) ApiProvider.LOCAL else ApiProvider.OPENAI
+                    },
+                    isLocalFlavorEnabled = isLocalFlavorEnabled,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
+            }
+
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
             // LOCAL provider configuration
@@ -178,18 +188,28 @@ fun SettingsScreen(
                 }
 
                 item {
-                    SecondStageProcessingCard(
+                    ProminentHybridProcessingCard(
                         localSettings = localSettings,
                         onLocalSettingsChanged = { newSettings ->
                             localSettings = newSettings
                         },
-                        availableProviders = ApiProvider.values().toList()
+                        modifier = Modifier.padding(bottom = 16.dp)
                     )
                 }
             }
 
             // Cloud provider configuration
             if (provider != ApiProvider.LOCAL) {
+                item {
+                    CloudProviderSelector(
+                        selectedProvider = provider,
+                        onProviderSelected = { newProvider ->
+                            provider = newProvider
+                        },
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                }
+
                 item {
                     Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -647,16 +667,21 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
 fun ProviderSelector(
     selectedProvider: ApiProvider,
     onProviderSelected: (ApiProvider) -> Unit,
-    isLocalFlavorEnabled: Boolean = true  // Default to local flavor
+    isLocalFlavorEnabled: Boolean = true,  // Default to local flavor
+    showLocalOption: Boolean = true  // NEW parameter to explicitly hide LOCAL
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Filter available providers based on build flavor
-    val availableProviders = remember(isLocalFlavorEnabled) {
-        if (isLocalFlavorEnabled) {
-            ApiProvider.values().toList()
-        } else {
-            ApiProvider.values().filter { it != ApiProvider.LOCAL }
+    // Filter available providers
+    val availableProviders = remember(isLocalFlavorEnabled, showLocalOption) {
+        ApiProvider.values().filter { provider ->
+            if (!isLocalFlavorEnabled && provider == ApiProvider.LOCAL) {
+                false  // Hide LOCAL if flavor not enabled
+            } else if (!showLocalOption && provider == ApiProvider.LOCAL) {
+                false  // Hide LOCAL if explicitly disabled
+            } else {
+                true
+            }
         }
     }
 
@@ -689,6 +714,120 @@ fun ProviderSelector(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun ProcessingModeToggle(
+    isLocalMode: Boolean,
+    onModeChanged: (Boolean) -> Unit,
+    isLocalFlavorEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Transcription Source",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        // Segmented button toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
+        ) {
+            // Cloud option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(
+                        if (!isLocalMode) MaterialTheme.colorScheme.primaryContainer
+                        else Color.Transparent
+                    )
+                    .clickable { onModeChanged(false) },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        tint = if (!isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
+                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cloud API",
+                        color = if (!isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = if (!isLocalMode) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+
+            // Local option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(
+                        if (isLocalMode) MaterialTheme.colorScheme.primaryContainer
+                        else Color.Transparent
+                    )
+                    .clickable(enabled = isLocalFlavorEnabled) {
+                        onModeChanged(true)
+                    }
+                    .alpha(if (isLocalFlavorEnabled) 1f else 0.5f),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhoneAndroid,
+                        contentDescription = null,
+                        tint = if (isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
+                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Local",
+                        color = if (isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        fontWeight = if (isLocalMode) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+
+        // Hint text below toggle
+        Text(
+            text = if (!isLocalMode) "Use cloud API services for transcription"
+                   else "On-device processing with whisper.cpp (privacy-first)",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        // Warning if local not available
+        if (!isLocalFlavorEnabled && isLocalMode) {
+            Text(
+                text = "⚠️ Local processing not available in this build variant",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
@@ -743,6 +882,60 @@ fun ModelSelector(
                         expanded = false
                     }
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CloudProviderSelector(
+    selectedProvider: ApiProvider,
+    onProviderSelected: (ApiProvider) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    // Filter to cloud providers only (exclude LOCAL)
+    val cloudProviders = remember {
+        ApiProvider.values().filter { it != ApiProvider.LOCAL }
+    }
+
+    Column(modifier = modifier) {
+        Text(
+            text = "Cloud Provider",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it }
+        ) {
+            OutlinedTextField(
+                value = selectedProvider.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Select Provider") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                cloudProviders.forEach { provider ->
+                    DropdownMenuItem(
+                        text = { Text(provider.displayName) },
+                        onClick = {
+                            onProviderSelected(provider)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
@@ -1944,6 +2137,174 @@ fun SecondStageProcessingCard(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.error
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProminentHybridProcessingCard(
+    localSettings: LocalSettings,
+    onLocalSettingsChanged: (LocalSettings) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (localSettings.enableSecondStageProcessing)
+                MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Header with toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OfflineBolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Optional: Cloud Processing",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Enable transformations & translations",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = localSettings.enableSecondStageProcessing,
+                    onCheckedChange = { enabled ->
+                        onLocalSettingsChanged(
+                            localSettings.copy(enableSecondStageProcessing = enabled)
+                        )
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Explanation
+            if (!localSettings.enableSecondStageProcessing) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Only VERBATIM mode available. Enable cloud processing to use transformation modes (Polite, Casual, etc.) and translations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // Show cloud provider/model selection when enabled
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surface,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = "Hybrid Workflow",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "Local transcription → Cloud transformation",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Provider selector (but without LOCAL option)
+                    ProviderSelector(
+                        selectedProvider = localSettings.secondStageProvider,
+                        onProviderSelected = { provider ->
+                            onLocalSettingsChanged(
+                                localSettings.copy(secondStageProvider = provider)
+                            )
+                        },
+                        isLocalFlavorEnabled = false,  // Hide LOCAL from this dropdown
+                        showLocalOption = false        // Extra safety
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ModelSelector(
+                        selectedModel = localSettings.secondStageModel,
+                        availableModels = localSettings.secondStageProvider.defaultModels,
+                        onModelSelected = { model ->
+                            onLocalSettingsChanged(
+                                localSettings.copy(secondStageModel = model)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Cost warning
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Cloud API will be used for post-processing (may incur costs)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
         }
