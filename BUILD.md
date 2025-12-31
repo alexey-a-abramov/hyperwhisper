@@ -2,203 +2,53 @@
 
 ## Quick Start
 
-### Build Debug APK
-```bash
-./build.sh
-```
-or
-```bash
-./build.sh debug
-```
-
-### Build Release APK
-```bash
-./build.sh release
-```
-
-### Build and Install to Device
-```bash
-./build.sh install
-```
-
-### Clean Build
-```bash
-./build.sh clean
-```
-
-## Build Script Features
-
-✅ Auto-increments version code on every build
-✅ Color-coded output
-✅ Shows APK location and size
-✅ Works with or without Gradle wrapper
-
-## Manual Build Commands
-
-If you prefer using gradle directly:
-
-### Debug Build
-```bash
-gradle assembleDebug
-```
-
-### Release Build
-```bash
-gradle assembleRelease
-```
-
-### Install to Device
-```bash
-gradle installDebug
-```
-
-### Clean
-```bash
-gradle clean
-```
-
-## APK Output Locations
-
-After building, find your APKs here:
-
-**Debug:**
-```
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Release:**
-```
-app/build/outputs/apk/release/app-release.apk
-```
-
-## Version Management
-
-Versions are managed in `gradle.properties`:
-
-```properties
-VERSION_NAME=1.0      # User-facing version (manual)
-VERSION_CODE=1        # Build number (auto-increments)
-```
-
-### How Auto-Increment Works
-
-Every time you run a build:
-1. Build script reads current VERSION_CODE from gradle.properties
-2. Increments it by 1
-3. Saves the new value
-4. Builds with the new version code
-
-Example:
-```
-Build 1: VERSION_CODE=1  → app shows "Version 1.0 (Code 1)"
-Build 2: VERSION_CODE=2  → app shows "Version 1.0 (Code 2)"
-Build 3: VERSION_CODE=3  → app shows "Version 1.0 (Code 3)"
-```
-
-### Updating Version Name
-
-When releasing a new version, manually edit `gradle.properties`:
-
-```properties
-VERSION_NAME=1.1      # Change this for new releases
-VERSION_CODE=50       # Keep current or reset to 1
-```
-
-## Setting up Gradle Wrapper (Optional)
-
-If you want to use `./gradlew` instead of system gradle:
+### Build on Android/Termux (Recommended for Cloud flavor)
 
 ```bash
-./setup-wrapper.sh
+# Cloud-only build (no native code, ~40 minutes)
+./build-android.sh cloud
+
+# Local build (with whisper.cpp, may require NDK setup)
+./build-android.sh local
+
+# Build both flavors
+./build-android.sh both
 ```
 
-This creates:
-- `gradlew` - Unix/Linux wrapper script
-- `gradlew.bat` - Windows wrapper script
-- `gradle/wrapper/` - Wrapper JAR and properties
+The script automatically:
+- ✅ Configures ARM64 AAPT2 for Android
+- ✅ Builds the APK(s)
+- ✅ Restores gradle.properties (keeps cloud builds working)
+- ✅ Shows APK location and size
 
-## Troubleshooting
-
-### "gradle not found"
-Install gradle:
-```bash
-pkg install gradle
-```
-
-### "Permission denied"
-Make scripts executable:
-```bash
-chmod +x build.sh setup-wrapper.sh
-```
-
-### Clean build if issues occur
-```bash
-./build.sh clean
-./build.sh debug
-```
-
-### View detailed build logs
-```bash
-gradle assembleDebug --stacktrace
-```
-
-## Build Types
-
-### Debug
-- Used for development and testing
-- Includes debugging symbols
-- Not optimized
-- Larger APK size
-- Can be installed alongside release builds
-
-### Release
-- Used for production
-- Optimized and obfuscated (if configured)
-- Smaller APK size
-- Requires signing for Play Store
-
-## Next Steps
-
-1. **First time?** Run `./build.sh` to create your first build
-2. **Need wrapper?** Run `./setup-wrapper.sh`
-3. **Ready to test?** Run `./build.sh install` to install on device
-4. **Making changes?** Version code increments automatically on each build
-
-## Quick Commands Reference
+### Build in GitHub Actions Cloud (Recommended for Local flavor)
 
 ```bash
-# Build commands
-./build.sh              # Build debug
-./build.sh debug        # Build debug
-./build.sh release      # Build release
-./build.sh install      # Build and install debug
-./build.sh clean        # Clean build
+# Trigger cloud build (both flavors)
+gh workflow run "Build APKs" --field build_local=true --field build_cloud=true
 
-# Setup
-./setup-wrapper.sh      # Create gradle wrapper
-chmod +x *.sh           # Make scripts executable
-
-# Manual gradle
-gradle assembleDebug    # Build debug
-gradle assembleRelease  # Build release
-gradle installDebug     # Install debug to device
-gradle clean            # Clean build
-
-# Find APKs
-find app/build -name "*.apk"
-
-# Install APK manually
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+# Wait and download when ready (~7 minutes)
+./download-cloud-build.sh
 ```
 
-## Build Configuration Files
-
-- `build.sh` - Main build script
-- `setup-wrapper.sh` - Gradle wrapper setup
-- `gradle.properties` - Version configuration
-- `app/build.gradle.kts` - App build configuration
-- `build.gradle.kts` - Project build configuration
+Downloaded APKs will be in: `cloud-builds/latest/`
 
 ---
 
-Happy building! 🚀
+## Build Flavors
+
+| Flavor | Native Code | Best Built | Build Time | APK Size |
+|--------|-------------|------------|------------|----------|
+| **cloud** | ❌ None | Android | ~40 min | 83 MB |
+| **local** | ✅ whisper.cpp | Cloud | ~7 min | 83 MB |
+
+## Build Scripts
+
+- **`build-android.sh`** - Automated Android/Termux builds
+- **`download-cloud-build.sh`** - Download GitHub Actions builds
+
+## Latest Features (v1.0 build 47+)
+
+- ✨ Explicit Cloud/Local toggle in settings
+- ✨ Prominent hybrid processing card
+- ✨ Cloud provider selector (11 providers)
