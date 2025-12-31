@@ -56,3 +56,6 @@ build.log
 
 # Cloud build downloads
 cloud-builds/
+
+# Build script temporary files
+gradle.properties.bak
