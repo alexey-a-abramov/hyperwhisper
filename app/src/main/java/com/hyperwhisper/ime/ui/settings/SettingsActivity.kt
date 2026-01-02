@@ -17,11 +17,18 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import javax.inject.Named
 
 @AndroidEntryPoint
 class SettingsActivity : ComponentActivity() {
 
     private val viewModel: SettingsViewModel by viewModels()
+
+    @Inject
+    @JvmField
+    @Named("isLocalFlavorEnabled")
+    var isLocalFlavorEnabled: Boolean = true
 
     // Permission request launcher
     private val requestPermissionLauncher = registerForActivityResult(
@@ -52,7 +59,10 @@ class SettingsActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SettingsScreen(viewModel = viewModel)
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        isLocalFlavorEnabled = isLocalFlavorEnabled
+                    )
                 }
             }
         }

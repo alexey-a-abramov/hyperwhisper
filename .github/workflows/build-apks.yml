@@ -32,6 +32,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Decode and setup keystore
+        run: |
+          # Decode keystore from base64 (if available in secrets)
+          if [ -n "${{ secrets.KEYSTORE_FILE }}" ]; then
+            echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > ${{ github.workspace }}/shared.keystore
+            echo "KEYSTORE_FILE=${{ github.workspace }}/shared.keystore" >> $GITHUB_ENV
+          else
+            echo "⚠️  No keystore secret found, using default debug keystore"
+          fi
+
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v3
         with:
@@ -42,6 +52,10 @@ jobs:
 
       - name: Build cloud debug APK
         run: ./gradlew assembleCloudDebug --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload cloud APK artifact
         uses: actions/upload-artifact@v4
@@ -67,6 +81,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Decode and setup keystore
+        run: |
+          # Decode keystore from base64 (if available in secrets)
+          if [ -n "${{ secrets.KEYSTORE_FILE }}" ]; then
+            echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > ${{ github.workspace }}/shared.keystore
+            echo "KEYSTORE_FILE=${{ github.workspace }}/shared.keystore" >> $GITHUB_ENV
+          else
+            echo "⚠️  No keystore secret found, using default debug keystore"
+          fi
+
       - name: Install NDK and CMake
         run: |
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
@@ -86,6 +110,9 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
           ANDROID_USER_HOME: ${{ github.workspace }}/.android
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload local APK artifact
         uses: actions/upload-artifact@v4

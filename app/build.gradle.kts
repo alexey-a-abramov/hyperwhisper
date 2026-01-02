@@ -12,6 +12,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Import for androidComponents API
+import com.android.build.api.variant.FilterConfiguration.FilterType
+
 android {
     namespace = "com.hyperwhisper"
     compileSdk = 34
@@ -71,10 +74,23 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-            // Exclude model assets from cloud flavor
-            if (project.findProperty("buildFlavor") == "cloud") {
-                excludes += "models/**"
-            }
+        }
+    }
+
+    // Signing configuration for consistent signatures across local and CI builds
+    signingConfigs {
+        create("shared") {
+            // Use keystore from environment or fall back to debug keystore
+            val keystorePath = System.getenv("KEYSTORE_FILE")
+                ?: file("${System.getProperty("user.home")}/.android/debug.keystore").absolutePath
+            val keystorePass = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            val keyAliasName = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
+            val keyPass = System.getenv("KEY_PASSWORD") ?: "android"
+
+            storeFile = file(keystorePath)
+            storePassword = keystorePass
+            keyAlias = keyAliasName
+            keyPassword = keyPass
         }
     }
 
@@ -85,6 +101,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Use shared signing for consistent signatures
+            signingConfig = signingConfigs.getByName("shared")
+        }
+        debug {
+            // Use shared signing for consistent signatures across local and CI
+            signingConfig = signingConfigs.getByName("shared")
         }
     }
 
