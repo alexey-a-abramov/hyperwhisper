@@ -2,6 +2,7 @@ package com.hyperwhisper.data
 
 import android.content.Context
 import android.util.Log
+import com.hyperwhisper.di.ModelDownloadClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,7 @@ import javax.inject.Singleton
 @Singleton
 class ModelRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val okHttpClient: OkHttpClient
+    @ModelDownloadClient private val okHttpClient: OkHttpClient
 ) {
     companion object {
         private const val TAG = "ModelRepository"

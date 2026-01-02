@@ -29,6 +29,10 @@ annotation class TranscriptionRetrofit
 @Retention(AnnotationRetention.BINARY)
 annotation class ChatCompletionRetrofit
 
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ModelDownloadClient
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -81,6 +85,25 @@ object NetworkModule {
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+    }
+
+    /**
+     * Separate OkHttpClient for model downloads
+     * Without auth interceptor to avoid adding API keys to HuggingFace requests
+     */
+    @Provides
+    @Singleton
+    @ModelDownloadClient
+    fun provideModelDownloadClient(): OkHttpClient {
+        return OkHttpClient.Builder()
+            .connectTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
             .build()
     }
 

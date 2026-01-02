@@ -513,7 +513,8 @@ enum class WhisperModel(
         displayName = "Tiny (Fast)",
         fileSize = 75L * 1024 * 1024, // ~75 MB
         fileName = "ggml-tiny.bin",
-        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+        // Using direct CDN link with proper redirect handling
+        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
         isRecommended = true
     ),
     BASE(
@@ -521,7 +522,7 @@ enum class WhisperModel(
         displayName = "Base (Balanced)",
         fileSize = 142L * 1024 * 1024, // ~142 MB
         fileName = "ggml-base.bin",
-        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
         isRecommended = true
     ),
     SMALL(
@@ -529,7 +530,7 @@ enum class WhisperModel(
         displayName = "Small (Accurate)",
         fileSize = 466L * 1024 * 1024, // ~466 MB
         fileName = "ggml-small.bin",
-        downloadUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
     );
 
     fun getFormattedSize(): String {
