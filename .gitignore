@@ -59,3 +59,5 @@ builds/
 
 # Build script temporary files
 gradle.properties.bak
+/models
+/models/
