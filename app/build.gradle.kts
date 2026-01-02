@@ -219,3 +219,34 @@ tasks.whenTaskAdded {
         dependsOn("incrementVersionCode")
     }
 }
+
+// Copy APKs to /builds directory after building
+android.applicationVariants.all {
+    val variant = this
+    val variantName = variant.name
+    val flavorName = variant.flavorName ?: "default"
+
+    // Define output directory based on flavor
+    val outputDir = when (flavorName) {
+        "cloud" -> file("${rootProject.projectDir}/builds/cloud")
+        "local" -> file("${rootProject.projectDir}/builds/local")
+        else -> file("${rootProject.projectDir}/builds/${flavorName}")
+    }
+
+    // Create task to copy APK to custom location
+    val variantNameCapitalized = variantName.replaceFirstChar { it.uppercase() }
+    val copyTask = tasks.register("copy${variantNameCapitalized}Apk", Copy::class.java) {
+        group = "build"
+        description = "Copy ${variantName} APK to ${outputDir.path}"
+
+        from(variant.outputs.map { it.outputFile })
+        into(outputDir)
+
+        dependsOn(variant.assembleProvider)
+    }
+
+    // Make assemble task depend on copy task
+    tasks.named("assemble${variantNameCapitalized}").configure {
+        finalizedBy(copyTask)
+    }
+}

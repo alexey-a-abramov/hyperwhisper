@@ -54,8 +54,8 @@ google-services.json
 *.hprof
 build.log
 
-# Cloud build downloads
-cloud-builds/
+# Build outputs and downloads
+builds/
 
 # Build script temporary files
 gradle.properties.bak

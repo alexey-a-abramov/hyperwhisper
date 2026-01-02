@@ -9,7 +9,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-OUTPUT_DIR="cloud-builds"
+OUTPUT_DIR="builds/downloads"
 WORKFLOW_NAME="build-apks.yml"
 REPO="alexey-a-abramov/hyperwhisper"
 
@@ -96,11 +96,11 @@ echo -e "${BLUE}Downloading cloud APK...${NC}"
 if gh run download "$RUN_ID" \
     --repo "$REPO" \
     --name "hyperwhisper-cloud-debug" \
-    --dir "$BUILD_DIR/apk"; then
-    echo -e "${GREEN}✓ APK downloaded${NC}"
+    --dir "$BUILD_DIR/cloud"; then
+    echo -e "${GREEN}✓ Cloud APK downloaded${NC}"
 
     # Find and display APK info
-    APK_FILE=$(find "$BUILD_DIR/apk" -name "*.apk" -type f)
+    APK_FILE=$(find "$BUILD_DIR/cloud" -name "*.apk" -type f)
     if [ -n "$APK_FILE" ]; then
         APK_SIZE=$(du -h "$APK_FILE" | cut -f1)
         echo -e "${GREEN}  File: $(basename "$APK_FILE")${NC}"
@@ -108,7 +108,28 @@ if gh run download "$RUN_ID" \
         echo -e "${GREEN}  Path: $APK_FILE${NC}"
     fi
 else
-    echo -e "${RED}✗ Failed to download APK${NC}"
+    echo -e "${RED}✗ Failed to download cloud APK${NC}"
+fi
+echo ""
+
+# Download local APK artifact (if available)
+echo -e "${BLUE}Downloading local APK...${NC}"
+if gh run download "$RUN_ID" \
+    --repo "$REPO" \
+    --name "hyperwhisper-local-debug" \
+    --dir "$BUILD_DIR/local" 2>/dev/null; then
+    echo -e "${GREEN}✓ Local APK downloaded${NC}"
+
+    # Find and display APK info
+    APK_FILE_LOCAL=$(find "$BUILD_DIR/local" -name "*.apk" -type f)
+    if [ -n "$APK_FILE_LOCAL" ]; then
+        APK_SIZE_LOCAL=$(du -h "$APK_FILE_LOCAL" | cut -f1)
+        echo -e "${GREEN}  File: $(basename "$APK_FILE_LOCAL")${NC}"
+        echo -e "${GREEN}  Size: $APK_SIZE_LOCAL${NC}"
+        echo -e "${GREEN}  Path: $APK_FILE_LOCAL${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ Local APK not available (workflow may have built cloud only)${NC}"
 fi
 echo ""
 
@@ -131,10 +152,14 @@ echo -e "${GREEN}✓ Summary saved to: $BUILD_DIR/summary.txt${NC}"
 echo ""
 
 # Create a "latest" symlink
-if [ -L "$OUTPUT_DIR/latest" ]; then
-    rm "$OUTPUT_DIR/latest"
+LATEST_LINK="$OUTPUT_DIR/latest"
+if [ -L "$LATEST_LINK" ]; then
+    rm "$LATEST_LINK"
 fi
-ln -s "$TIMESTAMP" "$OUTPUT_DIR/latest"
+# Use relative path for symlink
+cd "$OUTPUT_DIR"
+ln -s "$TIMESTAMP" "latest"
+cd - > /dev/null
 echo -e "${GREEN}✓ Created symlink: $OUTPUT_DIR/latest -> $TIMESTAMP${NC}"
 echo ""
 
@@ -151,11 +176,15 @@ ls -lh "$BUILD_DIR"
 echo ""
 echo -e "Quick access:"
 echo -e "  ${BLUE}Latest build: $OUTPUT_DIR/latest/${NC}"
-echo -e "  ${BLUE}APK: $OUTPUT_DIR/latest/apk/*.apk${NC}"
+echo -e "  ${BLUE}Cloud APK: $OUTPUT_DIR/latest/cloud/*.apk${NC}"
+echo -e "  ${BLUE}Local APK: $OUTPUT_DIR/latest/local/*.apk${NC}"
 echo -e "  ${BLUE}Logs: $OUTPUT_DIR/latest/build.log${NC}"
 echo ""
-echo -e "${GREEN}To install APK:${NC}"
+echo -e "${GREEN}To install APKs:${NC}"
 if [ -n "$APK_FILE" ]; then
-    echo -e "  ${BLUE}adb install \"$APK_FILE\"${NC}"
+    echo -e "  ${BLUE}adb install \"$APK_FILE\"${NC} (cloud)"
+fi
+if [ -n "$APK_FILE_LOCAL" ]; then
+    echo -e "  ${BLUE}adb install \"$APK_FILE_LOCAL\"${NC} (local)"
 fi
 echo ""

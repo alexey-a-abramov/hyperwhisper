@@ -97,8 +97,8 @@ build_flavor() {
         echo -e "${GREEN}⏱️  Build time: ${MINUTES}m ${SECONDS}s${NC}"
         echo ""
 
-        # Show APK location
-        APK_PATH="app/build/outputs/apk/${flavor_name,,}/debug/app-${flavor_name,,}-debug.apk"
+        # Show APK location (now in /builds directory)
+        APK_PATH="builds/${flavor_name,,}/app-${flavor_name,,}-debug.apk"
         if [[ -f "$APK_PATH" ]]; then
             APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
             APK_FULL_PATH=$(realpath "$APK_PATH")
@@ -106,6 +106,17 @@ build_flavor() {
             echo -e "   $APK_FULL_PATH"
             echo -e "${GREEN}📦 Size:${NC} $APK_SIZE"
             echo ""
+        else
+            # Fallback to old location for backward compatibility
+            APK_PATH_OLD="app/build/outputs/apk/${flavor_name,,}/debug/app-${flavor_name,,}-debug.apk"
+            if [[ -f "$APK_PATH_OLD" ]]; then
+                APK_SIZE=$(du -h "$APK_PATH_OLD" | cut -f1)
+                APK_FULL_PATH=$(realpath "$APK_PATH_OLD")
+                echo -e "${GREEN}📱 APK Location (old):${NC}"
+                echo -e "   $APK_FULL_PATH"
+                echo -e "${GREEN}📦 Size:${NC} $APK_SIZE"
+                echo ""
+            fi
         fi
 
         return 0
