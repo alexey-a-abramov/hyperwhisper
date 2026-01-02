@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -82,7 +84,8 @@ fun ModelManagementCard(
                     model = model,
                     state = state,
                     onDownload = { viewModel.downloadModel(model) },
-                    onDelete = { viewModel.deleteModel(model) }
+                    onDelete = { viewModel.deleteModel(model) },
+                    onImportFromFile = { uri -> viewModel.importModelFromFile(model, uri) }
                 )
             }
         }
@@ -90,15 +93,22 @@ fun ModelManagementCard(
 }
 
 /**
- * Individual model item with download/delete controls
+ * Individual model item with download/delete/import controls
  */
 @Composable
 private fun ModelItem(
     model: WhisperModel,
     state: ModelDownloadState,
     onDownload: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onImportFromFile: (android.net.Uri) -> Unit
 ) {
+    // File picker launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { onImportFromFile(it) }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -141,15 +151,24 @@ private fun ModelItem(
                     }
                 }
 
-                // Action button
+                // Action buttons
                 when (state) {
                     is ModelDownloadState.NotDownloaded -> {
-                        IconButton(onClick = onDownload) {
-                            Icon(
-                                imageVector = Icons.Default.CloudDownload,
-                                contentDescription = "Download",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(onClick = onDownload) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = "Download",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "Import from file",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
                         }
                     }
                     is ModelDownloadState.Downloaded -> {
@@ -175,12 +194,21 @@ private fun ModelItem(
                         )
                     }
                     is ModelDownloadState.Error -> {
-                        IconButton(onClick = onDownload) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Retry",
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(onClick = onDownload) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Retry",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = "Import from file",
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
                         }
                     }
                 }

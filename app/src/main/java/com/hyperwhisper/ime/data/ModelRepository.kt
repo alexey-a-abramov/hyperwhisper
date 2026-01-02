@@ -351,6 +351,86 @@ class ModelRepository @Inject constructor(
     }
 
     /**
+     * Import model from external file (user-selected)
+     */
+    suspend fun importModelFromFile(model: WhisperModel, sourceUri: android.net.Uri): Result<File> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            Log.d(TAG, "=== IMPORTING MODEL FROM FILE ===")
+            Log.d(TAG, "Model: ${model.displayName}")
+            Log.d(TAG, "Source URI: $sourceUri")
+            Log.d(TAG, "Expected size: ${model.fileSize} bytes")
+
+            updateModelState(model, ModelDownloadState.Downloading(0f))
+
+            val modelFile = getModelFile(model)
+            val tempFile = File(modelsDir, "${model.fileName}.tmp")
+
+            // Delete temp file if exists
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+
+            // Copy from URI to temp file
+            var copiedBytes = 0L
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(32 * 1024)
+                    var bytesRead: Int
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        copiedBytes += bytesRead
+
+                        // Update progress
+                        if (model.fileSize > 0) {
+                            val progress = copiedBytes.toFloat() / model.fileSize.toFloat()
+                            if (progress <= 1.0f) {
+                                updateModelState(model, ModelDownloadState.Downloading(progress))
+                            }
+                        }
+                    }
+                }
+            } ?: run {
+                val error = "Failed to open input stream from URI"
+                Log.e(TAG, error)
+                updateModelState(model, ModelDownloadState.Error(error))
+                return@withContext Result.failure(Exception(error))
+            }
+
+            Log.d(TAG, "Copied $copiedBytes bytes from file")
+
+            // Verify file size
+            if (tempFile.length() != model.fileSize) {
+                val error = buildString {
+                    append("File size mismatch!\n")
+                    append("Expected: ${model.fileSize / (1024 * 1024)}MB\n")
+                    append("Got: ${tempFile.length() / (1024 * 1024)}MB\n")
+                    append("Please select the correct ${model.modelName} model file.")
+                }
+                Log.e(TAG, error)
+                tempFile.delete()
+                updateModelState(model, ModelDownloadState.Error(error))
+                return@withContext Result.failure(Exception(error))
+            }
+
+            // Move to final location
+            if (modelFile.exists()) {
+                modelFile.delete()
+            }
+            tempFile.renameTo(modelFile)
+
+            updateModelState(model, ModelDownloadState.Downloaded)
+            Log.d(TAG, "Model imported successfully: ${modelFile.absolutePath}")
+
+            Result.success(modelFile)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error importing model", e)
+            updateModelState(model, ModelDownloadState.Error(e.message ?: "Import failed"))
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Update individual model state
      */
     private fun updateModelState(model: WhisperModel, state: ModelDownloadState) {

@@ -25,6 +25,11 @@ class ModelManagementViewModel @Inject constructor(
      */
     val modelStates: StateFlow<Map<WhisperModel, ModelDownloadState>> = modelRepository.modelStates
 
+    init {
+        // Auto-extract bundled model on first launch
+        extractBundledModel()
+    }
+
     /**
      * Download a model from HuggingFace
      */
@@ -56,6 +61,15 @@ class ModelManagementViewModel @Inject constructor(
     fun extractBundledModel() {
         viewModelScope.launch {
             modelRepository.extractBundledModel()
+        }
+    }
+
+    /**
+     * Import model from user-selected file
+     */
+    fun importModelFromFile(model: WhisperModel, uri: android.net.Uri) {
+        viewModelScope.launch {
+            modelRepository.importModelFromFile(model, uri)
         }
     }
 }
