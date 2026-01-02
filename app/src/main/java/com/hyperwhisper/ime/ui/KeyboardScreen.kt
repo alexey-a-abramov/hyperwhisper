@@ -378,7 +378,7 @@ fun KeyboardScreen(
                         onClick = onEnter,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                         tonalElevation = 2.dp
                     ) {
                         Box(
@@ -388,7 +388,7 @@ fun KeyboardScreen(
                             Icon(
                                 imageVector = Icons.Default.KeyboardReturn,
                                 contentDescription = strings.enterDesc,
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -408,7 +408,7 @@ fun KeyboardScreen(
                 if (lastTranscribedText.isNotEmpty()) {
                     Surface(
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1.3f)
                             .height(56.dp)
                             .pointerInput(appearanceSettings.enableHistoryPanel) {
                                 detectTapGestures(
@@ -440,17 +440,17 @@ fun KeyboardScreen(
                             ) {
                                 Text(
                                     strings.pasteLastHold.uppercase(),
-                                    fontSize = 10.sp,
+                                    fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Text(
-                                    if (lastTranscribedText.length > 25) {
-                                        lastTranscribedText.take(25) + "..."
+                                    if (lastTranscribedText.length > 40) {
+                                        lastTranscribedText.take(40) + "..."
                                     } else {
                                         lastTranscribedText
                                     },
-                                    fontSize = 9.sp,
+                                    fontSize = 8.sp,
                                     maxLines = 1,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                                 )
@@ -467,7 +467,7 @@ fun KeyboardScreen(
                         .height(56.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                     ),
                     contentPadding = PaddingValues(0.dp)
                 ) {
@@ -475,7 +475,7 @@ fun KeyboardScreen(
                         text = strings.space,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFeatureSettings = "smcp" // Small caps
                         )
@@ -755,7 +755,7 @@ fun RepeatableDeleteButton(
         pressDuration >= 5000 -> MaterialTheme.colorScheme.error
         pressDuration >= 3000 -> MaterialTheme.colorScheme.errorContainer
         isPressed -> MaterialTheme.colorScheme.surfaceVariant
-        else -> MaterialTheme.colorScheme.surface
+        else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
     }
 
     // Minimal circular button with left arrow icon
@@ -782,7 +782,7 @@ fun RepeatableDeleteButton(
             Icon(
                 imageVector = Icons.Default.ArrowBack,
                 contentDescription = "Backspace",
-                tint = if (pressDuration >= 3000) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
+                tint = if (pressDuration >= 3000) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(24.dp)
             )
         }

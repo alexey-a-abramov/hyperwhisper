@@ -84,19 +84,25 @@ class ModelRepository @Inject constructor(
      */
     suspend fun downloadModel(model: WhisperModel): Result<File> = withContext(Dispatchers.IO) {
         return@withContext try {
-            Log.d(TAG, "Downloading model: ${model.displayName} from ${model.downloadUrl}")
+            Log.d(TAG, "=== DOWNLOAD START ===")
+            Log.d(TAG, "Model: ${model.displayName}")
+            Log.d(TAG, "URL: ${model.downloadUrl}")
+            Log.d(TAG, "Expected size: ${model.fileSize / (1024 * 1024)}MB")
 
-            // Update state to downloading
+            // Update state to downloading (0%)
             updateModelState(model, ModelDownloadState.Downloading(0f))
+            Log.d(TAG, "State updated to Downloading(0%)")
 
             val request = Request.Builder()
                 .url(model.downloadUrl)
                 .build()
 
+            Log.d(TAG, "Executing HTTP request...")
             val response = okHttpClient.newCall(request).execute()
+            Log.d(TAG, "HTTP Response: ${response.code} ${response.message}")
 
             if (!response.isSuccessful) {
-                val error = "Download failed: HTTP ${response.code}"
+                val error = "Download failed: HTTP ${response.code} ${response.message}"
                 Log.e(TAG, error)
                 updateModelState(model, ModelDownloadState.Error(error))
                 return@withContext Result.failure(Exception(error))
@@ -111,58 +117,164 @@ class ModelRepository @Inject constructor(
             }
 
             val totalBytes = body.contentLength()
-            Log.d(TAG, "Download started: ${totalBytes / (1024 * 1024)} MB")
+            Log.d(TAG, "Content-Length: $totalBytes bytes (${totalBytes / (1024 * 1024)} MB)")
+            Log.d(TAG, "Content-Type: ${response.header("Content-Type")}")
+            Log.d(TAG, "All headers:")
+            response.headers.forEach { header ->
+                Log.d(TAG, "  ${header.first}: ${header.second}")
+            }
 
             val modelFile = getModelFile(model)
             val tempFile = File(modelsDir, "${model.fileName}.tmp")
 
-            // Download with progress
-            body.byteStream().use { input ->
-                FileOutputStream(tempFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var downloadedBytes = 0L
+            Log.d(TAG, "=== FILE PATHS ===")
+            Log.d(TAG, "Models directory: ${modelsDir.absolutePath}")
+            Log.d(TAG, "Target file: ${modelFile.absolutePath}")
+            Log.d(TAG, "Temp file: ${tempFile.absolutePath}")
+            Log.d(TAG, "Models dir exists: ${modelsDir.exists()}")
+            Log.d(TAG, "Models dir writable: ${modelsDir.canWrite()}")
 
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-
-                        // Update progress
-                        if (totalBytes > 0) {
-                            val progress = downloadedBytes.toFloat() / totalBytes.toFloat()
-                            updateModelState(model, ModelDownloadState.Downloading(progress))
-
-                            if (downloadedBytes % (1024 * 1024 * 10) == 0L) { // Log every 10MB
-                                Log.d(TAG, "Download progress: ${(progress * 100).toInt()}%")
-                            }
-                        }
-                    }
-                }
+            // Delete temp file if it exists
+            if (tempFile.exists()) {
+                Log.d(TAG, "Deleting existing temp file (${tempFile.length()} bytes)")
+                tempFile.delete()
             }
 
+            // Download with progress
+            Log.d(TAG, "=== DOWNLOAD STREAM START ===")
+            Log.d(TAG, "Source URL: ${model.downloadUrl}")
+            Log.d(TAG, "Destination: ${tempFile.absolutePath}")
+            Log.d(TAG, "Expected size: ${model.fileSize} bytes")
+
+            var lastProgressUpdate = 0f
+            val progressUpdateThreshold = 0.01f // Update UI every 1% progress
+            var downloadedBytes = 0L
+
+            try {
+                body.byteStream().use { input ->
+                    Log.d(TAG, "Input stream opened: ${input.javaClass.name}")
+                    Log.d(TAG, "Input stream available: ${input.available()} bytes")
+
+                    FileOutputStream(tempFile).use { output ->
+                        Log.d(TAG, "Output stream opened to: ${tempFile.absolutePath}")
+
+                        val buffer = ByteArray(32 * 1024) // 32KB buffer
+                        var bytesRead: Int
+                        var readCount = 0
+
+                        Log.d(TAG, "Starting read loop (expected: $totalBytes bytes)")
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            readCount++
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+
+                            // Log first few reads for debugging
+                            if (readCount <= 5) {
+                                Log.d(TAG, "Read #$readCount: $bytesRead bytes (total: $downloadedBytes)")
+                            }
+
+                            // Update progress less frequently to avoid UI overhead
+                            if (totalBytes > 0) {
+                                val progress = downloadedBytes.toFloat() / totalBytes.toFloat()
+
+                                // Update UI only if progress increased by at least 1%
+                                if (progress - lastProgressUpdate >= progressUpdateThreshold || progress >= 0.99f) {
+                                    updateModelState(model, ModelDownloadState.Downloading(progress))
+                                    lastProgressUpdate = progress
+                                    Log.d(TAG, "Progress: ${(progress * 100).toInt()}% ($downloadedBytes / $totalBytes bytes, ${downloadedBytes / (1024 * 1024)}MB / ${totalBytes / (1024 * 1024)}MB)")
+                                }
+                            } else {
+                                // If totalBytes is unknown, update every 5MB
+                                if (downloadedBytes % (1024 * 1024 * 5) == 0L) {
+                                    Log.d(TAG, "Downloaded ${downloadedBytes / (1024 * 1024)}MB (size unknown)")
+                                }
+                            }
+                        }
+
+                        output.flush()
+                        Log.d(TAG, "Output stream flushed")
+                        Log.d(TAG, "Total reads: $readCount")
+                        Log.d(TAG, "Total bytes downloaded: $downloadedBytes")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during stream operation", e)
+                throw e
+            }
+
+            Log.d(TAG, "=== DOWNLOAD STREAM END ===")
+            Log.d(TAG, "Temp file size: ${tempFile.length()} bytes")
+            Log.d(TAG, "Temp file exists: ${tempFile.exists()}")
+
             // Verify file size
+            Log.d(TAG, "=== SIZE VERIFICATION ===")
+            Log.d(TAG, "Expected: ${model.fileSize} bytes (${model.fileSize / (1024 * 1024)}MB)")
+            Log.d(TAG, "Downloaded: ${tempFile.length()} bytes (${tempFile.length() / (1024 * 1024)}MB)")
+            Log.d(TAG, "Downloaded variable: $downloadedBytes bytes")
+            Log.d(TAG, "Content-Length header: $totalBytes bytes")
+
             if (tempFile.length() != model.fileSize) {
-                tempFile.delete()
-                val error = "Downloaded size mismatch: expected ${model.fileSize}, got ${tempFile.length()}"
+                val error = buildString {
+                    append("Size mismatch!\n")
+                    append("Expected: ${model.fileSize / (1024 * 1024)}MB (${model.fileSize} bytes)\n")
+                    append("Got: ${tempFile.length() / (1024 * 1024)}MB (${tempFile.length()} bytes)\n")
+                    append("Downloaded var: ${downloadedBytes / (1024 * 1024)}MB ($downloadedBytes bytes)\n")
+                    append("URL: ${model.downloadUrl}\n")
+                    if (tempFile.length() == 0L) {
+                        append("ERROR: File is empty! Check network/SSL or redirects.")
+                    }
+                }
                 Log.e(TAG, error)
+                Log.e(TAG, "Deleting incomplete temp file: ${tempFile.absolutePath}")
+                tempFile.delete()
                 updateModelState(model, ModelDownloadState.Error(error))
                 return@withContext Result.failure(Exception(error))
             }
 
             // Move temp file to final location
+            Log.d(TAG, "=== FINALIZING ===")
             if (modelFile.exists()) {
+                Log.d(TAG, "Deleting existing model file: ${modelFile.absolutePath} (${modelFile.length()} bytes)")
                 modelFile.delete()
             }
-            tempFile.renameTo(modelFile)
+
+            Log.d(TAG, "Renaming temp file to final location")
+            Log.d(TAG, "  From: ${tempFile.absolutePath}")
+            Log.d(TAG, "  To: ${modelFile.absolutePath}")
+
+            val renamed = tempFile.renameTo(modelFile)
+            Log.d(TAG, "Rename result: $renamed")
+
+            if (!renamed) {
+                val error = "Failed to rename temp file to final location"
+                Log.e(TAG, error)
+                updateModelState(model, ModelDownloadState.Error(error))
+                return@withContext Result.failure(Exception(error))
+            }
 
             updateModelState(model, ModelDownloadState.Downloaded)
-            Log.d(TAG, "Model downloaded successfully: ${modelFile.absolutePath}")
+            Log.d(TAG, "=== DOWNLOAD COMPLETE ===")
+            Log.d(TAG, "Model: ${model.displayName}")
+            Log.d(TAG, "File: ${modelFile.absolutePath}")
+            Log.d(TAG, "Size: ${modelFile.length()} bytes (${modelFile.length() / (1024 * 1024)}MB)")
 
             Result.success(modelFile)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading model: ${model.displayName}", e)
-            updateModelState(model, ModelDownloadState.Error(e.message ?: "Unknown error"))
+            val errorMsg = buildString {
+                append("Download failed: ")
+                append(e.javaClass.simpleName)
+                append(" - ")
+                append(e.message ?: "Unknown error")
+            }
+            Log.e(TAG, "=== DOWNLOAD ERROR ===", e)
+            Log.e(TAG, "Model: ${model.displayName}")
+            Log.e(TAG, "Error type: ${e.javaClass.name}")
+            Log.e(TAG, "Error message: ${e.message}")
+            Log.e(TAG, "Stack trace:", e)
+
+            updateModelState(model, ModelDownloadState.Error(errorMsg))
             Result.failure(e)
         }
     }

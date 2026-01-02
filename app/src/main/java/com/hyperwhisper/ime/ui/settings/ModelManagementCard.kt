@@ -1,5 +1,9 @@
 package com.hyperwhisper.ui.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -7,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -212,27 +217,85 @@ private fun ModelItem(
                 }
             }
 
-            // Download progress
+            // Download progress and URL info
             when (state) {
                 is ModelDownloadState.Downloading -> {
+                    val context = LocalContext.current
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         LinearProgressIndicator(
                             progress = state.progress,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Downloading... ${(state.progress * 100).toInt()}%",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            // Copy URL button
+                            TextButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Model URL", model.downloadUrl)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                contentPadding = PaddingValues(4.dp),
+                                modifier = Modifier.height(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy URL",
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Copy URL", fontSize = 9.sp)
+                            }
+                        }
+
+                        // Show URL (truncated)
                         Text(
-                            text = "Downloading... ${(state.progress * 100).toInt()}%",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.primary
+                            text = model.downloadUrl.take(60) + "...",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            lineHeight = 12.sp
                         )
                     }
                 }
                 is ModelDownloadState.Error -> {
-                    Text(
-                        text = "Error: ${state.message}",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    val context = LocalContext.current
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Error: ${state.message}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+
+                        // Copy URL button for errors too
+                        TextButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Model URL", model.downloadUrl)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                            },
+                            contentPadding = PaddingValues(4.dp),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy URL",
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy URL for debugging", fontSize = 9.sp)
+                        }
+                    }
                 }
                 else -> {}
             }

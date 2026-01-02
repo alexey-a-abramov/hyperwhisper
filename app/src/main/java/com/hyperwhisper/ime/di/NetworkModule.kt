@@ -97,13 +97,17 @@ object NetworkModule {
     @Provides
     @Singleton
     @ModelDownloadClient
-    fun provideModelDownloadClient(): OkHttpClient {
+    fun provideModelDownloadClient(
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
         return OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor) // Add logging for debugging
             .connectTimeout(120, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS) // 5 minutes for large downloads
             .writeTimeout(120, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
             .build()
     }
 
