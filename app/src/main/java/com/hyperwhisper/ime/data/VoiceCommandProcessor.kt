@@ -63,7 +63,8 @@ class VoiceCommandProcessor @Inject constructor(
             SettingType.ENABLE_HISTORY -> changeHistoryEnabled(command.getBooleanValue())
             SettingType.UI_LANGUAGE -> changeUILanguage(command.value)
             SettingType.THEME -> changeTheme(command.getThemeOption())
-            SettingType.ENABLE_VOICE_COMMANDS -> changeVoiceCommandsEnabled(command.getBooleanValue())
+            SettingType.ENABLE_TECHIE_MODE -> changeTechieModeEnabled(command.getBooleanValue())
+            SettingType.ENABLE_CONFIGURATION_MODE -> changeConfigurationModeEnabled(command.getBooleanValue())
             SettingType.UNKNOWN -> VoiceCommandResult(
                 success = false,
                 message = "Unknown setting: ${command.setting}"
@@ -214,25 +215,34 @@ class VoiceCommandProcessor @Inject constructor(
     /**
      * Enable/disable voice commands mode
      * This will switch to/from the voice commands mode
+     * @deprecated Replaced by changeConfigurationModeEnabled
      */
     private suspend fun changeVoiceCommandsEnabled(enabled: Boolean): VoiceCommandResult {
+        return changeConfigurationModeEnabled(enabled)
+    }
+
+    /**
+     * Enable/disable configuration mode
+     * This will switch to/from the configuration mode
+     */
+    private suspend fun changeConfigurationModeEnabled(enabled: Boolean): VoiceCommandResult {
         val allModes = settingsRepository.voiceModes.first()
 
         if (enabled) {
-            // Switch to voice commands mode
-            val voiceCommandsMode = allModes.firstOrNull { it.id == "voice_commands" }
-            if (voiceCommandsMode != null) {
-                settingsRepository.setSelectedMode(voiceCommandsMode.id)
+            // Switch to configuration mode
+            val configurationMode = allModes.firstOrNull { it.id == "configuration" }
+            if (configurationMode != null) {
+                settingsRepository.setSelectedMode(configurationMode.id)
                 return VoiceCommandResult(
                     success = true,
-                    message = "Voice commands mode enabled",
-                    settingChanged = "Voice Commands",
+                    message = "Configuration mode enabled",
+                    settingChanged = "Configuration Mode",
                     newValue = "Enabled"
                 )
             } else {
                 return VoiceCommandResult(
                     success = false,
-                    message = "Voice commands mode not found"
+                    message = "Configuration mode not found"
                 )
             }
         } else {
@@ -242,8 +252,8 @@ class VoiceCommandProcessor @Inject constructor(
                 settingsRepository.setSelectedMode(verbatimMode.id)
                 return VoiceCommandResult(
                     success = true,
-                    message = "Voice commands mode disabled",
-                    settingChanged = "Voice Commands",
+                    message = "Configuration mode disabled",
+                    settingChanged = "Configuration Mode",
                     newValue = "Disabled"
                 )
             } else {
@@ -253,6 +263,23 @@ class VoiceCommandProcessor @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Enable/disable techie/developer mode
+     */
+    private suspend fun changeTechieModeEnabled(enabled: Boolean): VoiceCommandResult {
+        val currentSettings = settingsRepository.appearanceSettings.first()
+        val updatedSettings = currentSettings.copy(techieModeEnabled = enabled)
+        settingsRepository.saveAppearanceSettings(updatedSettings)
+
+        val status = if (enabled) "enabled" else "disabled"
+        return VoiceCommandResult(
+            success = true,
+            message = "Techie mode $status",
+            settingChanged = "Techie Mode",
+            newValue = status
+        )
     }
 
     /**

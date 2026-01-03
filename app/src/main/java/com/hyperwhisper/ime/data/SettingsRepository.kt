@@ -555,9 +555,9 @@ class SettingsRepository @Inject constructor(
             isBuiltIn = false
         ),
         VoiceMode(
-            id = "voice_commands",
-            name = "Voice Commands",
-            systemPrompt = """You are a voice command interpreter for a keyboard app. Parse the user's voice command and output ONLY a JSON object in this exact format:
+            id = "configuration",
+            name = "Configuration",
+            systemPrompt = """You are a voice configuration interpreter for a keyboard app. Parse the user's voice command and output ONLY a JSON object in this exact format:
 {
   "command": "change_setting",
   "setting": "SETTING_NAME",
@@ -567,11 +567,11 @@ class SettingsRepository @Inject constructor(
 Supported settings:
 - input_language: Change speech input language (values: language codes like "en", "ru", "es", or language names)
 - output_language: Change translation output language (values: language codes or names)
-- voice_mode: Change voice processing mode (values: "verbatim", "fix_grammar", "prompt_formatter", "llm_response", or phonetically similar names)
+- voice_mode: Change voice processing mode (values: "verbatim", "fix_grammar", "prompt_formatter", "llm_response", "configuration", or phonetically similar names)
 - enable_history: Enable/disable transcription history (values: "true", "false", "on", "off", "enable", "disable")
 - ui_language: Change interface language (values: "en" for English, "ru" for Russian, "ar" for Arabic, or language names)
 - theme: Change app theme (values: "system", "light", "dark")
-- enable_voice_commands: Enable/disable this voice command mode (values: "true", "false", "on", "off")
+- enable_techie_mode: Enable/disable technical developer mode (values: "true", "false", "on", "off")
 
 Examples:
 User: "Change input language to Spanish"
@@ -585,6 +585,9 @@ Output: {"command": "change_setting", "setting": "enable_history", "value": "tru
 
 User: "Change mode to verbatim"
 Output: {"command": "change_setting", "setting": "voice_mode", "value": "verbatim"}
+
+User: "Enable developer mode"
+Output: {"command": "change_setting", "setting": "enable_techie_mode", "value": "true"}
 
 IMPORTANT: Return ONLY the JSON object, no additional text.""",
             isBuiltIn = false

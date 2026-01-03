@@ -71,6 +71,7 @@ fun KeyboardScreen(
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
     val usageStatistics by viewModel.usageStatistics.collectAsState()
+    val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
@@ -528,6 +529,17 @@ fun KeyboardScreen(
                 errorMessage = error,
                 onDismiss = { viewModel.clearError() },
                 context = context
+            )
+        }
+
+        // Show Configuration Command Confirmation Dialog
+        pendingCommandResult?.let { result ->
+            ConfigurationConfirmationDialog(
+                settingChanged = result.settingChanged,
+                newValue = result.newValue,
+                message = result.message,
+                onConfirm = { viewModel.confirmPendingCommand() },
+                onDismiss = { viewModel.rejectPendingCommand() }
             )
         }
 
@@ -1017,6 +1029,120 @@ fun ErrorOverlay(
                         Text(
                             strings.dismiss.uppercase(),
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfigurationConfirmationDialog(
+    settingChanged: String?,
+    newValue: String?,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val strings = LocalStrings.current
+
+    // Full-screen overlay within keyboard
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 16.dp
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Title
+                Text(
+                    text = "Configuration Change",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+
+                // Change summary
+                if (settingChanged != null && newValue != null) {
+                    Text(
+                        text = "Setting: $settingChanged",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "New Value: $newValue",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Full message
+                Text(
+                    text = message,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Action buttons
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Confirm button
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Confirm",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Apply Change".uppercase(),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Cancel button
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text(
+                            "Cancel".uppercase(),
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }

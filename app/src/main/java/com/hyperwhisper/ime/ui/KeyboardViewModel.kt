@@ -43,6 +43,10 @@ class KeyboardViewModel @Inject constructor(
     private val _transcriptionProgress = MutableStateFlow<Float?>(null)
     val transcriptionProgress: StateFlow<Float?> = _transcriptionProgress.asStateFlow()
 
+    // Pending configuration command for confirmation dialog
+    private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
+    val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
+
     // Job for current transcription (to allow cancellation)
     private var transcriptionJob: kotlinx.coroutines.Job? = null
 
@@ -227,9 +231,9 @@ class KeyboardViewModel @Inject constructor(
                         Log.d(TAG, "Transcription successful: ${result.data}")
                         TraceLogger.trace("KeyboardViewModel", "Transcription successful, length: ${result.data.length} chars")
 
-                        // Check if in voice commands mode
-                        if (mode.id == "voice_commands") {
-                            // Process as voice command
+                        // Check if in configuration mode
+                        if (mode.id == "configuration") {
+                            // Process as configuration command
                             viewModelScope.launch {
                                 try {
                                     val commandResult = voiceCommandProcessor.executeCommand(
@@ -237,20 +241,22 @@ class KeyboardViewModel @Inject constructor(
                                         viewModelScope
                                     )
 
-                                    // Show notification
-                                    voiceCommandProcessor.showNotification(commandResult)
+                                    if (commandResult.success) {
+                                        // Show pending command for user confirmation
+                                        _pendingCommandResult.value = commandResult
+                                        Log.d(TAG, "Configuration command pending: ${commandResult.message}")
+                                        TraceLogger.trace("KeyboardViewModel", "Configuration pending: ${commandResult.message}")
+                                    } else {
+                                        // Show error directly
+                                        _errorMessage.value = commandResult.message
+                                    }
 
                                     // Don't commit command text to input field
-                                    // Just log it
-                                    Log.d(TAG, "Voice command executed: ${commandResult.message}")
-                                    TraceLogger.trace("KeyboardViewModel", "Voice command: ${commandResult.message}")
-
-                                    // Clear transcribed text so it doesn't get committed
                                     _transcribedText.value = ""
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Error processing voice command", e)
-                                    TraceLogger.error("KeyboardViewModel", "Voice command error", e)
-                                    _errorMessage.value = "Voice command error: ${e.message}"
+                                    Log.e(TAG, "Error processing configuration command", e)
+                                    TraceLogger.error("KeyboardViewModel", "Configuration command error", e)
+                                    _errorMessage.value = "Configuration error: ${e.message}"
                                 }
                             }
                         } else {
@@ -643,5 +649,29 @@ class KeyboardViewModel @Inject constructor(
         _recordingState.value = RecordingState.IDLE
         _transcribedText.value = ""
         _errorMessage.value = null
+    }
+
+    /**
+     * Confirm and apply pending configuration command
+     */
+    fun confirmPendingCommand() {
+        viewModelScope.launch {
+            val pending = _pendingCommandResult.value
+            if (pending != null && pending.success) {
+                // Show notification
+                voiceCommandProcessor.showNotification(pending)
+                Log.d(TAG, "Configuration command confirmed: ${pending.message}")
+            }
+            // Clear pending command
+            _pendingCommandResult.value = null
+        }
+    }
+
+    /**
+     * Reject pending configuration command
+     */
+    fun rejectPendingCommand() {
+        Log.d(TAG, "Configuration command rejected")
+        _pendingCommandResult.value = null
     }
 }

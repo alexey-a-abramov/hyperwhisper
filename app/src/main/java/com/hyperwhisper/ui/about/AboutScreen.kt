@@ -120,18 +120,30 @@ fun AboutScreen(
 • Polite - Makes speech professional and friendly
 • Prompt Formatter - Optimizes text for AI prompts
 • LLM Response - Get direct answers to questions
-• Voice Commands - Control app settings by voice
+• Configuration - Control app settings by voice
 
-Voice Commands Mode:
-Switch to "Voice Commands" mode to control settings by speaking:
-• "Change input language to [language]"
-• "Change output language to [language]"
-• "Change mode to [mode name]"
+Configuration Mode:
+Switch to "Configuration" mode to control settings by voice commands.
+When you speak a command, you'll see a confirmation dialog showing what will change.
+
+Sample Voice Commands:
+• "Change input language to Spanish"
+• "Switch to English language"
+• "Change mode to verbatim"
+• "Enable fix grammar mode"
 • "Switch to dark mode" / "light mode" / "system theme"
 • "Enable history" / "Disable history"
-• "Change interface language to [language]"
+• "Enable developer mode" / "Enable techie mode"
+• "Change interface language to Russian"
+• "Turn off configuration mode" (returns to verbatim)
 
-After speaking a command, you'll see a notification confirming the change. The command text won't appear in your input field.
+How it works:
+1. Select "Configuration" from the mode selector
+2. Tap the microphone and speak your command
+3. Review the change in the confirmation dialog
+4. Tap "Apply Change" to confirm or "Cancel" to dismiss
+
+After confirmation, you'll see a notification that the setting was updated.
 
 Delete Button:
 • Tap - Delete one character (or selected text)
@@ -139,7 +151,7 @@ Delete Button:
 • Hold 5 seconds - Delete ALL text (button turns red)
 
 Language Selection:
-Use Voice Commands mode to change languages hands-free, or tap the language buttons below the microphone to select from the list.""",
+Use Configuration mode to change languages hands-free, or tap the language buttons below the microphone to select from the list.""",
                 fontSize = 14.sp,
                 lineHeight = 20.sp
             )

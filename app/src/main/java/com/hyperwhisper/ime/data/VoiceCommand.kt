@@ -22,7 +22,8 @@ enum class SettingType {
     ENABLE_HISTORY,
     UI_LANGUAGE,
     THEME,
-    ENABLE_VOICE_COMMANDS,
+    ENABLE_TECHIE_MODE,
+    ENABLE_CONFIGURATION_MODE,
     UNKNOWN
 }
 
@@ -107,7 +108,8 @@ data class VoiceCommand(
             "enablehistory", "history" -> SettingType.ENABLE_HISTORY
             "uilanguage", "interfacelanguage", "language" -> SettingType.UI_LANGUAGE
             "theme", "darkmode", "lightmode" -> SettingType.THEME
-            "enablevoicecommands", "voicecommands", "commandmode" -> SettingType.ENABLE_VOICE_COMMANDS
+            "enabletechiemode", "techiemode", "developermode", "devmode", "debug" -> SettingType.ENABLE_TECHIE_MODE
+            "enableconfigurationmode", "configurationmode", "commandmode" -> SettingType.ENABLE_CONFIGURATION_MODE
             else -> SettingType.UNKNOWN
         }
     }
