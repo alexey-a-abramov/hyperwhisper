@@ -125,11 +125,22 @@ android {
         prefab = true
     }
 
-    // External native build for whisper.cpp (required for local flavor)
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    // External native build for whisper.cpp
+    // NOTE: This requires NDK and CMake, which are incompatible with Termux on Android
+    // For Termux builds: Pre-built .so files should be placed in src/main/jniLibs/
+    // For CI/desktop builds: Uncomment the section below
+
+    // Check if pre-built native libs exist
+    val hasPreBuiltLibs = file("src/main/jniLibs/arm64-v8a/libhyperwhisper_jni.so").exists() ||
+                         file("src/main/jniLibs/armeabi-v7a/libhyperwhisper_jni.so").exists()
+
+    // Only configure CMake if pre-built libs don't exist (for CI/desktop builds)
+    if (!hasPreBuiltLibs) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
     }
 
