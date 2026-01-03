@@ -55,20 +55,20 @@ jobs:
       run: |
         echo "Listing built native libraries:"
         find app/build -name "*.so" -type f || echo "No .so files found"
-        ls -R app/build/intermediates/merged_native_libs/localDebug/out/lib/ || echo "Directory not found"
+        ls -R app/build/intermediates/merged_native_libs/localDebug/mergeLocalDebugNativeLibs/out/lib/ || echo "Directory not found"
 
     - name: Upload Native Libraries
       uses: actions/upload-artifact@v4
       with:
         name: native-libs
-        path: app/build/intermediates/merged_native_libs/localDebug/out/lib/
+        path: app/build/intermediates/merged_native_libs/localDebug/mergeLocalDebugNativeLibs/out/lib/
         retention-days: 30
 
     - name: Commit Native Libraries
       if: success()
       run: |
         mkdir -p app/src/main/jniLibs
-        cp -r app/build/intermediates/merged_native_libs/localDebug/out/lib/* app/src/main/jniLibs/
+        cp -r app/build/intermediates/merged_native_libs/localDebug/mergeLocalDebugNativeLibs/out/lib/* app/src/main/jniLibs/
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add app/src/main/jniLibs
