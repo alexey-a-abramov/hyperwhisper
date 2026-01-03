@@ -174,19 +174,21 @@ fun KeyboardScreen(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Logs button
-                IconButton(
-                    onClick = {
-                        val intent = Intent(context, com.hyperwhisper.ui.logs.LogsActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
+                // Logs button (only shown in techie mode)
+                if (appearanceSettings.techieModeEnabled) {
+                    IconButton(
+                        onClick = {
+                            val intent = Intent(context, com.hyperwhisper.ui.logs.LogsActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assignment,
+                            contentDescription = strings.viewLogsDesc,
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Assignment,
-                        contentDescription = strings.viewLogsDesc,
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
                 }
 
                 // Help/About button
