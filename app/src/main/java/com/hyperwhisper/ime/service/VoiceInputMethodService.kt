@@ -109,7 +109,7 @@ class VoiceInputMethodService : InputMethodService(),
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
             // Initialize ViewModel using ViewModelProvider
-            viewModel = KeyboardViewModel(voiceRepository, settingsRepository, voiceCommandProcessor)
+            viewModel = KeyboardViewModel(this, voiceRepository, settingsRepository, voiceCommandProcessor)
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)

@@ -34,7 +34,14 @@ jobs:
     - name: Build Native Libraries
       run: |
         chmod +x gradlew
-        ./gradlew assembleLocalDebug --stacktrace
+        echo "Starting Gradle build..."
+        ./gradlew assembleLocalDebug --stacktrace --info || {
+          echo "Build failed. Showing last 100 lines of build output:"
+          echo "Checking for common issues..."
+          ls -la app/src/main/cpp/
+          ls -la app/src/main/cpp/whisper/ || echo "Whisper directory not found"
+          exit 1
+        }
 
     - name: List built libraries
       run: |
