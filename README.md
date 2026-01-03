@@ -73,39 +73,30 @@ The app implements two distinct API strategies:
 
 ## Setup & Installation
 
-### Prerequisites
+### Quick Build
 
-1. Android Studio Hedgehog or later
-2. Android SDK 26+ (minimum), 34 (target)
-3. Kotlin 1.9.20+
-4. Gradle 8.2+
+```bash
+# Clone the repository
+git clone https://github.com/alexey-a-abramov/hyperwhisper.git
+cd hyperwhisper
 
-### Build Steps
+# Build cloud flavor (API-only, ~30 seconds on Termux)
+./build-android.sh cloud
 
-1. **Clone the repository**
-   ```bash
-   cd /data/data/com.termux/files/home/projects/hyperwhisper
-   ```
+# Or build local flavor (with on-device Whisper, ~1 minute on Termux)
+./build-android.sh local
 
-2. **Add app icons** (Required)
-   Place your app icons in:
-   - `app/src/main/res/mipmap-hdpi/ic_launcher.png`
-   - `app/src/main/res/mipmap-mdpi/ic_launcher.png`
-   - `app/src/main/res/mipmap-xhdpi/ic_launcher.png`
-   - `app/src/main/res/mipmap-xxhdpi/ic_launcher.png`
-   - `app/src/main/res/mipmap-xxxhdpi/ic_launcher.png`
+# Or build via GitHub Actions
+gh workflow run build-apks.yml
+```
 
-   Or use Android Studio's Image Asset tool to generate them.
+**Output**: APKs in `builds/local/` or `builds/cloud/`
 
-3. **Build the project**
-   ```bash
-   ./gradlew assembleDebug
-   ```
+**Build Flavors**:
+- **Cloud**: API-only voice processing (~15-43 MB) - Uses OpenAI/Groq/OpenRouter APIs
+- **Local**: On-device Whisper.cpp (~89-110 MB) - Works offline, requires device models
 
-4. **Install on device**
-   ```bash
-   ./gradlew installDebug
-   ```
+> 📖 **For detailed build instructions, troubleshooting, and architecture overview, see [BUILD.md](BUILD.md)**
 
 ### Enabling the Keyboard
 
