@@ -134,8 +134,13 @@ android {
     val hasPreBuiltLibs = file("src/main/jniLibs/arm64-v8a/libhyperwhisper_jni.so").exists() ||
                          file("src/main/jniLibs/armeabi-v7a/libhyperwhisper_jni.so").exists()
 
-    // Only configure CMake if pre-built libs don't exist (for CI/desktop builds)
-    if (!hasPreBuiltLibs) {
+    // Check if whisper submodule exists (needed for native build)
+    val hasWhisperSubmodule = file("src/main/cpp/whisper/CMakeLists.txt").exists()
+
+    // Only configure CMake if:
+    // - Pre-built libs don't exist AND
+    // - Whisper submodule is present (cloud flavor skips submodules)
+    if (!hasPreBuiltLibs && hasWhisperSubmodule) {
         externalNativeBuild {
             cmake {
                 path = file("src/main/cpp/CMakeLists.txt")
