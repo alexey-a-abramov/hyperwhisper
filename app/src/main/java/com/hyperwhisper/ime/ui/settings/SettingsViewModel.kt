@@ -74,13 +74,13 @@ class SettingsViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                // Validate LOCAL provider if selected
+                // Log warning if LOCAL provider is selected but model is not downloaded
+                // Don't block saving - user should be able to save their preference
                 if (provider == ApiProvider.LOCAL) {
                     val validationResult = localModelValidator.validateModel(localSettings.selectedModel)
                     if (validationResult.isFailure) {
-                        Log.e(TAG, "LOCAL provider validation failed: ${validationResult.exceptionOrNull()?.message}")
-                        // Could show error to user here
-                        return@launch
+                        Log.w(TAG, "LOCAL provider selected but model not ready: ${validationResult.exceptionOrNull()?.message}")
+                        Log.w(TAG, "Settings will be saved but model must be downloaded before use")
                     }
                 }
 
