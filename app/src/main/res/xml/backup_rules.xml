@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Exclude DataStore preferences from backup -->
-    <exclude domain="sharedpref" path="datastore" />
+    <!-- Include DataStore preferences in backup for persistence across updates/reinstalls -->
+    <!-- DataStore contains all app settings, history, and user preferences -->
+    <!-- Removed exclusion to enable backup and restore functionality -->
 </full-backup-content>

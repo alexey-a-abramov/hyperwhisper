@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="sharedpref" path="datastore" />
+        <!-- Include DataStore in cloud backup (Android 12+) -->
+        <!-- This enables settings and history to persist across device transfers and reinstalls -->
     </cloud-backup>
 </data-extraction-rules>
