@@ -443,14 +443,18 @@ fun KeyboardScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Paste last transcribed text button with long press for history
-                if (lastTranscribedText.isNotEmpty()) {
+                // Show if there's last transcribed text OR if there's history available
+                if (lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()) {
+                    // Use lastTranscribedText if available, otherwise use first history item
+                    val textToShow = if (lastTranscribedText.isNotEmpty()) lastTranscribedText else transcriptionHistory.first().text
+
                     Surface(
                         modifier = Modifier
                             .weight(1.3f)
                             .height(56.dp)
                             .pointerInput(appearanceSettings.enableHistoryPanel) {
                                 detectTapGestures(
-                                    onTap = { onTextCommit(lastTranscribedText) },
+                                    onTap = { onTextCommit(textToShow) },
                                     onLongPress = {
                                         if (appearanceSettings.enableHistoryPanel) {
                                             showHistoryPanel = true
@@ -483,10 +487,10 @@ fun KeyboardScreen(
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Text(
-                                    if (lastTranscribedText.length > 40) {
-                                        lastTranscribedText.take(40) + "..."
+                                    if (textToShow.length > 40) {
+                                        textToShow.take(40) + "..."
                                     } else {
-                                        lastTranscribedText
+                                        textToShow
                                     },
                                     fontSize = 8.sp,
                                     maxLines = 1,
@@ -501,7 +505,7 @@ fun KeyboardScreen(
                 Button(
                     onClick = onSpace,
                     modifier = Modifier
-                        .weight(if (lastTranscribedText.isEmpty()) 1f else 0.6f)
+                        .weight(if (lastTranscribedText.isEmpty() && transcriptionHistory.isEmpty()) 1f else 0.6f)
                         .height(56.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.OfflineBolt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -118,6 +119,32 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(strings.settingsTitle) },
                 actions = {
+                    // Save and close button
+                    IconButton(onClick = {
+                        // Settings auto-save when changed
+                        val activity = context as? android.app.Activity
+                        activity?.finish()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Save and Close",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+
+                    // Close button
+                    IconButton(onClick = {
+                        val activity = context as? android.app.Activity
+                        activity?.finish()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+
+                    // Help button
                     IconButton(onClick = {
                         val intent = android.content.Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
                         context.startActivity(intent)
