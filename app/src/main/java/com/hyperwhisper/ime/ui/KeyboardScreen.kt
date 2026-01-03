@@ -37,6 +37,8 @@ import kotlinx.coroutines.launch
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.data.ApiSettings
+import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.components.InputFieldInfo
@@ -61,12 +63,14 @@ fun KeyboardScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val processingInfo by viewModel.processingInfo.collectAsState()
     val recordingDuration by viewModel.recordingDuration.collectAsState()
+    val transcriptionProgress by viewModel.transcriptionProgress.collectAsState()
     val transcriptionHistory by viewModel.transcriptionHistory.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
     val apiSettings by viewModel.apiSettings.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
+    val usageStatistics by viewModel.usageStatistics.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
@@ -147,16 +151,18 @@ fun KeyboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Switch to Previous Keyboard button
-                IconButton(onClick = onSwitchKeyboard) {
-                    Icon(
-                        imageVector = Icons.Default.Keyboard,
-                        contentDescription = strings.switchKeyboardDesc,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // Switch to Previous Keyboard button (only shown if enabled in settings)
+                if (appearanceSettings.showKeyboardSwitcher) {
+                    IconButton(onClick = onSwitchKeyboard) {
+                        Icon(
+                            imageVector = Icons.Default.Keyboard,
+                            contentDescription = strings.switchKeyboardDesc,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
 
                 ModeSelector(
                     modes = voiceModes,
@@ -228,7 +234,7 @@ fun KeyboardScreen(
                     enabled = recordingState == RecordingState.IDLE
                 )
 
-                // Provider/Model Info (MIDDLE)
+                // Provider/Model Info (MIDDLE) - Shows current transcription mode and model
                 Surface(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
@@ -242,31 +248,48 @@ fun KeyboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
+                            // Show mode: "Local" or "Cloud"
+                            val mode = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) "Local" else "Cloud"
+                            val modelDisplay = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) {
+                                // For local mode, show selected whisper model
+                                apiSettings.localSettings.selectedModel.displayName
+                            } else {
+                                // For cloud mode, show provider name
+                                apiSettings.provider.displayName
+                            }
+
                             Text(
-                                text = "${apiSettings.provider.displayName}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
+                                text = "$mode - $modelDisplay",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 maxLines = 1
                             )
                             Text(
-                                text = apiSettings.modelId,
+                                text = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) {
+                                    apiSettings.localSettings.selectedModel.modelName
+                                } else {
+                                    apiSettings.modelId
+                                },
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Light,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                                 maxLines = 1
                             )
                         }
-                        IconButton(
-                            onClick = { showConfigInfo = true },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Configuration Info",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
+                        // Config info button (only shown in techie mode)
+                        if (appearanceSettings.techieModeEnabled) {
+                            IconButton(
+                                onClick = { showConfigInfo = true },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Configuration Info",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -320,11 +343,13 @@ fun KeyboardScreen(
                             }
                         }
                         else -> {
-                            // Show input field info when not recording
-                            InputFieldInfo(
-                                editorInfo = editorInfo,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            // Show input field info when not recording (only in techie mode)
+                            if (appearanceSettings.techieModeEnabled) {
+                                InputFieldInfo(
+                                    editorInfo = editorInfo,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                 }
@@ -343,7 +368,9 @@ fun KeyboardScreen(
                             recordingState = recordingState,
                             onStartRecording = { viewModel.startRecording() },
                             onStopRecording = { viewModel.stopRecording() },
+                            onCancelTranscription = { viewModel.cancelTranscription() },
                             recordingDuration = recordingDuration,
+                            transcriptionProgress = transcriptionProgress,
                             modifier = Modifier
                         )
 
@@ -498,6 +525,7 @@ fun KeyboardScreen(
         if (showConfigInfo) {
             ConfigInfoDialog(
                 apiSettings = apiSettings,
+                usageStatistics = usageStatistics,
                 onDismiss = { showConfigInfo = false }
             )
         }
@@ -532,6 +560,8 @@ fun KeyboardScreen(
 
         // Show History Panel
         if (showHistoryPanel) {
+            var selectedItemForReprocess by remember { mutableStateOf<TranscriptionHistoryItem?>(null) }
+
             TranscriptionHistoryPanel(
                 history = transcriptionHistory,
                 onSelect = { text ->
@@ -539,8 +569,33 @@ fun KeyboardScreen(
                     showHistoryPanel = false
                 },
                 onClearAll = { viewModel.clearHistory() },
-                onDismiss = { showHistoryPanel = false }
+                onDismiss = { showHistoryPanel = false },
+                onReprocessWithCurrentSettings = { item ->
+                    viewModel.reprocessWithCurrentSettings(item)
+                    showHistoryPanel = false
+                },
+                onReprocessWithNewSettings = { item ->
+                    selectedItemForReprocess = item
+                }
             )
+
+            // Dialog for selecting new settings for reprocessing
+            selectedItemForReprocess?.let { item ->
+                ReprocessSettingsDialog(
+                    item = item,
+                    currentApiSettings = apiSettings,
+                    currentVoiceModes = voiceModes,
+                    currentSelectedModeId = selectedModeId,
+                    onConfirm = { newSettings, newMode ->
+                        viewModel.reprocessWithNewSettings(item, newSettings, newMode)
+                        selectedItemForReprocess = null
+                        showHistoryPanel = false
+                    },
+                    onDismiss = {
+                        selectedItemForReprocess = null
+                    }
+                )
+            }
         }
     }
 }
@@ -584,7 +639,8 @@ fun ModeSelector(
 
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth()
         ) {
             modes.forEach { mode ->
                 DropdownMenuItem(
@@ -592,7 +648,8 @@ fun ModeSelector(
                     onClick = {
                         onModeSelected(mode.id)
                         expanded = false
-                    }
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 )
             }
         }
@@ -604,7 +661,9 @@ fun MicrophoneButton(
     recordingState: RecordingState,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
+    onCancelTranscription: () -> Unit = {},
     recordingDuration: Long = 0L,
+    transcriptionProgress: Float? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -622,7 +681,10 @@ fun MicrophoneButton(
                 )
             }
             RecordingState.PROCESSING -> {
-                ProcessingIndicator()
+                ProcessingIndicator(
+                    progress = transcriptionProgress,
+                    onCancel = onCancelTranscription
+                )
             }
             RecordingState.ERROR -> {
                 IdleMicButton(onClick = onStartRecording)
@@ -695,16 +757,51 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
 }
 
 @Composable
-fun ProcessingIndicator() {
+fun ProcessingIndicator(progress: Float? = null, onCancel: () -> Unit = {}) {
     Box(
         modifier = Modifier.size(72.dp),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(60.dp),
-            strokeWidth = 5.dp,
-            color = MaterialTheme.colorScheme.primary
-        )
+        // Progress indicator
+        if (progress != null && progress > 0f) {
+            CircularProgressIndicator(
+                progress = progress,
+                modifier = Modifier.size(60.dp),
+                strokeWidth = 5.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            // Show percentage text
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            // Indeterminate progress
+            CircularProgressIndicator(
+                modifier = Modifier.size(60.dp),
+                strokeWidth = 5.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        // Cancel button (clickable overlay)
+        FloatingActionButton(
+            onClick = onCancel,
+            modifier = Modifier
+                .size(28.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = 8.dp),
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cancel",
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
@@ -922,6 +1019,7 @@ fun ErrorOverlay(
 @Composable
 fun ConfigInfoDialog(
     apiSettings: com.hyperwhisper.data.ApiSettings,
+    usageStatistics: com.hyperwhisper.data.UsageStatistics,
     onDismiss: () -> Unit
 ) {
     val strings = LocalStrings.current
@@ -1311,7 +1409,9 @@ fun TranscriptionHistoryPanel(
     history: List<TranscriptionHistoryItem>,
     onSelect: (String) -> Unit,
     onClearAll: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onReprocessWithCurrentSettings: ((TranscriptionHistoryItem) -> Unit)? = null,
+    onReprocessWithNewSettings: ((TranscriptionHistoryItem) -> Unit)? = null
 ) {
     val strings = LocalStrings.current
     // Full-screen overlay
@@ -1376,6 +1476,7 @@ fun TranscriptionHistoryPanel(
                             val item = history[index]
                             val dateTime = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
                                 .format(java.util.Date(item.timestamp))
+                            val hasAudio = item.audioFilePath != null
 
                             Surface(
                                 onClick = { onSelect(item.text) },
@@ -1389,18 +1490,99 @@ fun TranscriptionHistoryPanel(
                                         .padding(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text(
-                                        dateTime,
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    // Header with timestamp and audio indicator
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            dateTime,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (hasAudio) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Mic,
+                                                    contentDescription = "Has audio",
+                                                    modifier = Modifier.size(14.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    "Audio saved",
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Transcription text
                                     Text(
                                         item.text,
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 3
                                     )
+
+                                    // Process buttons (only if audio exists)
+                                    if (hasAudio && (onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            if (onReprocessWithCurrentSettings != null) {
+                                                OutlinedButton(
+                                                    onClick = { onReprocessWithCurrentSettings(item) },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Replay,
+                                                        contentDescription = "Reprocess",
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text(
+                                                        "Current",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                            if (onReprocessWithNewSettings != null) {
+                                                Button(
+                                                    onClick = { onReprocessWithNewSettings(item) },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 8.dp),
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Settings,
+                                                        contentDescription = "Settings",
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text(
+                                                        "New Settings",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1433,4 +1615,114 @@ fun TranscriptionHistoryPanel(
             }
         }
     }
+}
+/**
+ * Dialog for selecting new settings for reprocessing audio
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReprocessSettingsDialog(
+    item: TranscriptionHistoryItem,
+    currentApiSettings: ApiSettings,
+    currentVoiceModes: List<VoiceMode>,
+    currentSelectedModeId: String,
+    onConfirm: (ApiSettings, VoiceMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedProvider by remember { mutableStateOf(currentApiSettings.provider) }
+    var selectedModeId by remember { mutableStateOf(currentSelectedModeId) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Reprocess Audio",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Select provider and mode for reprocessing:",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Provider selection
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Provider:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ApiProvider.values().forEach { provider ->
+                            FilterChip(
+                                selected = selectedProvider == provider,
+                                onClick = { selectedProvider = provider },
+                                label = {
+                                    Text(
+                                        provider.displayName,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Mode selection
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "Mode:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    currentVoiceModes.forEach { mode ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedModeId == mode.id,
+                                onClick = { selectedModeId = mode.id }
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                mode.name,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val selectedMode = currentVoiceModes.firstOrNull { it.id == selectedModeId }
+                    if (selectedMode != null) {
+                        val newSettings = currentApiSettings.copy(provider = selectedProvider)
+                        onConfirm(newSettings, selectedMode)
+                    }
+                },
+                enabled = currentVoiceModes.any { it.id == selectedModeId }
+            ) {
+                Text("REPROCESS", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL")
+            }
+        }
+    )
 }

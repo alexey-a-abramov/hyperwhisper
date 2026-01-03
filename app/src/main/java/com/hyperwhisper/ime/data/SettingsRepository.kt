@@ -49,12 +49,17 @@ class SettingsRepository @Inject constructor(
         private val APPEARANCE_FONT_FAMILY_KEY = stringPreferencesKey("appearance_font_family")
         private val APPEARANCE_AUTO_COPY_KEY = booleanPreferencesKey("appearance_auto_copy")
         private val APPEARANCE_ENABLE_HISTORY_KEY = booleanPreferencesKey("appearance_enable_history")
+        private val APPEARANCE_TECHIE_MODE_KEY = booleanPreferencesKey("appearance_techie_mode")
+        private val APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY = booleanPreferencesKey("appearance_show_keyboard_switcher")
 
         // Transcription history key
         private val TRANSCRIPTION_HISTORY_KEY = stringPreferencesKey("transcription_history")
 
         // Usage statistics key
         private val USAGE_STATISTICS_KEY = stringPreferencesKey("usage_statistics")
+
+        // Cumulative audio duration key (total seconds of audio processed)
+        private val CUMULATIVE_AUDIO_DURATION_KEY = stringPreferencesKey("cumulative_audio_duration")
 
         // Recently used languages key
         private val RECENTLY_USED_LANGUAGES_KEY = stringPreferencesKey("recently_used_languages")
@@ -304,7 +309,9 @@ class SettingsRepository @Inject constructor(
                 }
             } ?: FontFamilyOption.DEFAULT,
             autoCopyToClipboard = preferences[APPEARANCE_AUTO_COPY_KEY] ?: true,
-            enableHistoryPanel = preferences[APPEARANCE_ENABLE_HISTORY_KEY] ?: true
+            enableHistoryPanel = preferences[APPEARANCE_ENABLE_HISTORY_KEY] ?: true,
+            techieModeEnabled = preferences[APPEARANCE_TECHIE_MODE_KEY] ?: false,
+            showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false
         )
     }
 
@@ -318,6 +325,8 @@ class SettingsRepository @Inject constructor(
             preferences[APPEARANCE_FONT_FAMILY_KEY] = settings.fontFamily.name
             preferences[APPEARANCE_AUTO_COPY_KEY] = settings.autoCopyToClipboard
             preferences[APPEARANCE_ENABLE_HISTORY_KEY] = settings.enableHistoryPanel
+            preferences[APPEARANCE_TECHIE_MODE_KEY] = settings.techieModeEnabled
+            preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] = settings.showKeyboardSwitcher
         }
     }
 
@@ -382,7 +391,7 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun addToHistory(text: String) {
+    suspend fun addToHistory(text: String, audioFilePath: String? = null) {
         if (text.isBlank()) return
 
         dataStore.edit { preferences ->
@@ -398,12 +407,24 @@ class SettingsRepository @Inject constructor(
                 }
             }
 
-            // Add new item at the beginning
-            val newItem = TranscriptionHistoryItem(text = text)
+            // Add new item at the beginning with audio file path
+            val newItem = TranscriptionHistoryItem(text = text, audioFilePath = audioFilePath)
             val updatedHistory = listOf(newItem) + currentHistory
 
             // Keep only last MAX_HISTORY_ITEMS items
             val trimmedHistory = updatedHistory.take(MAX_HISTORY_ITEMS)
+
+            // Delete audio files for items that are being removed
+            val removedItems = updatedHistory.drop(MAX_HISTORY_ITEMS)
+            removedItems.forEach { item ->
+                item.audioFilePath?.let { path ->
+                    try {
+                        java.io.File(path).delete()
+                    } catch (e: Exception) {
+                        // Ignore deletion errors
+                    }
+                }
+            }
 
             preferences[TRANSCRIPTION_HISTORY_KEY] = gson.toJson(trimmedHistory)
         }
@@ -411,6 +432,28 @@ class SettingsRepository @Inject constructor(
 
     suspend fun clearHistory() {
         dataStore.edit { preferences ->
+            // Get current history to delete audio files
+            val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
+            if (!currentHistoryJson.isNullOrEmpty()) {
+                try {
+                    val type = object : TypeToken<List<TranscriptionHistoryItem>>() {}.type
+                    val currentHistory = gson.fromJson<List<TranscriptionHistoryItem>>(currentHistoryJson, type)
+
+                    // Delete all audio files
+                    currentHistory?.forEach { item ->
+                        item.audioFilePath?.let { path ->
+                            try {
+                                java.io.File(path).delete()
+                            } catch (e: Exception) {
+                                // Ignore deletion errors
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore parsing errors
+                }
+            }
+
             preferences.remove(TRANSCRIPTION_HISTORY_KEY)
         }
     }
