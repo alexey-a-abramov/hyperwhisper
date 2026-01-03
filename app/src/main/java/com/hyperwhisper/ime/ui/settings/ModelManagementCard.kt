@@ -121,35 +121,17 @@ private fun ModelItem(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Model name and recommended badge
+            // Model name
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = model.displayName,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
-                    if (model.isRecommended) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondary,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = "Recommended",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSecondary
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = model.displayName,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
 
                 // Action buttons
                 when (state) {
@@ -254,35 +236,95 @@ private fun ModelItem(
                             progress = state.progress,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Progress percentage and size
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val downloadedMB = state.downloadedBytes / (1024.0 * 1024.0)
+                            val totalMB = state.totalBytes / (1024.0 * 1024.0)
+                            val progressText = if (state.totalBytes > 0) {
+                                "${(state.progress * 100).toInt()}% (${"%.1f".format(downloadedMB)} / ${"%.1f".format(totalMB)} MB)"
+                            } else {
+                                "${(state.progress * 100).toInt()}%"
+                            }
                             Text(
-                                text = "Downloading... ${(state.progress * 100).toInt()}%",
-                                fontSize = 10.sp,
+                                text = progressText,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
                             )
 
                             // Copy URL button
-                            TextButton(
+                            IconButton(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     val clip = ClipData.newPlainText("Model URL", model.downloadUrl)
                                     clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "URL copied", Toast.LENGTH_SHORT).show()
                                 },
-                                contentPadding = PaddingValues(4.dp),
-                                modifier = Modifier.height(24.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ContentCopy,
                                     contentDescription = "Copy URL",
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(Modifier.width(4.dp))
-                                Text("Copy URL", fontSize = 9.sp)
+                            }
+                        }
+
+                        // Speed and ETA
+                        if (state.speedBytesPerSecond > 0) {
+                            val speedMBps = state.speedBytesPerSecond / (1024.0 * 1024.0)
+                            val etaMinutes = state.etaSeconds / 60
+                            val etaSecondsRem = state.etaSeconds % 60
+                            val speedText = "${"%.2f".format(speedMBps)} MB/s"
+                            val etaText = if (etaMinutes > 0) {
+                                "${etaMinutes}m ${etaSecondsRem}s"
+                            } else {
+                                "${etaSecondsRem}s"
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Speed,
+                                        contentDescription = "Speed",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = speedText,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = "ETA",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.tertiary
+                                    )
+                                    Text(
+                                        text = "ETA: $etaText",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.tertiary
+                                    )
+                                }
                             }
                         }
 

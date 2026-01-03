@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
@@ -142,6 +143,62 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Current Mode Status Card
+            item {
+                val mode = if (provider == ApiProvider.LOCAL) "Local" else "Cloud"
+                val modelDisplay = if (provider == ApiProvider.LOCAL) {
+                    localSettings.selectedModel.displayName
+                } else {
+                    provider.displayName
+                }
+                val modelDetails = if (provider == ApiProvider.LOCAL) {
+                    localSettings.selectedModel.modelName
+                } else {
+                    modelId
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Current Mode",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = "$mode - $modelDisplay",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = modelDetails,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Icon(
+                            imageVector = if (provider == ApiProvider.LOCAL) Icons.Default.PhoneAndroid else Icons.Default.CloudUpload,
+                            contentDescription = mode,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+            }
+
             // API Settings Section
             item {
                 Text(
@@ -1657,6 +1714,74 @@ fun AppearanceSection(
                 }
             )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Techie mode toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Techie Mode",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Show technical details like logs button and field info on keyboard",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = localSettings.techieModeEnabled,
+                onCheckedChange = { enabled ->
+                    val newSettings = localSettings.copy(techieModeEnabled = enabled)
+                    localSettings = newSettings
+                    onSettingsChange(newSettings)
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Miscellaneous section
+        Text(
+            text = "Miscellaneous",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Show keyboard switcher toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Show Keyboard Switcher",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Display keyboard switcher button next to mode selector",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = localSettings.showKeyboardSwitcher,
+                onCheckedChange = { enabled ->
+                    val newSettings = localSettings.copy(showKeyboardSwitcher = enabled)
+                    localSettings = newSettings
+                    onSettingsChange(newSettings)
+                }
+            )
+        }
     }
 }
 
@@ -2374,11 +2499,29 @@ fun LocalPrerequisitesCard(
                         progress = modelState.progress,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    val downloadedMB = modelState.downloadedBytes / (1024.0 * 1024.0)
+                    val totalMB = modelState.totalBytes / (1024.0 * 1024.0)
+                    val progressText = if (modelState.totalBytes > 0) {
+                        "${(modelState.progress * 100).toInt()}% (${"%.1f".format(downloadedMB)} / ${"%.1f".format(totalMB)} MB)"
+                    } else {
+                        "${(modelState.progress * 100).toInt()}% complete"
+                    }
                     Text(
-                        text = "${(modelState.progress * 100).toInt()}% complete",
+                        text = progressText,
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    if (modelState.speedBytesPerSecond > 0) {
+                        val speedMBps = modelState.speedBytesPerSecond / (1024.0 * 1024.0)
+                        val etaMinutes = modelState.etaSeconds / 60
+                        val etaSecondsRem = modelState.etaSeconds % 60
+                        val etaText = if (etaMinutes > 0) "${etaMinutes}m ${etaSecondsRem}s" else "${etaSecondsRem}s"
+                        Text(
+                            text = "${"%.2f".format(speedMBps)} MB/s · ETA: $etaText",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                 }
 
                 // Show error message

@@ -361,7 +361,9 @@ data class AppearanceSettings(
     val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
     val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
     val autoCopyToClipboard: Boolean = true,
-    val enableHistoryPanel: Boolean = true
+    val enableHistoryPanel: Boolean = true,
+    val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
+    val showKeyboardSwitcher: Boolean = false // Show keyboard switcher button on main screen
 )
 
 /**
@@ -370,7 +372,8 @@ data class AppearanceSettings(
 data class TranscriptionHistoryItem(
     val id: String = java.util.UUID.randomUUID().toString(),
     val text: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val audioFilePath: String? = null  // Path to saved audio file for reprocessing
 )
 
 /**
@@ -544,7 +547,13 @@ enum class WhisperModel(
  */
 sealed class ModelDownloadState {
     object NotDownloaded : ModelDownloadState()
-    data class Downloading(val progress: Float) : ModelDownloadState() // 0.0 - 1.0
+    data class Downloading(
+        val progress: Float,            // 0.0 - 1.0
+        val downloadedBytes: Long = 0L,
+        val totalBytes: Long = 0L,
+        val speedBytesPerSecond: Long = 0L,
+        val etaSeconds: Long = 0L
+    ) : ModelDownloadState()
     object Downloaded : ModelDownloadState()
     data class Error(val message: String) : ModelDownloadState()
 }
