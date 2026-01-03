@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import android.os.Build
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.data.getAvailableProviders
 import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.ColorSchemeOption
 import com.hyperwhisper.data.DarkModePreference
@@ -726,14 +727,17 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
 fun ProviderSelector(
     selectedProvider: ApiProvider,
     onProviderSelected: (ApiProvider) -> Unit,
-    isLocalFlavorEnabled: Boolean = true,  // Default to local flavor
-    showLocalOption: Boolean = true  // NEW parameter to explicitly hide LOCAL
+    isLocalFlavorEnabled: Boolean = true,  // Default to local flavor (deprecated, use BuildConfig)
+    showLocalOption: Boolean = true  // Explicitly hide LOCAL option
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Filter available providers
+    // Filter available providers based on BuildConfig and parameters
     val availableProviders = remember(isLocalFlavorEnabled, showLocalOption) {
-        ApiProvider.values().filter { provider ->
+        val allProviders = getAvailableProviders()  // Uses BuildConfig.CLOUD_ONLY_BUILD internally
+
+        // Additional filtering for backward compatibility with existing callers
+        allProviders.filter { provider ->
             if (!isLocalFlavorEnabled && provider == ApiProvider.LOCAL) {
                 false  // Hide LOCAL if flavor not enabled
             } else if (!showLocalOption && provider == ApiProvider.LOCAL) {
@@ -957,7 +961,7 @@ fun CloudProviderSelector(
 
     // Filter to cloud providers only (exclude LOCAL)
     val cloudProviders = remember {
-        ApiProvider.values().filter { it != ApiProvider.LOCAL }
+        ApiProvider.entries.filter { it != ApiProvider.LOCAL }
     }
 
     Column(modifier = modifier) {

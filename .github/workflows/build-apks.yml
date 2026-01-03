@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hyperwhisper-cloud-debug
-          path: app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
+          path: builds/cloud/app-cloud-debug.apk
           retention-days: 30
 
   build-local:
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hyperwhisper-local-debug
-          path: app/build/outputs/apk/local/debug/app-local-debug.apk
+          path: builds/local/app-local-debug.apk
           retention-days: 30
 
   build-summary:

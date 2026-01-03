@@ -30,16 +30,55 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // BuildConfig fields for conditional features
+        buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
+        buildConfigField("boolean", "CLOUD_BUILD", "false")
+        buildConfigField("boolean", "LOCAL_BUILD", "false")
+        buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
     }
 
-    // Product flavors for local (with native) and cloud (APIs only) variants
+    // Product flavors for different build variants
+    // - cloudOnly: Cloud APIs only, no local mode option (built locally on Android)
+    // - cloud: Cloud APIs with option to use local mode (built on GitHub)
+    // - local: Pre-built native libs included (built on GitHub)
     flavorDimensions += "mode"
 
     productFlavors {
+        create("cloudOnly") {
+            dimension = "mode"
+            applicationIdSuffix = ".cloudonly"
+            versionNameSuffix = "-cloudOnly"
+
+            // BuildConfig: Cloud-only build, no local mode option
+            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "true")
+            buildConfigField("boolean", "CLOUD_BUILD", "true")
+            buildConfigField("boolean", "LOCAL_BUILD", "false")
+            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
+        }
+
+        create("cloud") {
+            dimension = "mode"
+            applicationIdSuffix = ".cloud"
+            versionNameSuffix = "-cloud"
+
+            // BuildConfig: Cloud build with local mode option available
+            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
+            buildConfigField("boolean", "CLOUD_BUILD", "true")
+            buildConfigField("boolean", "LOCAL_BUILD", "false")
+            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
+        }
+
         create("local") {
             dimension = "mode"
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
+
+            // BuildConfig: Local build with pre-built native libs
+            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
+            buildConfigField("boolean", "CLOUD_BUILD", "false")
+            buildConfigField("boolean", "LOCAL_BUILD", "true")
+            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "true")
 
             // NDK configuration for whisper.cpp (local flavor only)
             ndk {
@@ -56,13 +95,6 @@ android {
                     )
                 }
             }
-        }
-
-        create("cloud") {
-            dimension = "mode"
-            applicationIdSuffix = ".cloud"
-            versionNameSuffix = "-cloud"
-            // No NDK/CMake configuration - cloud APIs only
         }
     }
 
@@ -121,6 +153,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true  // Enable BuildConfig generation
         compose = true
         prefab = true
     }
@@ -243,6 +276,7 @@ android.applicationVariants.all {
 
     // Define output directory based on flavor
     val outputDir = when (flavorName) {
+        "cloudOnly" -> file("${rootProject.projectDir}/builds/cloudonly")
         "cloud" -> file("${rootProject.projectDir}/builds/cloud")
         "local" -> file("${rootProject.projectDir}/builds/local")
         else -> file("${rootProject.projectDir}/builds/${flavorName}")

@@ -2,6 +2,7 @@
 
 # Build script for Android/Termux environment
 # Automatically handles AAPT2 configuration for ARM64 builds
+# All APKs are output to the builds/ directory
 
 set -e
 
@@ -22,15 +23,16 @@ echo -e "${BLUE}============================================${NC}"
 echo ""
 
 # Parse arguments
-FLAVOR="${1:-cloud}"
-VALID_FLAVORS=("cloud" "local" "both")
+FLAVOR="${1:-cloudonly}"
+VALID_FLAVORS=("cloudonly" "cloud" "local" "all")
 
 if [[ ! " ${VALID_FLAVORS[@]} " =~ " ${FLAVOR} " ]]; then
     echo -e "${RED}❌ Invalid flavor: $FLAVOR${NC}"
-    echo -e "Usage: $0 [cloud|local|both]"
-    echo -e "  cloud - Build cloud-only flavor (default, no native code)"
-    echo -e "  local - Build local flavor (with whisper.cpp native code)"
-    echo -e "  both  - Build both flavors"
+    echo -e "Usage: $0 [cloudonly|cloud|local|all]"
+    echo -e "  cloudonly - Cloud-only build (no native code, no local option) - for local Android builds"
+    echo -e "  cloud     - Cloud build (with local mode option available) - for GitHub Actions"
+    echo -e "  local     - Local build (with pre-built native libs) - for GitHub Actions"
+    echo -e "  all       - Build all flavors"
     exit 1
 fi
 
@@ -78,6 +80,7 @@ echo ""
 build_flavor() {
     local flavor_name=$1
     local gradle_task=$2
+    local output_dir=$3
 
     echo -e "${BLUE}============================================${NC}"
     echo -e "${BLUE}Building $flavor_name flavor...${NC}"
@@ -97,8 +100,8 @@ build_flavor() {
         echo -e "${GREEN}⏱️  Build time: ${MINUTES}m ${SECONDS}s${NC}"
         echo ""
 
-        # Show APK location (now in /builds directory)
-        APK_PATH="builds/${flavor_name,,}/app-${flavor_name,,}-debug.apk"
+        # Show APK location (in builds/ directory)
+        APK_PATH="builds/${output_dir}/app-${flavor_name,,}-debug.apk"
         if [[ -f "$APK_PATH" ]]; then
             APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
             APK_FULL_PATH=$(realpath "$APK_PATH")
@@ -106,17 +109,6 @@ build_flavor() {
             echo -e "   $APK_FULL_PATH"
             echo -e "${GREEN}📦 Size:${NC} $APK_SIZE"
             echo ""
-        else
-            # Fallback to old location for backward compatibility
-            APK_PATH_OLD="app/build/outputs/apk/${flavor_name,,}/debug/app-${flavor_name,,}-debug.apk"
-            if [[ -f "$APK_PATH_OLD" ]]; then
-                APK_SIZE=$(du -h "$APK_PATH_OLD" | cut -f1)
-                APK_FULL_PATH=$(realpath "$APK_PATH_OLD")
-                echo -e "${GREEN}📱 APK Location (old):${NC}"
-                echo -e "   $APK_FULL_PATH"
-                echo -e "${GREEN}📦 Size:${NC} $APK_SIZE"
-                echo ""
-            fi
         fi
 
         return 0
@@ -136,14 +128,20 @@ build_flavor() {
 # Build based on flavor
 BUILD_SUCCESS=true
 
-if [[ "$FLAVOR" == "both" ]] || [[ "$FLAVOR" == "cloud" ]]; then
-    if ! build_flavor "Cloud" "assembleCloudDebug"; then
+if [[ "$FLAVOR" == "all" ]] || [[ "$FLAVOR" == "cloudonly" ]]; then
+    if ! build_flavor "CloudOnly" "assembleCloudOnlyDebug" "cloudonly"; then
         BUILD_SUCCESS=false
     fi
 fi
 
-if [[ "$FLAVOR" == "both" ]] || [[ "$FLAVOR" == "local" ]]; then
-    if ! build_flavor "Local" "assembleLocalDebug"; then
+if [[ "$FLAVOR" == "all" ]] || [[ "$FLAVOR" == "cloud" ]]; then
+    if ! build_flavor "Cloud" "assembleCloudDebug" "cloud"; then
+        BUILD_SUCCESS=false
+    fi
+fi
+
+if [[ "$FLAVOR" == "all" ]] || [[ "$FLAVOR" == "local" ]]; then
+    if ! build_flavor "Local" "assembleLocalDebug" "local"; then
         BUILD_SUCCESS=false
     fi
 fi
@@ -156,6 +154,11 @@ echo ""
 
 if [[ "$BUILD_SUCCESS" == true ]]; then
     echo -e "${GREEN}✅ All builds completed successfully!${NC}"
+    echo ""
+    echo -e "${YELLOW}📱 APKs are in the builds/ directory:${NC}"
+    echo -e "   builds/cloudonly/  - Cloud-only build (for local Android builds)"
+    echo -e "   builds/cloud/      - Cloud build (with local option)"
+    echo -e "   builds/local/      - Local build (with native libs)"
     echo ""
     echo -e "${YELLOW}📲 To install:${NC}"
     echo -e "   adb install \"<path-to-apk>\""

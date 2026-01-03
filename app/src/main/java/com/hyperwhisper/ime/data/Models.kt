@@ -3,6 +3,7 @@ package com.hyperwhisper.data
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import com.google.gson.annotations.SerializedName
+import com.hyperwhisper.BuildConfig
 import java.io.File
 
 /**
@@ -203,6 +204,21 @@ enum class ApiProvider(
         defaultEndpoint = "",
         defaultModels = listOf("tiny", "base", "small")
     )
+}
+
+/**
+ * Helper function to get available API providers based on build variant.
+ * In cloudOnly builds, LOCAL provider is not available.
+ * In cloud and local builds, all providers are available.
+ */
+fun getAvailableProviders(): List<ApiProvider> {
+    return if (BuildConfig.CLOUD_ONLY_BUILD) {
+        // Cloud-only build: exclude LOCAL provider
+        ApiProvider.entries.filter { it != ApiProvider.LOCAL }
+    } else {
+        // Cloud or Local build: all providers available
+        ApiProvider.entries
+    }
 }
 
 enum class RecordingState {
