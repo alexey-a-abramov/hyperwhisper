@@ -3,9 +3,6 @@ name: Build Native Library
 on:
   push:
     branches: [ master ]
-    paths:
-      - 'app/src/main/cpp/**'
-      - 'app/build.gradle.kts'
   workflow_dispatch:
 
 jobs:
