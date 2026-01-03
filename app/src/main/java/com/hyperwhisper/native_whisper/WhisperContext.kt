@@ -14,15 +14,32 @@ class WhisperContext @Inject constructor() {
 
     companion object {
         private const val TAG = "WhisperContext"
+        private var libraryLoadAttempted = false
+        private var libraryLoadSuccess = false
 
         init {
+            libraryLoadAttempted = true
             try {
                 System.loadLibrary("hyperwhisper_jni")
+                libraryLoadSuccess = true
                 Log.d(TAG, "Native library loaded successfully")
             } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Failed to load native library", e)
+                libraryLoadSuccess = false
+                Log.e(TAG, "Failed to load native library: ${e.message}", e)
+                Log.e(TAG, "This usually means:")
+                Log.e(TAG, "  1. Native libraries are not included in this build variant")
+                Log.e(TAG, "  2. Using cloud/cloudOnly build variant but trying to use LOCAL mode")
+                Log.e(TAG, "  3. Native libraries for this architecture are missing")
+            } catch (e: Throwable) {
+                libraryLoadSuccess = false
+                Log.e(TAG, "Unexpected error loading native library", e)
             }
         }
+
+        /**
+         * Check if the native library was successfully loaded
+         */
+        fun isLibraryAvailable(): Boolean = libraryLoadSuccess
     }
 
     // JNI methods
@@ -41,6 +58,13 @@ class WhisperContext @Inject constructor() {
      * @return Result indicating success or failure
      */
     fun loadModel(modelFile: File): Result<Unit> {
+        if (!libraryLoadSuccess) {
+            return Result.failure(Exception(
+                "Native library not available. LOCAL mode requires the 'local' build variant with native libraries. " +
+                "Please use a cloud API provider or install the local build variant."
+            ))
+        }
+
         return try {
             if (!modelFile.exists()) {
                 return Result.failure(Exception("Model file not found: ${modelFile.absolutePath}"))
@@ -55,9 +79,9 @@ class WhisperContext @Inject constructor() {
             } else {
                 Result.failure(Exception("Failed to load model"))
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Error loading model", e)
-            Result.failure(e)
+            Result.failure(Exception("Failed to load model: ${e.message}"))
         }
     }
 
@@ -73,6 +97,12 @@ class WhisperContext @Inject constructor() {
         language: String = "",
         translate: Boolean = false
     ): Result<String> {
+        if (!libraryLoadSuccess) {
+            return Result.failure(Exception(
+                "Native library not available. LOCAL mode requires the 'local' build variant with native libraries."
+            ))
+        }
+
         return try {
             if (!nativeIsModelLoaded()) {
                 return Result.failure(Exception("Model not loaded"))
@@ -91,9 +121,9 @@ class WhisperContext @Inject constructor() {
             } else {
                 Result.failure(Exception("Transcription returned empty result"))
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Error transcribing audio", e)
-            Result.failure(e)
+            Result.failure(Exception("Transcription failed: ${e.message}"))
         }
     }
 
@@ -101,12 +131,14 @@ class WhisperContext @Inject constructor() {
      * Unload the currently loaded model to free memory
      */
     fun unloadModel() {
+        if (!libraryLoadSuccess) return
+
         try {
             if (nativeIsModelLoaded()) {
                 Log.d(TAG, "Unloading model")
                 nativeUnloadModel()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Error unloading model", e)
         }
     }
@@ -116,9 +148,12 @@ class WhisperContext @Inject constructor() {
      * @return True if a model is loaded, false otherwise
      */
     fun isModelLoaded(): Boolean {
+        if (!libraryLoadSuccess) return false
+
         return try {
             nativeIsModelLoaded()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error checking if model is loaded", e)
             false
         }
     }

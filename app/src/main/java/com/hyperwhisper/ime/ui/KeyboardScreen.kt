@@ -79,7 +79,15 @@ fun KeyboardScreen(
     var showTimerText by remember { mutableStateOf(true) }
 
     // Track last transcribed text for paste button
+    // Initialize from history if available
     var lastTranscribedText by remember { mutableStateOf("") }
+
+    // Initialize lastTranscribedText from history on first load
+    LaunchedEffect(transcriptionHistory) {
+        if (lastTranscribedText.isEmpty() && transcriptionHistory.isNotEmpty()) {
+            lastTranscribedText = transcriptionHistory.first().text
+        }
+    }
 
     // Get clipboard manager
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
