@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import android.os.Build
+import com.hyperwhisper.BuildConfig
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.getAvailableProviders
 import com.hyperwhisper.data.AppearanceSettings
@@ -755,7 +756,7 @@ fun ProviderSelector(
     selectedProvider: ApiProvider,
     onProviderSelected: (ApiProvider) -> Unit,
     isLocalFlavorEnabled: Boolean = true,  // Default to local flavor (deprecated, use BuildConfig)
-    showLocalOption: Boolean = true  // Explicitly hide LOCAL option
+    showLocalOption: Boolean = BuildConfig.INCLUDES_NATIVE_LIBS  // Show LOCAL option only if native libs included
 ) {
     var expanded by remember { mutableStateOf(false) }
 
