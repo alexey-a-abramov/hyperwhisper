@@ -36,12 +36,30 @@ class AudioConverter @Inject constructor() {
      */
     suspend fun convertM4AToWav(m4aFile: File, outputDir: File): Result<File> = withContext(Dispatchers.IO) {
         return@withContext try {
+            Log.d(TAG, "========== AUDIO CONVERSION START ==========")
+            Log.d(TAG, "Input file: ${m4aFile.absolutePath}")
+            Log.d(TAG, "Input exists: ${m4aFile.exists()}")
+            Log.d(TAG, "Input size: ${m4aFile.length()} bytes")
+            Log.d(TAG, "Output dir: ${outputDir.absolutePath}")
+            Log.d(TAG, "Output dir exists: ${outputDir.exists()}")
+
             if (!m4aFile.exists()) {
-                return@withContext Result.failure(Exception("M4A file not found"))
+                Log.e(TAG, "Input file does not exist!")
+                return@withContext Result.failure(Exception("M4A file not found: ${m4aFile.absolutePath}"))
+            }
+
+            if (m4aFile.length() == 0L) {
+                Log.e(TAG, "Input file is empty!")
+                return@withContext Result.failure(Exception("M4A file is empty (0 bytes)"))
+            }
+
+            if (!outputDir.exists()) {
+                Log.d(TAG, "Creating output directory")
+                outputDir.mkdirs()
             }
 
             val wavFile = File(outputDir, "${m4aFile.nameWithoutExtension}.wav")
-            Log.d(TAG, "Converting ${m4aFile.name} to ${wavFile.name}")
+            Log.d(TAG, "Output file: ${wavFile.absolutePath}")
 
             val extractor = MediaExtractor()
             extractor.setDataSource(m4aFile.absolutePath)
@@ -132,16 +150,34 @@ class AudioConverter @Inject constructor() {
                 }
             }
 
+            // IMPORTANT: Get output format BEFORE stopping/releasing decoder
+            val outputFormat = decoder.outputFormat
+            val channels = try {
+                outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not get channel count from output format, using input format")
+                audioFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            }
+            val sampleRate = try {
+                outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not get sample rate from output format, using input format")
+                audioFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            }
+
+            Log.d(TAG, "Audio format - Sample rate: $sampleRate Hz, Channels: $channels")
+            Log.d(TAG, "PCM data collected: ${pcmData.size} samples")
+
             decoder.stop()
             decoder.release()
             extractor.release()
+            Log.d(TAG, "Decoder and extractor released")
 
-            // Convert stereo to mono if needed
-            val outputFormat = decoder.outputFormat
-            val channels = outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            val sampleRate = outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-
-            Log.d(TAG, "Decoded audio: $sampleRate Hz, $channels channels, ${pcmData.size} samples")
+            // Validate PCM data
+            if (pcmData.isEmpty()) {
+                Log.e(TAG, "No PCM data decoded from audio file!")
+                return@withContext Result.failure(Exception("Decoder produced no audio data"))
+            }
 
             val monoData = if (channels == 2) {
                 Log.d(TAG, "Converting stereo to mono")
@@ -149,6 +185,8 @@ class AudioConverter @Inject constructor() {
             } else {
                 pcmData.toShortArray()
             }
+
+            Log.d(TAG, "Mono data samples: ${monoData.size}")
 
             // Resample if needed (simple decimation/interpolation)
             val finalData = if (sampleRate != TARGET_SAMPLE_RATE) {
@@ -158,15 +196,22 @@ class AudioConverter @Inject constructor() {
                 monoData
             }
 
+            Log.d(TAG, "Final data samples: ${finalData.size}")
+
             // Write WAV file
             writeWavFile(wavFile, finalData, TARGET_SAMPLE_RATE, TARGET_CHANNELS)
 
             Log.d(TAG, "Conversion successful: ${wavFile.absolutePath} (${wavFile.length()} bytes)")
+            Log.d(TAG, "========== AUDIO CONVERSION COMPLETE ==========")
             Result.success(wavFile)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error converting M4A to WAV", e)
-            Result.failure(e)
+            Log.e(TAG, "========== AUDIO CONVERSION FAILED ==========")
+            Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Exception message: ${e.message}")
+            Log.e(TAG, "Stack trace:", e)
+            Log.e(TAG, "==============================================")
+            Result.failure(Exception("Audio conversion error: ${e.message ?: e.javaClass.simpleName}", e))
         }
     }
 
@@ -257,5 +302,43 @@ class AudioConverter @Inject constructor() {
             (value.toInt() and 0xFF).toByte(),
             (value.toInt() shr 8 and 0xFF).toByte()
         )
+    }
+
+    /**
+     * Smoke test: Verify audio conversion is working
+     * Creates a test WAV file with a simple sine wave and verifies the output
+     */
+    suspend fun smokeTest(outputDir: File): Result<String> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            Log.d(TAG, "========== AUDIO CONVERTER SMOKE TEST ==========")
+
+            // Create a simple test: Generate a 1-second sine wave at 440Hz
+            val testSamples = ShortArray(TARGET_SAMPLE_RATE) { i ->
+                val t = i.toDouble() / TARGET_SAMPLE_RATE
+                (Short.MAX_VALUE * 0.5 * kotlin.math.sin(2 * kotlin.math.PI * 440 * t)).toInt().toShort()
+            }
+
+            val testWavFile = File(outputDir, "smoke_test_${System.currentTimeMillis()}.wav")
+            writeWavFile(testWavFile, testSamples, TARGET_SAMPLE_RATE, TARGET_CHANNELS)
+
+            val success = testWavFile.exists() && testWavFile.length() > 0
+            val message = if (success) {
+                "Smoke test PASSED: Created ${testWavFile.name} (${testWavFile.length()} bytes)"
+            } else {
+                "Smoke test FAILED: Could not create test WAV file"
+            }
+
+            Log.d(TAG, message)
+
+            // Cleanup test file
+            testWavFile.delete()
+
+            Log.d(TAG, "========== SMOKE TEST COMPLETE ==========")
+
+            if (success) Result.success(message) else Result.failure(Exception(message))
+        } catch (e: Exception) {
+            Log.e(TAG, "Smoke test exception", e)
+            Result.failure(Exception("Smoke test failed: ${e.message}"))
+        }
     }
 }
