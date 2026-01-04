@@ -122,7 +122,7 @@ fun SettingsScreen(
                 actions = {
                     // Save and close button
                     IconButton(onClick = {
-                        // Settings auto-save when changed
+                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
                         val activity = context as? android.app.Activity
                         activity?.finish()
                     }) {
