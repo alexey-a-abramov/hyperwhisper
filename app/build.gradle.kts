@@ -47,7 +47,7 @@ android {
     productFlavors {
         create("cloudOnly") {
             dimension = "mode"
-            applicationIdSuffix = ".cloudonly"
+            // applicationIdSuffix = ".cloudonly"
             versionNameSuffix = "-cloudOnly"
 
             // BuildConfig: Cloud-only build, no local mode option
@@ -59,7 +59,7 @@ android {
 
         create("cloud") {
             dimension = "mode"
-            applicationIdSuffix = ".cloud"
+            // applicationIdSuffix = ".cloud"
             versionNameSuffix = "-cloud"
 
             // BuildConfig: Cloud build with local mode option available
@@ -71,7 +71,7 @@ android {
 
         create("local") {
             dimension = "mode"
-            applicationIdSuffix = ".local"
+            // applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
 
             // BuildConfig: Local build with pre-built native libs
