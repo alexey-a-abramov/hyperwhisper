@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
@@ -28,8 +27,6 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CloudQueue
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,18 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import android.os.Build
-import com.hyperwhisper.BuildConfig
 import com.hyperwhisper.data.ApiProvider
-import com.hyperwhisper.data.getAvailableProviders
 import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.ColorSchemeOption
 import com.hyperwhisper.data.DarkModePreference
 import com.hyperwhisper.data.FontFamilyOption
-import com.hyperwhisper.data.LocalSettings
-import com.hyperwhisper.data.ModelDownloadState
 import com.hyperwhisper.data.UIScaleOption
 import com.hyperwhisper.data.VoiceMode
-import com.hyperwhisper.data.WhisperModel
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 import kotlinx.coroutines.launch
@@ -66,13 +58,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    modifier: Modifier = Modifier,
-    isLocalFlavorEnabled: Boolean = true  // Default to local flavor, cloud builds will pass false
+    modifier: Modifier = Modifier
 ) {
     val apiSettings by viewModel.apiSettings.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
-    val modelStates by viewModel.modelStates.collectAsState()
 
     var provider by remember { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
@@ -80,9 +70,6 @@ fun SettingsScreen(
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
     var inputLanguage by remember { mutableStateOf(apiSettings.inputLanguage) }
     var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
-    var localSettings by remember { mutableStateOf(apiSettings.localSettings) }
-    var showModelSelector by remember { mutableStateOf(false) }
-    var showModelInfo by remember { mutableStateOf(false) }
     var showInputLanguageInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
@@ -102,7 +89,6 @@ fun SettingsScreen(
         modelId = apiSettings.modelId
         inputLanguage = apiSettings.inputLanguage
         outputLanguage = apiSettings.outputLanguage
-        localSettings = apiSettings.localSettings
     }
 
     // Update API key and defaults when provider changes
@@ -125,7 +111,7 @@ fun SettingsScreen(
                     // Save and close button
                     IconButton(onClick = {
                         coroutineScope.launch {
-                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
                             val activity = context as? android.app.Activity
                             activity?.finish()
                         }
@@ -176,20 +162,8 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Current Mode Status Card
+            // Current Provider Status Card
             item {
-                val mode = if (provider == ApiProvider.LOCAL) "Local" else "Cloud"
-                val modelDisplay = if (provider == ApiProvider.LOCAL) {
-                    localSettings.selectedModel.displayName
-                } else {
-                    provider.displayName
-                }
-                val modelDetails = if (provider == ApiProvider.LOCAL) {
-                    localSettings.selectedModel.modelName
-                } else {
-                    modelId
-                }
-
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -206,25 +180,25 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Current Mode",
+                                text = "Current Provider",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
                             Text(
-                                text = "$mode - $modelDisplay",
+                                text = provider.displayName,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = modelDetails,
+                                text = modelId,
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
                         }
                         Icon(
-                            imageVector = if (provider == ApiProvider.LOCAL) Icons.Default.PhoneAndroid else Icons.Default.CloudUpload,
-                            contentDescription = mode,
+                            imageVector = Icons.Default.CloudUpload,
+                            contentDescription = "Cloud",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(40.dp)
                         )
@@ -243,67 +217,22 @@ fun SettingsScreen(
             }
 
             item {
-                ProcessingModeToggle(
-                    isLocalMode = provider == ApiProvider.LOCAL,
-                    onModeChanged = { isLocal ->
-                        provider = if (isLocal) ApiProvider.LOCAL else ApiProvider.OPENAI
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            // Cloud provider configuration
+            item {
+                CloudProviderSelector(
+                    selectedProvider = provider,
+                    onProviderSelected = { newProvider ->
+                        provider = newProvider
                     },
-                    isLocalFlavorEnabled = isLocalFlavorEnabled,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
 
             item {
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
-            }
-
-            // LOCAL provider configuration
-            if (provider == ApiProvider.LOCAL && isLocalFlavorEnabled) {
-                item {
-                    LocalModelSelector(
-                        selectedModel = localSettings.selectedModel,
-                        modelStates = modelStates,
-                        onModelSelected = { model ->
-                            localSettings = localSettings.copy(selectedModel = model)
-                        }
-                    )
-                }
-
-                item {
-                    LocalPrerequisitesCard(
-                        selectedModel = localSettings.selectedModel,
-                        modelState = modelStates[localSettings.selectedModel] ?: ModelDownloadState.NotDownloaded,
-                        onDownloadModel = {
-                            viewModel.downloadModel(localSettings.selectedModel)
-                        }
-                    )
-                }
-
-                item {
-                    ProminentHybridProcessingCard(
-                        localSettings = localSettings,
-                        onLocalSettingsChanged = { newSettings ->
-                            localSettings = newSettings
-                        },
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                }
-            }
-
-            // Cloud provider configuration
-            if (provider != ApiProvider.LOCAL) {
-                item {
-                    CloudProviderSelector(
-                        selectedProvider = provider,
-                        onProviderSelected = { newProvider ->
-                            provider = newProvider
-                        },
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                }
-
-                item {
-                    Row(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Top
@@ -523,17 +452,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Show model management only for local flavor
-            if (isLocalFlavorEnabled) {
-                item {
-                    ModelManagementCard()
-                }
-
-                item {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-
             // Voice Modes Section
             item {
                 Row(
@@ -558,27 +476,10 @@ fun SettingsScreen(
             }
 
             items(voiceModes) { mode ->
-                val isVerbatim = mode.id == "verbatim"
-                val isLocalProvider = provider == ApiProvider.LOCAL
-                val secondStageEnabled = localSettings.enableSecondStageProcessing
-
-                val isEnabled = when {
-                    !isLocalProvider -> true
-                    isVerbatim -> true
-                    secondStageEnabled -> true
-                    else -> false
-                }
-
-                val disabledReason = if (!isEnabled) {
-                    "Enable 'Cloud Processing' in the API Configuration section above to use transformation modes with local transcription"
-                } else null
-
-                ModeCardWithTooltip(
+                ModeCard(
                     mode = mode,
-                    isEnabled = isEnabled,
-                    disabledReason = disabledReason,
-                    onEdit = { if (isEnabled) editingMode = mode },
-                    onDelete = { if (isEnabled) viewModel.deleteVoiceMode(mode.id) }
+                    onEdit = { editingMode = mode },
+                    onDelete = { viewModel.deleteVoiceMode(mode.id) }
                 )
             }
 
@@ -586,7 +487,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
                             (context as? android.app.Activity)?.finish() // Close settings after saving
                         }
                     },
@@ -760,27 +661,9 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
 @Composable
 fun ProviderSelector(
     selectedProvider: ApiProvider,
-    onProviderSelected: (ApiProvider) -> Unit,
-    isLocalFlavorEnabled: Boolean = true,  // Default to local flavor (deprecated, use BuildConfig)
-    showLocalOption: Boolean = BuildConfig.INCLUDES_NATIVE_LIBS  // Show LOCAL option only if native libs included
+    onProviderSelected: (ApiProvider) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-
-    // Filter available providers based on BuildConfig and parameters
-    val availableProviders = remember(isLocalFlavorEnabled, showLocalOption) {
-        val allProviders = getAvailableProviders()  // Uses BuildConfig.CLOUD_ONLY_BUILD internally
-
-        // Additional filtering for backward compatibility with existing callers
-        allProviders.filter { provider ->
-            if (!isLocalFlavorEnabled && provider == ApiProvider.LOCAL) {
-                false  // Hide LOCAL if flavor not enabled
-            } else if (!showLocalOption && provider == ApiProvider.LOCAL) {
-                false  // Hide LOCAL if explicitly disabled
-            } else {
-                true
-            }
-        }
-    }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -802,7 +685,7 @@ fun ProviderSelector(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            availableProviders.forEach { provider ->
+            ApiProvider.entries.forEach { provider ->
                 DropdownMenuItem(
                     text = { Text(provider.displayName) },
                     onClick = {
@@ -811,120 +694,6 @@ fun ProviderSelector(
                     }
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun ProcessingModeToggle(
-    isLocalMode: Boolean,
-    onModeChanged: (Boolean) -> Unit,
-    isLocalFlavorEnabled: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Transcription Source",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // Segmented button toggle
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
-                .clip(RoundedCornerShape(24.dp))
-        ) {
-            // Cloud option
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(
-                        if (!isLocalMode) MaterialTheme.colorScheme.primaryContainer
-                        else Color.Transparent
-                    )
-                    .clickable { onModeChanged(false) },
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CloudQueue,
-                        contentDescription = null,
-                        tint = if (!isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Cloud API",
-                        color = if (!isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = if (!isLocalMode) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            }
-
-            // Local option
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(
-                        if (isLocalMode) MaterialTheme.colorScheme.primaryContainer
-                        else Color.Transparent
-                    )
-                    .clickable(enabled = isLocalFlavorEnabled) {
-                        onModeChanged(true)
-                    }
-                    .alpha(if (isLocalFlavorEnabled) 1f else 0.5f),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhoneAndroid,
-                        contentDescription = null,
-                        tint = if (isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
-                               else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Local",
-                        color = if (isLocalMode) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        fontWeight = if (isLocalMode) FontWeight.Bold else FontWeight.Normal
-                    )
-                }
-            }
-        }
-
-        // Hint text below toggle
-        Text(
-            text = if (!isLocalMode) "Use cloud API services for transcription"
-                   else "On-device processing with whisper.cpp (privacy-first)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        // Warning if local not available
-        if (!isLocalFlavorEnabled && isLocalMode) {
-            Text(
-                text = "⚠️ Local processing not available in this build variant",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
-            )
         }
     }
 }
@@ -993,14 +762,9 @@ fun CloudProviderSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Filter to cloud providers only (exclude LOCAL)
-    val cloudProviders = remember {
-        ApiProvider.entries.filter { it != ApiProvider.LOCAL }
-    }
-
     Column(modifier = modifier) {
         Text(
-            text = "Cloud Provider",
+            text = "Provider",
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
@@ -1024,7 +788,7 @@ fun CloudProviderSelector(
                 expanded = expanded,
                 onDismissRequest = { expanded = false }
             ) {
-                cloudProviders.forEach { provider ->
+                ApiProvider.entries.forEach { provider ->
                     DropdownMenuItem(
                         text = { Text(provider.displayName) },
                         onClick = {
@@ -1199,8 +963,7 @@ fun EditModeDialog(
 fun ModelInfoDialog(
     provider: ApiProvider,
     modelId: String,
-    onDismiss: () -> Unit,
-    isLocalFlavorEnabled: Boolean = true  // Default to local flavor
+    onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1330,14 +1093,6 @@ fun ModelInfoDialog(
                         Text("• Whisper variants", fontSize = 14.sp)
                         Text("• Free inference API", fontSize = 14.sp)
                         Text("• Community-driven", fontSize = 14.sp)
-                    }
-                    ApiProvider.LOCAL -> {
-                        Text("Local (whisper.cpp)", fontWeight = FontWeight.Medium)
-                        Text("• 100% offline - no internet required", fontSize = 14.sp)
-                        Text("• Complete privacy - data never leaves device", fontSize = 14.sp)
-                        Text("• No API costs", fontSize = 14.sp)
-                        Text("• Multiple model sizes (tiny, base, small)", fontSize = 14.sp)
-                        Text("• Fast inference on mobile devices", fontSize = 14.sp)
                     }
                 }
 
@@ -2092,503 +1847,6 @@ fun UILanguageSelector(
                         expanded = false
                     }
                 )
-            }
-        }
-    }
-}
-
-/**
- * Local model selector for choosing between Tiny/Base/Small models
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun LocalModelSelector(
-    selectedModel: WhisperModel,
-    modelStates: Map<WhisperModel, ModelDownloadState>,
-    onModelSelected: (WhisperModel) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selectedModel.displayName,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Local Model") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            leadingIcon = {
-                val state = modelStates[selectedModel] ?: ModelDownloadState.NotDownloaded
-                when (state) {
-                    is ModelDownloadState.Downloaded -> Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Downloaded",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    else -> Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Not downloaded",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            },
-            supportingText = {
-                Text(selectedModel.getFormattedSize())
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            WhisperModel.values().forEach { model ->
-                val state = modelStates[model] ?: ModelDownloadState.NotDownloaded
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(model.displayName)
-                                Text(
-                                    text = model.getFormattedSize(),
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                            when (state) {
-                                is ModelDownloadState.Downloaded -> Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                else -> Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Not downloaded",
-                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        onModelSelected(model)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-/**
- * Card showing second-stage cloud processing option for LOCAL provider
- */
-@Composable
-fun SecondStageProcessingCard(
-    localSettings: LocalSettings,
-    onLocalSettingsChanged: (LocalSettings) -> Unit,
-    availableProviders: List<ApiProvider>,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Title and switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Cloud Processing (Optional)",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Enable cloud API for transformations and translations",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-                Switch(
-                    checked = localSettings.enableSecondStageProcessing,
-                    onCheckedChange = { enabled ->
-                        onLocalSettingsChanged(localSettings.copy(enableSecondStageProcessing = enabled))
-                    }
-                )
-            }
-
-            // Explanation text
-            if (!localSettings.enableSecondStageProcessing) {
-                Text(
-                    text = "Only VERBATIM mode available. Enable cloud processing to use transformations.",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(12.dp)
-                )
-            }
-
-            // Cloud provider selector (shown when enabled)
-            if (localSettings.enableSecondStageProcessing) {
-                Divider()
-
-                Text(
-                    text = "Hybrid Workflow: Local transcription → Cloud transformation",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-
-                ProviderSelector(
-                    selectedProvider = localSettings.secondStageProvider,
-                    onProviderSelected = { provider ->
-                        onLocalSettingsChanged(localSettings.copy(secondStageProvider = provider))
-                    }
-                )
-
-                ModelSelector(
-                    selectedModel = localSettings.secondStageModel,
-                    availableModels = localSettings.secondStageProvider.defaultModels,
-                    onModelSelected = { model ->
-                        onLocalSettingsChanged(localSettings.copy(secondStageModel = model))
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Cost warning
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Cloud processing will use API credits. Costs apply based on usage.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ProminentHybridProcessingCard(
-    localSettings: LocalSettings,
-    onLocalSettingsChanged: (LocalSettings) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-        ),
-        border = BorderStroke(
-            1.dp,
-            if (localSettings.enableSecondStageProcessing)
-                MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header with toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.OfflineBolt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Optional: Cloud Processing",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Enable transformations & translations",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-
-                Switch(
-                    checked = localSettings.enableSecondStageProcessing,
-                    onCheckedChange = { enabled ->
-                        onLocalSettingsChanged(
-                            localSettings.copy(enableSecondStageProcessing = enabled)
-                        )
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Explanation
-            if (!localSettings.enableSecondStageProcessing) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Only VERBATIM mode available. Enable cloud processing to use transformation modes (Polite, Casual, etc.) and translations.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                // Show cloud provider/model selection when enabled
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surface,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "Hybrid Workflow",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        text = "Local transcription → Cloud transformation",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    // Provider selector (but without LOCAL option)
-                    ProviderSelector(
-                        selectedProvider = localSettings.secondStageProvider,
-                        onProviderSelected = { provider ->
-                            onLocalSettingsChanged(
-                                localSettings.copy(secondStageProvider = provider)
-                            )
-                        },
-                        isLocalFlavorEnabled = false,  // Hide LOCAL from this dropdown
-                        showLocalOption = false        // Extra safety
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    ModelSelector(
-                        selectedModel = localSettings.secondStageModel,
-                        availableModels = localSettings.secondStageProvider.defaultModels,
-                        onModelSelected = { model ->
-                            onLocalSettingsChanged(
-                                localSettings.copy(secondStageModel = model)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Cost warning
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                                RoundedCornerShape(6.dp)
-                            )
-                            .padding(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Cloud API will be used for post-processing (may incur costs)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Prerequisites status card for LOCAL provider
- */
-@Composable
-fun LocalPrerequisitesCard(
-    selectedModel: WhisperModel,
-    modelState: ModelDownloadState,
-    onDownloadModel: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isReady = modelState is ModelDownloadState.Downloaded
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isReady) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            } else {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            }
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isReady) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        text = if (isReady) "Ready to Use" else "Download Required",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = if (isReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${selectedModel.displayName} (${selectedModel.getFormattedSize()})",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-
-                // Show progress for downloading state
-                if (modelState is ModelDownloadState.Downloading) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = modelState.progress,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    val downloadedMB = modelState.downloadedBytes / (1024.0 * 1024.0)
-                    val totalMB = modelState.totalBytes / (1024.0 * 1024.0)
-                    val progressText = if (modelState.totalBytes > 0) {
-                        "${(modelState.progress * 100).toInt()}% (${"%.1f".format(downloadedMB)} / ${"%.1f".format(totalMB)} MB)"
-                    } else {
-                        "${(modelState.progress * 100).toInt()}% complete"
-                    }
-                    Text(
-                        text = progressText,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    if (modelState.speedBytesPerSecond > 0) {
-                        val speedMBps = modelState.speedBytesPerSecond / (1024.0 * 1024.0)
-                        val etaMinutes = modelState.etaSeconds / 60
-                        val etaSecondsRem = modelState.etaSeconds % 60
-                        val etaText = if (etaMinutes > 0) "${etaMinutes}m ${etaSecondsRem}s" else "${etaSecondsRem}s"
-                        Text(
-                            text = "${"%.2f".format(speedMBps)} MB/s · ETA: $etaText",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-
-                // Show error message
-                if (modelState is ModelDownloadState.Error) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = modelState.message,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-
-            // Download button (shown when not ready)
-            if (!isReady && modelState !is ModelDownloadState.Downloading) {
-                Button(
-                    onClick = onDownloadModel,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Download")
-                }
             }
         }
     }
