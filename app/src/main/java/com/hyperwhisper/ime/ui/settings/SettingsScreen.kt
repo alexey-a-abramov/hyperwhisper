@@ -71,6 +71,7 @@ fun SettingsScreen(
     var inputLanguage by remember { mutableStateOf(apiSettings.inputLanguage) }
     var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
     var showInputLanguageInfo by remember { mutableStateOf(false) }
+    var showModelInfo by remember { mutableStateOf(false) }
 
     var showAddModeDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<VoiceMode?>(null) }
@@ -417,7 +418,6 @@ fun SettingsScreen(
                     else -> {}
                 }
             }
-            }  // End of cloud provider configuration
 
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -440,16 +440,6 @@ fun SettingsScreen(
 
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
-            }
-
-            // Local Models Section
-            item {
-                Text(
-                    text = "Local Models",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
 
             // Voice Modes Section

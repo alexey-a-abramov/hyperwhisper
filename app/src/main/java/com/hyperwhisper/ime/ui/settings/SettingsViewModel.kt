@@ -101,11 +101,10 @@ class SettingsViewModel @Inject constructor(
                 apiKeys = updatedApiKeys,
                 modelId = modelId.trim(),
                 inputLanguage = inputLanguage.trim(),
-                outputLanguage = outputLanguage.trim(),
-                localSettings = localSettings
+                outputLanguage = outputLanguage.trim()
             )
             settingsRepository.saveApiSettings(settings)
-            Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId, local: ${localSettings.selectedModel.displayName}")
+            Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId")
         } catch (e: Exception) {
             Log.e(TAG, "Error saving API settings", e)
         }
