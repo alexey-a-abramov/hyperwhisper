@@ -7,8 +7,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GRADLE_PROPS="$SCRIPT_DIR/gradle.properties"
-AAPT2_LINE="android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2"
+AAPT2_OVERRIDE="-Pandroid.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2"
+GRADLE_OPTS=""
 
 # Color output
 RED='\033[0;31m'
@@ -39,42 +39,23 @@ fi
 echo -e "${YELLOW}📋 Build flavor: $FLAVOR${NC}"
 echo ""
 
-# Check if running on Android
-if [[ ! -d "/data/data/com.termux" ]]; then
-    echo -e "${YELLOW}⚠️  Warning: Not running on Termux/Android${NC}"
+# Check if running on Android/Termux
+if [[ -d "/data/data/com.termux" ]]; then
+    # Running on Termux - add AAPT2 override
+    if [[ ! -f "/data/data/com.termux/files/usr/bin/aapt2" ]]; then
+        echo -e "${RED}❌ Error: AAPT2 not found at /data/data/com.termux/files/usr/bin/aapt2${NC}"
+        echo -e "Install it with: ${YELLOW}pkg install aapt2${NC}"
+        exit 1
+    fi
+    GRADLE_OPTS="$AAPT2_OVERRIDE"
+    echo -e "${GREEN}✓ Termux detected: Using AAPT2 override${NC}"
+    echo ""
+else
+    echo -e "${YELLOW}⚠️  Not running on Termux/Android${NC}"
     echo -e "This script is designed for Android/Termux environment."
     echo -e "For other platforms, use: ./gradlew assemble<Flavor>Debug"
     echo ""
 fi
-
-# Backup gradle.properties
-echo -e "${BLUE}📦 Backing up gradle.properties...${NC}"
-cp "$GRADLE_PROPS" "$GRADLE_PROPS.bak"
-
-# Function to restore gradle.properties
-restore_gradle_props() {
-    if [[ -f "$GRADLE_PROPS.bak" ]]; then
-        echo -e "${BLUE}🔄 Restoring gradle.properties...${NC}"
-        mv "$GRADLE_PROPS.bak" "$GRADLE_PROPS"
-    fi
-}
-
-# Trap to ensure restoration even on error
-trap restore_gradle_props EXIT
-
-# Uncomment AAPT2 override for ARM64
-echo -e "${BLUE}🔧 Configuring ARM64 AAPT2...${NC}"
-sed -i "s|# $AAPT2_LINE|$AAPT2_LINE|g" "$GRADLE_PROPS"
-
-# Verify AAPT2 is available
-if [[ ! -f "/data/data/com.termux/files/usr/bin/aapt2" ]]; then
-    echo -e "${RED}❌ Error: AAPT2 not found at /data/data/com.termux/files/usr/bin/aapt2${NC}"
-    echo -e "Install it with: ${YELLOW}pkg install aapt2${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✓ AAPT2 configured${NC}"
-echo ""
 
 # Build function
 build_flavor() {
@@ -89,7 +70,7 @@ build_flavor() {
 
     START_TIME=$(date +%s)
 
-    if ./gradlew "$gradle_task" --stacktrace; then
+    if ./gradlew $GRADLE_OPTS "$gradle_task" --stacktrace; then
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
         MINUTES=$((DURATION / 60))
@@ -162,9 +143,6 @@ if [[ "$BUILD_SUCCESS" == true ]]; then
     echo ""
     echo -e "${YELLOW}📲 To install:${NC}"
     echo -e "   adb install \"<path-to-apk>\""
-    echo ""
-    echo -e "${YELLOW}💡 Note:${NC} gradle.properties has been restored to keep"
-    echo -e "   AAPT2 override commented for cloud builds."
     echo ""
     exit 0
 else
