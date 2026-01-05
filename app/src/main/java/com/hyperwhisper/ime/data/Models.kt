@@ -181,8 +181,8 @@ enum class ApiProvider(
     ),
     HUGGINGFACE(
         displayName = "Hugging Face",
-        defaultEndpoint = "https://api-inference.huggingface.co/models/",
-        defaultModels = listOf("openai/whisper-large-v3", "openai/whisper-medium", "openai/whisper-small")
+        defaultEndpoint = "https://api-inai.endpoints.huggingface.cloud/v1/",
+        defaultModels = listOf("meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3", "google/gemma-2-9b-it")
     )
 }
 

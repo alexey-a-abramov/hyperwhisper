@@ -154,6 +154,9 @@ class VoiceRepository @Inject constructor(
         // Gemini supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.GEMINI) return false
 
+        // Hugging Face is text-only - requires two-step for all audio input
+        if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
+
         // Verbatim mode only needs post-processing if translation is required
         if (voiceMode.id == "verbatim") return needsTranslation
 
@@ -301,6 +304,8 @@ class VoiceRepository @Inject constructor(
      * - For "Verbatim" mode with OpenAI/Groq: Use Transcription Strategy
      * - For transformation modes (Polite, Casual, etc.): Use Chat Completion Strategy
      * - For OpenRouter: Always use Chat Completion Strategy
+     * - For Gemini: Always use Chat Completion Strategy (supports audio natively)
+     * - For Hugging Face: Always use Chat Completion Strategy (text-only models)
      */
     private fun selectStrategy(
         voiceMode: VoiceMode,
@@ -312,8 +317,18 @@ class VoiceRepository @Inject constructor(
                 Log.d(TAG, "Selected ChatCompletionStrategy (OpenRouter)")
                 chatCompletionStrategy
             }
-            // Verbatim mode with OpenAI uses transcription
-            voiceMode.id == "verbatim" && provider == ApiProvider.OPENAI -> {
+            // Gemini always uses chat completion (supports audio natively)
+            provider == ApiProvider.GEMINI -> {
+                Log.d(TAG, "Selected ChatCompletionStrategy (Gemini)")
+                chatCompletionStrategy
+            }
+            // Hugging Face always uses chat completion (text-only LLMs)
+            provider == ApiProvider.HUGGINGFACE -> {
+                Log.d(TAG, "Selected ChatCompletionStrategy (HuggingFace - text-only)")
+                chatCompletionStrategy
+            }
+            // Verbatim mode with OpenAI/Groq uses transcription
+            voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ) -> {
                 Log.d(TAG, "Selected TranscriptionStrategy (Verbatim)")
                 transcriptionStrategy
             }
