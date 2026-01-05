@@ -18,14 +18,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -52,12 +53,15 @@ import com.hyperwhisper.data.UIScaleOption
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
+import android.widget.Toast
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    updateManager: com.hyperwhisper.ime.update.UpdateManager? = null,
+    onShowUpdateDialog: (com.hyperwhisper.ime.update.UpdateInfo) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val apiSettings by viewModel.apiSettings.collectAsState()
@@ -484,6 +488,96 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(strings.saveAndCloseSettings)
+                }
+            }
+
+            // Check for Updates section
+            item {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            item {
+                Text(
+                    text = "App",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column {
+                                    Text(
+                                        text = "Version",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = updateManager?.getCurrentVersion()?.second ?: "Unknown",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        when (val result = updateManager?.checkForUpdates()) {
+                                            is com.hyperwhisper.ime.update.UpdateCheckResult.UpdateAvailable -> {
+                                                onShowUpdateDialog(result.updateInfo)
+                                            }
+                                            is com.hyperwhisper.ime.update.UpdateCheckResult.NoUpdateAvailable -> {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Already up to date!",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                            is com.hyperwhisper.ime.update.UpdateCheckResult.Error -> {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Update check failed: ${result.message}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                            null -> {}
+                                        }
+                                    }
+                                },
+                                contentPadding = PaddingValues(8.dp, 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Check for Updates",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Check", fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
             }
         }

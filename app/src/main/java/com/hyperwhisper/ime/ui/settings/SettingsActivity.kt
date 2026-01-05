@@ -12,17 +12,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
+import com.hyperwhisper.ime.update.UpdateCheckResult
+import com.hyperwhisper.ime.update.UpdateDialog
+import com.hyperwhisper.ime.update.UpdateManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class SettingsActivity : ComponentActivity() {
 
     private val viewModel: SettingsViewModel by viewModels()
+
+    @Inject
+    lateinit var updateManager: UpdateManager
+
+    // Update dialog state
+    private var updateInfo by mutableStateOf<com.hyperwhisper.ime.update.UpdateInfo?>(null)
+    private var showUpdateDialog by mutableStateOf(false)
 
     // Permission request launcher
     private val requestPermissionLauncher = registerForActivityResult(
@@ -45,6 +59,9 @@ class SettingsActivity : ComponentActivity() {
         // Check and request microphone permission
         checkAndRequestMicrophonePermission()
 
+        // Check for updates
+        checkForUpdates()
+
         setContent {
             val appearanceSettings by viewModel.appearanceSettings.collectAsState()
 
@@ -54,9 +71,59 @@ class SettingsActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     SettingsScreen(
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        updateManager = updateManager,
+                        onShowUpdateDialog = { info ->
+                            updateInfo = info
+                            showUpdateDialog = true
+                        }
                     )
                 }
+            }
+
+            // Update dialog
+            updateInfo?.let { info ->
+                val currentVersion = updateManager.getCurrentVersion().second
+                UpdateDialog(
+                    updateInfo = info,
+                    currentVersion = currentVersion,
+                    onDismiss = { showUpdateDialog = false },
+                    onSkip = {
+                        updateManager.skipVersion(info.versionCode)
+                        showUpdateDialog = false
+                    },
+                    onUpdate = { progressCallback, onComplete, onError ->
+                        lifecycleScope.launch {
+                            when (val result = updateManager.downloadApk(info.apkUrl, progressCallback)) {
+                                is com.hyperwhisper.ime.update.DownloadResult.Success -> {
+                                    onComplete()
+                                    updateManager.installApk()
+                                }
+                                is com.hyperwhisper.ime.update.DownloadResult.Error -> {
+                                    onError(result.message)
+                                    Toast.makeText(
+                                        this@SettingsActivity,
+                                        "Download failed: ${result.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                                else -> {}
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    private fun checkForUpdates() {
+        lifecycleScope.launch {
+            when (val result = updateManager.checkForUpdates()) {
+                is UpdateCheckResult.UpdateAvailable -> {
+                    updateInfo = result.updateInfo
+                    showUpdateDialog = true
+                }
+                else -> {}
             }
         }
     }
