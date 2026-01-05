@@ -952,31 +952,68 @@ fun ErrorOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Title
                 Text(
                     text = strings.error,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
 
-                // Error message (bigger text, scrollable if needed)
-                Text(
-                    text = errorMessage,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.weight(1f)
-                )
+                // Error message (scrollable with finger scrolling)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    item {
+                        Text(
+                            text = errorMessage,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
 
-                // Action buttons
-                Column(
+                // Open Settings button (for permission errors) - full width above buttons row
+                if (isPermissionError) {
+                    Button(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                            contentColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        contentPadding = PaddingValues(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            strings.openSettings,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Action buttons row (Copy + Dismiss)
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Copy button
                     Button(
@@ -986,66 +1023,38 @@ fun ErrorOverlay(
                             clipboard.setPrimaryClip(clip)
                             Toast.makeText(context, "Error copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.onErrorContainer,
                             contentColor = MaterialTheme.colorScheme.errorContainer
-                        )
+                        ),
+                        contentPadding = PaddingValues(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Copy",
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
-                            strings.copyError.uppercase(),
-                            fontSize = 13.sp,
+                            strings.copyError,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-
-                    // Open Settings button (for permission errors)
-                    if (isPermissionError) {
-                        Button(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                                contentColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                strings.openSettings.uppercase(),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
 
                     // Dismiss button
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        ),
+                        contentPadding = PaddingValues(8.dp)
                     ) {
                         Text(
-                            strings.dismiss.uppercase(),
-                            fontSize = 13.sp,
+                            strings.dismiss,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
