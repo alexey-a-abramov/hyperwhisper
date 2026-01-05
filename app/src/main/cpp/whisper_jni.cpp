@@ -11,6 +11,9 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+// Version marker for native library - update this to force rebuild
+#define JNI_VERSION "1.1.0-multithreaded"
+
 /**
  * Get optimal number of threads for whisper processing.
  * Uses available cores but caps at a reasonable maximum to avoid
@@ -105,7 +108,7 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeTranscribe(
 
     // Get optimal thread count for this device
     int n_threads = get_optimal_threads();
-    LOGI("Using %d threads for transcription", n_threads);
+    LOGI("WhisperJNI version %s - using %d threads for transcription", JNI_VERSION, n_threads);
 
     // Set up whisper parameters
     struct whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
