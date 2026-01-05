@@ -12,7 +12,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 // Version marker for native library - update this to force rebuild
-#define JNI_VERSION "1.2.0-progress-callbacks"
+#define JNI_VERSION "1.2.1-callbacks-v2"
 
 // Global reference to Java VM and callback objects
 static JavaVM* g_jvm = nullptr;
