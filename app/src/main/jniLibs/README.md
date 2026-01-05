@@ -76,3 +76,4 @@ If you get `UnsatisfiedLinkError`:
 2. Check file permissions: `ls -la jniLibs/*/*.so`
 3. Ensure ABI matches your device (use `adb shell getprop ro.product.cpu.abi`)
 4. Clean and rebuild: `./gradlew clean assembleLocalDebug`
+# Trigger rebuild
