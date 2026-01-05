@@ -6,7 +6,7 @@ import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.native_whisper.AudioConverter
 import com.hyperwhisper.native_whisper.WhisperContext
 import com.hyperwhisper.network.AudioProcessingStrategy
-import com.hyperwhisper.network.LocalWhisperStrategy
+import com.hyperwhisper.network.LocalWhisperCallbacks
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,37 +46,32 @@ object FlavorModule {
     }
 
     // First, create the singleton instance
-    private var localWhisperStrategyInstance: LocalWhisperStrategy? = null
+    // Use the interface as type to avoid KSP issues in cloud builds
+    private var localWhisperCallbacksInstance: LocalWhisperCallbacks? = null
 
     @Provides
     @Singleton
-    fun provideLocalWhisperStrategyConcrete(
+    fun provideLocalWhisperCallbacks(
         whisperContext: WhisperContext,
         audioConverter: AudioConverter,
         modelRepository: ModelRepository,
         settingsRepository: SettingsRepository
-    ): LocalWhisperStrategy {
-        return localWhisperStrategyInstance ?: LocalWhisperStrategy(
+    ): LocalWhisperCallbacks {
+        return localWhisperCallbacksInstance ?: com.hyperwhisper.network.LocalWhisperStrategy(
             whisperContext,
             audioConverter,
             modelRepository,
             settingsRepository
-        ).also { localWhisperStrategyInstance = it }
-    }
-
-    @Provides
-    @Singleton
-    fun provideLocalWhisperCallbacks(concrete: LocalWhisperStrategy): LocalWhisperCallbacks {
-        return concrete
+        ).also { localWhisperCallbacksInstance = it }
     }
 
     @Provides
     @Singleton
     @Named("localWhisperStrategy")
     fun provideLocalWhisperStrategy(
-        concrete: LocalWhisperStrategy
+        callbacks: LocalWhisperCallbacks
     ): AudioProcessingStrategy {
-        return concrete
+        return callbacks as AudioProcessingStrategy
     }
 
     @Provides
