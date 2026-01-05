@@ -34,7 +34,10 @@ class LocalWhisperStrategy @Inject constructor(
         modelId: String
     ): ApiResult<String> = withContext(Dispatchers.IO) {
         return@withContext try {
-            Log.d(TAG, "========== LOCAL WHISPER PROCESSING ==========")
+            val totalStartTime = System.currentTimeMillis()
+
+            Log.d(TAG, "========== LOCAL WHISPER PROCESSING START ==========")
+            Log.d(TAG, "[TIMING] Processing started at: ${java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())}")
             Log.d(TAG, "Processing audio with local whisper.cpp")
             Log.d(TAG, "Model: $modelId")
             Log.d(TAG, "Voice Mode: ${voiceMode.name}")
@@ -55,33 +58,42 @@ class LocalWhisperStrategy @Inject constructor(
 
             // 3. Load model if not already loaded
             val modelFile = modelRepository.getModelFile(model)
+            var modelLoadTimeMs = 0L
             if (!whisperContext.isModelLoaded()) {
+                Log.d(TAG, "[TIMING] Model loading started...")
+                val modelLoadStart = System.currentTimeMillis()
                 Log.d(TAG, "Loading model: ${modelFile.absolutePath}")
                 val loadResult = whisperContext.loadModel(modelFile)
+                modelLoadTimeMs = System.currentTimeMillis() - modelLoadStart
                 if (loadResult.isFailure) {
                     val error = loadResult.exceptionOrNull()?.message ?: "Failed to load model"
                     Log.e(TAG, "Model loading failed: $error")
                     return@withContext ApiResult.Error("Failed to load model: $error")
                 }
-                Log.d(TAG, "Model loaded successfully")
+                Log.d(TAG, "[TIMING] Model loaded in ${modelLoadTimeMs}ms (${String.format("%.2f", modelLoadTimeMs / 1000.0)}s)")
             } else {
-                Log.d(TAG, "Model already loaded")
+                Log.d(TAG, "Model already loaded (0ms)")
             }
 
             // 4. Convert M4A to WAV if needed
+            var conversionTimeMs = 0L
             val wavFile = if (audioFile.extension.lowercase() == "m4a") {
+                Log.d(TAG, "[TIMING] Audio conversion started...")
+                val conversionStart = System.currentTimeMillis()
                 Log.d(TAG, "Converting M4A to WAV...")
                 val convertResult = audioConverter.convertM4AToWav(audioFile, audioFile.parentFile!!)
+                conversionTimeMs = System.currentTimeMillis() - conversionStart
                 if (convertResult.isFailure) {
                     val error = convertResult.exceptionOrNull()?.message ?: "Conversion failed"
                     Log.e(TAG, "Audio conversion failed: $error")
                     return@withContext ApiResult.Error("Audio conversion failed: $error")
                 }
                 val wav = convertResult.getOrNull()!!
-                Log.d(TAG, "Conversion successful: ${wav.name} (${wav.length()} bytes)")
+                Log.d(TAG, "[TIMING] Audio converted in ${conversionTimeMs}ms (${String.format("%.2f", conversionTimeMs / 1000.0)}s)")
+                Log.d(TAG, "  WAV file: ${wav.name} (${wav.length()} bytes)")
                 wav
             } else {
-                Log.d(TAG, "Audio is already in WAV format")
+                Log.d(TAG, "Audio is already in WAV format (0ms conversion)")
                 audioFile
             }
 
@@ -96,8 +108,8 @@ class LocalWhisperStrategy @Inject constructor(
             Log.d(TAG, "Language: $language")
 
             // 6. Transcribe with whisper.cpp
-            Log.d(TAG, "Starting transcription...")
-            val startTime = System.currentTimeMillis()
+            Log.d(TAG, "[TIMING] Transcription started...")
+            val transcriptionStart = System.currentTimeMillis()
 
             val transcribeResult = whisperContext.transcribe(
                 audioFile = wavFile,
@@ -105,8 +117,8 @@ class LocalWhisperStrategy @Inject constructor(
                 translate = false
             )
 
-            val elapsedTime = System.currentTimeMillis() - startTime
-            Log.d(TAG, "Transcription completed in ${elapsedTime}ms")
+            val transcriptionTimeMs = System.currentTimeMillis() - transcriptionStart
+            Log.d(TAG, "[TIMING] Transcription completed in ${transcriptionTimeMs}ms (${String.format("%.2f", transcriptionTimeMs / 1000.0)}s)")
 
             // 7. Cleanup temporary WAV file if we created it
             if (wavFile != audioFile) {
@@ -121,11 +133,21 @@ class LocalWhisperStrategy @Inject constructor(
             }
 
             val transcription = transcribeResult.getOrNull() ?: ""
+            val totalTimeMs = System.currentTimeMillis() - totalStartTime
+
             Log.d(TAG, "✓ Transcription successful")
             Log.d(TAG, "  Result length: ${transcription.length} chars")
             Log.d(TAG, "  Result preview: ${transcription.take(100)}...")
-            Log.d(TAG, "  Processing time: ${elapsedTime}ms (${String.format("%.2f", elapsedTime / 1000.0)}s)")
-            Log.d(TAG, "========== END LOCAL PROCESSING ==========")
+            Log.d(TAG, "")
+            Log.d(TAG, "========== TIMING SUMMARY ==========")
+            Log.d(TAG, "  Model loading:    ${modelLoadTimeMs}ms")
+            Log.d(TAG, "  Audio conversion: ${conversionTimeMs}ms")
+            Log.d(TAG, "  Transcription:    ${transcriptionTimeMs}ms")
+            Log.d(TAG, "  --------------------------------")
+            Log.d(TAG, "  TOTAL TIME:       ${totalTimeMs}ms (${String.format("%.2f", totalTimeMs / 1000.0)}s)")
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "[TIMING] Processing ended at: ${java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())}")
+            Log.d(TAG, "========== LOCAL WHISPER PROCESSING END ==========")
 
             // 8. Create processing info for transparency
             val processingInfo = ProcessingInfo(

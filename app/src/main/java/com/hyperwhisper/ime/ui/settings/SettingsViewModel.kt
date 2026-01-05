@@ -73,36 +73,64 @@ class SettingsViewModel @Inject constructor(
         localSettings: LocalSettings = LocalSettings()
     ) {
         viewModelScope.launch {
-            try {
-                // Log warning if LOCAL provider is selected but model is not downloaded
-                // Don't block saving - user should be able to save their preference
-                if (provider == ApiProvider.LOCAL) {
-                    val validationResult = localModelValidator.validateModel(localSettings.selectedModel)
-                    if (validationResult.isFailure) {
-                        Log.w(TAG, "LOCAL provider selected but model not ready: ${validationResult.exceptionOrNull()?.message}")
-                        Log.w(TAG, "Settings will be saved but model must be downloaded before use")
-                    }
+            saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+        }
+    }
+
+    /**
+     * Suspend version that waits for the save to complete before returning.
+     * Use this when you need to ensure settings are saved before proceeding (e.g., before closing activity).
+     */
+    suspend fun saveApiSettingsAndWait(
+        provider: ApiProvider,
+        baseUrl: String,
+        apiKey: String,
+        modelId: String,
+        inputLanguage: String = "",
+        outputLanguage: String = "",
+        localSettings: LocalSettings = LocalSettings()
+    ) {
+        saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+    }
+
+    private suspend fun saveApiSettingsInternal(
+        provider: ApiProvider,
+        baseUrl: String,
+        apiKey: String,
+        modelId: String,
+        inputLanguage: String,
+        outputLanguage: String,
+        localSettings: LocalSettings
+    ) {
+        try {
+            // Log warning if LOCAL provider is selected but model is not downloaded
+            // Don't block saving - user should be able to save their preference
+            if (provider == ApiProvider.LOCAL) {
+                val validationResult = localModelValidator.validateModel(localSettings.selectedModel)
+                if (validationResult.isFailure) {
+                    Log.w(TAG, "LOCAL provider selected but model not ready: ${validationResult.exceptionOrNull()?.message}")
+                    Log.w(TAG, "Settings will be saved but model must be downloaded before use")
                 }
-
-                // Get current settings to preserve other provider API keys
-                val currentSettings = apiSettings.value
-                val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
-                updatedApiKeys[provider] = apiKey.trim()
-
-                val settings = ApiSettings(
-                    provider = provider,
-                    baseUrl = baseUrl.trim(),
-                    apiKeys = updatedApiKeys,
-                    modelId = modelId.trim(),
-                    inputLanguage = inputLanguage.trim(),
-                    outputLanguage = outputLanguage.trim(),
-                    localSettings = localSettings
-                )
-                settingsRepository.saveApiSettings(settings)
-                Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId, local: ${localSettings.selectedModel.displayName}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving API settings", e)
             }
+
+            // Get current settings to preserve other provider API keys
+            val currentSettings = apiSettings.value
+            val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
+            updatedApiKeys[provider] = apiKey.trim()
+
+            val settings = ApiSettings(
+                provider = provider,
+                baseUrl = baseUrl.trim(),
+                apiKeys = updatedApiKeys,
+                modelId = modelId.trim(),
+                inputLanguage = inputLanguage.trim(),
+                outputLanguage = outputLanguage.trim(),
+                localSettings = localSettings
+            )
+            settingsRepository.saveApiSettings(settings)
+            Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId, local: ${localSettings.selectedModel.displayName}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving API settings", e)
         }
     }
 

@@ -43,6 +43,9 @@ class KeyboardViewModel @Inject constructor(
     private val _transcriptionProgress = MutableStateFlow<Float?>(null)
     val transcriptionProgress: StateFlow<Float?> = _transcriptionProgress.asStateFlow()
 
+    private val _processingStage = MutableStateFlow<ProcessingStage?>(null)
+    val processingStage: StateFlow<ProcessingStage?> = _processingStage.asStateFlow()
+
     // Pending configuration command for confirmation dialog
     private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
     val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
@@ -206,24 +209,63 @@ class KeyboardViewModel @Inject constructor(
                 // Start transcription with progress tracking and cancellation support
                 transcriptionJob = viewModelScope.launch {
                     try {
-                        // Start progress simulation
-                        _transcriptionProgress.value = 0.1f
+                        // Determine progress stages based on provider
+                        val isLocalProvider = settings.provider == ApiProvider.LOCAL
 
-                        // Launch progress updater
+                        // Initial stage
+                        _processingStage.value = ProcessingStage.PREPARING
+                        _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
+
+                        // Launch progress updater with realistic stage-based simulation
                         val progressJob = launch {
-                            var progress = 0.1f
-                            while (progress < 0.9f) {
-                                kotlinx.coroutines.delay(300)
-                                progress += 0.05f
-                                _transcriptionProgress.value = progress
+                            if (isLocalProvider) {
+                                // Local processing stages: prepare -> convert -> load model -> transcribe
+                                val stages = listOf(
+                                    ProcessingStage.PREPARING to 200L,
+                                    ProcessingStage.CONVERTING_AUDIO to 500L,
+                                    ProcessingStage.LOADING_MODEL to 300L,
+                                    ProcessingStage.TRANSCRIBING to 3000L,  // Main transcription - takes longest
+                                    ProcessingStage.FINISHING to 200L
+                                )
+
+                                for ((stage, duration) in stages) {
+                                    _processingStage.value = stage
+                                    // Smoothly animate progress within the stage
+                                    val steps = (duration / 100).toInt().coerceAtLeast(1)
+                                    val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
+                                    for (i in 0 until steps) {
+                                        _transcriptionProgress.value = stage.progressStart + (progressIncrement * i)
+                                        kotlinx.coroutines.delay(100)
+                                    }
+                                }
+                            } else {
+                                // Cloud processing stages: prepare -> upload -> wait for API -> finish
+                                val stages = listOf(
+                                    ProcessingStage.PREPARING to 200L,
+                                    ProcessingStage.UPLOADING to 800L,
+                                    ProcessingStage.WAITING_API to 2000L,  // Main API call - takes longest
+                                    ProcessingStage.FINISHING to 200L
+                                )
+
+                                for ((stage, duration) in stages) {
+                                    _processingStage.value = stage
+                                    // Smoothly animate progress within the stage
+                                    val steps = (duration / 100).toInt().coerceAtLeast(1)
+                                    val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
+                                    for (i in 0 until steps) {
+                                        _transcriptionProgress.value = stage.progressStart + (progressIncrement * i)
+                                        kotlinx.coroutines.delay(100)
+                                    }
+                                }
                             }
                         }
 
                         // Process audio through API
                         val result = voiceRepository.processAudio(audioFile, mode, settings)
 
-                        // Cancel progress updater
+                        // Cancel progress updater and complete
                         progressJob.cancel()
+                        _processingStage.value = ProcessingStage.FINISHING
                         _transcriptionProgress.value = 1.0f
 
                         when (result) {
@@ -270,6 +312,7 @@ class KeyboardViewModel @Inject constructor(
                         _processingInfo.value = result.processingInfo
                         _recordingState.value = RecordingState.IDLE
                         _transcriptionProgress.value = null
+                        _processingStage.value = null
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "Transcription failed: ${result.message}")
@@ -277,6 +320,7 @@ class KeyboardViewModel @Inject constructor(
                         _errorMessage.value = "API Error: ${result.message}"
                         _recordingState.value = RecordingState.ERROR
                         _transcriptionProgress.value = null
+                        _processingStage.value = null
                     }
                     is ApiResult.Loading -> {
                         // Should not happen in this flow
@@ -287,6 +331,7 @@ class KeyboardViewModel @Inject constructor(
                         TraceLogger.trace("KeyboardViewModel", "Transcription cancelled")
                         _recordingState.value = RecordingState.IDLE
                         _transcriptionProgress.value = null
+                        _processingStage.value = null
                         throw e // Re-throw to properly cancel the coroutine
                     } catch (e: Exception) {
                         Log.e(TAG, "Error during transcription", e)
@@ -294,6 +339,7 @@ class KeyboardViewModel @Inject constructor(
                         _errorMessage.value = e.message
                         _recordingState.value = RecordingState.ERROR
                         _transcriptionProgress.value = null
+                        _processingStage.value = null
                     } finally {
                         // Cleanup audio file
                         audioFile.delete()
@@ -341,6 +387,7 @@ class KeyboardViewModel @Inject constructor(
 
                 _recordingState.value = RecordingState.IDLE
                 _transcriptionProgress.value = null
+                _processingStage.value = null
                 _errorMessage.value = null
 
                 Log.d(TAG, "Transcription cancelled successfully")

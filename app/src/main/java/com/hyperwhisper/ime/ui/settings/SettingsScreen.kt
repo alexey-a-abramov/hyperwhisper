@@ -60,6 +60,7 @@ import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.WhisperModel
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +92,7 @@ fun SettingsScreen(
     val connectionTestState by viewModel.connectionTestState.collectAsState()
     val context = LocalContext.current
     val strings = LocalStrings.current
+    val coroutineScope = rememberCoroutineScope()
 
     // Update fields when settings change
     LaunchedEffect(apiSettings) {
@@ -122,9 +124,11 @@ fun SettingsScreen(
                 actions = {
                     // Save and close button
                     IconButton(onClick = {
-                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
-                        val activity = context as? android.app.Activity
-                        activity?.finish()
+                        coroutineScope.launch {
+                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+                            val activity = context as? android.app.Activity
+                            activity?.finish()
+                        }
                     }) {
                         Icon(
                             imageVector = Icons.Default.Check,
@@ -581,8 +585,10 @@ fun SettingsScreen(
             item { // Moved Save Settings button to the bottom
                 Button(
                     onClick = {
-                        viewModel.saveApiSettings(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
-                        (context as? android.app.Activity)?.finish() // Close settings after saving
+                        coroutineScope.launch {
+                            viewModel.saveApiSettingsAndWait(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+                            (context as? android.app.Activity)?.finish() // Close settings after saving
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

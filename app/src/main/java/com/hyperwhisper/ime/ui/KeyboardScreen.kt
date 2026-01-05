@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.hyperwhisper.data.RecordingState
+import com.hyperwhisper.data.ProcessingStage
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.ApiSettings
@@ -64,6 +65,7 @@ fun KeyboardScreen(
     val processingInfo by viewModel.processingInfo.collectAsState()
     val recordingDuration by viewModel.recordingDuration.collectAsState()
     val transcriptionProgress by viewModel.transcriptionProgress.collectAsState()
+    val processingStage by viewModel.processingStage.collectAsState()
     val transcriptionHistory by viewModel.transcriptionHistory.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
@@ -382,6 +384,7 @@ fun KeyboardScreen(
                             onCancelTranscription = { viewModel.cancelTranscription() },
                             recordingDuration = recordingDuration,
                             transcriptionProgress = transcriptionProgress,
+                            processingStage = processingStage,
                             modifier = Modifier
                         )
 
@@ -690,6 +693,7 @@ fun MicrophoneButton(
     onCancelTranscription: () -> Unit = {},
     recordingDuration: Long = 0L,
     transcriptionProgress: Float? = null,
+    processingStage: ProcessingStage? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -709,6 +713,7 @@ fun MicrophoneButton(
             RecordingState.PROCESSING -> {
                 ProcessingIndicator(
                     progress = transcriptionProgress,
+                    processingStage = processingStage,
                     onCancel = onCancelTranscription
                 )
             }
@@ -783,49 +788,68 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
 }
 
 @Composable
-fun ProcessingIndicator(progress: Float? = null, onCancel: () -> Unit = {}) {
-    Box(
-        modifier = Modifier.size(72.dp),
-        contentAlignment = Alignment.Center
+fun ProcessingIndicator(
+    progress: Float? = null,
+    processingStage: ProcessingStage? = null,
+    onCancel: () -> Unit = {}
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Progress indicator
-        if (progress != null && progress > 0f) {
-            CircularProgressIndicator(
-                progress = progress,
-                modifier = Modifier.size(60.dp),
-                strokeWidth = 5.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            // Show percentage text
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        } else {
-            // Indeterminate progress
-            CircularProgressIndicator(
-                modifier = Modifier.size(60.dp),
-                strokeWidth = 5.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Box(
+            modifier = Modifier.size(72.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Progress indicator
+            if (progress != null && progress > 0f) {
+                CircularProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.size(60.dp),
+                    strokeWidth = 5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                // Show percentage text
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                // Indeterminate progress
+                CircularProgressIndicator(
+                    modifier = Modifier.size(60.dp),
+                    strokeWidth = 5.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Cancel button (clickable overlay)
+            FloatingActionButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .size(28.dp)
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 8.dp),
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cancel",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
-        // Cancel button (clickable overlay)
-        FloatingActionButton(
-            onClick = onCancel,
-            modifier = Modifier
-                .size(28.dp)
-                .align(Alignment.BottomCenter)
-                .offset(y = 8.dp),
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Cancel",
-                modifier = Modifier.size(16.dp)
+        // Show processing stage text
+        processingStage?.let { stage ->
+            Text(
+                text = stage.displayName,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                maxLines = 1
             )
         }
     }

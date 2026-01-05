@@ -229,6 +229,20 @@ enum class RecordingState {
 }
 
 /**
+ * Processing stage for more detailed progress tracking
+ */
+enum class ProcessingStage(val displayName: String, val progressStart: Float, val progressEnd: Float) {
+    PREPARING("Preparing audio...", 0.0f, 0.1f),
+    CONVERTING_AUDIO("Converting audio...", 0.1f, 0.2f),
+    LOADING_MODEL("Loading model...", 0.2f, 0.3f),
+    TRANSCRIBING("Transcribing...", 0.3f, 0.8f),
+    POST_PROCESSING("Post-processing...", 0.8f, 0.95f),
+    UPLOADING("Uploading audio...", 0.1f, 0.3f),
+    WAITING_API("Waiting for API...", 0.3f, 0.9f),
+    FINISHING("Finishing...", 0.95f, 1.0f)
+}
+
+/**
  * API Request/Response DTOs
  */
 

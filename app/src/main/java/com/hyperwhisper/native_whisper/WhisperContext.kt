@@ -112,8 +112,14 @@ class WhisperContext @Inject constructor() {
                 return Result.failure(Exception("Audio file not found: ${audioFile.absolutePath}"))
             }
 
+            Log.d(TAG, "[TIMING] Native transcription starting...")
             Log.d(TAG, "Transcribing: ${audioFile.name} (${audioFile.length()} bytes), lang=$language, translate=$translate")
+
+            val startTime = System.currentTimeMillis()
             val result = nativeTranscribe(audioFile.absolutePath, language, translate)
+            val elapsedMs = System.currentTimeMillis() - startTime
+
+            Log.d(TAG, "[TIMING] Native transcription completed in ${elapsedMs}ms (${String.format("%.2f", elapsedMs / 1000.0)}s)")
 
             if (result.isNotEmpty()) {
                 Log.d(TAG, "Transcription successful: ${result.length} chars")

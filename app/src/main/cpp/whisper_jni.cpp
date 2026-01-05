@@ -1,12 +1,32 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <thread>
+#include <algorithm>
+#include <chrono>
 #include <android/log.h>
 #include "whisper.h"
 
 #define LOG_TAG "WhisperJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+/**
+ * Get optimal number of threads for whisper processing.
+ * Uses available cores but caps at a reasonable maximum to avoid
+ * memory pressure and diminishing returns on mobile devices.
+ */
+static int get_optimal_threads() {
+    int available_cores = std::thread::hardware_concurrency();
+    if (available_cores == 0) {
+        // hardware_concurrency() failed, use safe default
+        return 4;
+    }
+    // Use most available cores but leave 1-2 for system responsiveness
+    // Cap at 8 to avoid excessive memory usage on high-core devices
+    int optimal = std::min(available_cores - 1, 8);
+    return std::max(optimal, 2); // At least 2 threads
+}
 
 // Global context handle
 static struct whisper_context* g_context = nullptr;
@@ -79,7 +99,13 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeTranscribe(
         return env->NewStringUTF("");
     }
 
-    LOGI("Audio loaded: %zu samples, %d Hz", pcm_data.size(), sample_rate);
+    // Calculate audio duration for logging
+    float audio_duration_sec = (float)pcm_data.size() / (float)sample_rate;
+    LOGI("Audio loaded: %zu samples, %d Hz (%.2f seconds)", pcm_data.size(), sample_rate, audio_duration_sec);
+
+    // Get optimal thread count for this device
+    int n_threads = get_optimal_threads();
+    LOGI("Using %d threads for transcription", n_threads);
 
     // Set up whisper parameters
     struct whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
@@ -88,7 +114,7 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeTranscribe(
     params.print_realtime = false;
     params.print_timestamps = false;
     params.translate = translate;
-    params.n_threads = 4; // Use 4 threads for mobile
+    params.n_threads = n_threads;
     params.offset_ms = 0;
     params.no_context = true;
     params.single_segment = false;
@@ -100,9 +126,16 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeTranscribe(
         params.language = "auto";
     }
 
-    // Run inference
-    LOGI("Starting transcription...");
+    // Run inference with timing
+    LOGI("[TIMING] Starting native transcription...");
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     int result = whisper_full(g_context, params, pcm_data.data(), pcm_data.size());
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    float real_time_factor = (duration_ms / 1000.0f) / audio_duration_sec;
+    LOGI("[TIMING] Native transcription completed in %lld ms (%.2fx realtime)", duration_ms, real_time_factor);
 
     env->ReleaseStringUTFChars(audioPath, audio_path);
     env->ReleaseStringUTFChars(language, lang);
