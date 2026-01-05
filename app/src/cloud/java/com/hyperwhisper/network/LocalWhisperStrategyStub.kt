@@ -29,8 +29,8 @@ class LocalWhisperStrategyStub : AudioProcessingStrategy, LocalWhisperCallbacks 
      * No-op callback methods for cloud builds
      */
     override fun setCallbacks(
-        progressCallback: WhisperProgressCallback? = null,
-        segmentCallback: WhisperSegmentCallback? = null
+        progressCallback: WhisperProgressCallback?,
+        segmentCallback: WhisperSegmentCallback?
     ) {
         // No-op for cloud builds
     }

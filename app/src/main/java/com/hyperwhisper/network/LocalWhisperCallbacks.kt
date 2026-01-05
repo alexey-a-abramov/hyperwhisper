@@ -9,8 +9,8 @@ import com.hyperwhisper.native_whisper.WhisperSegmentCallback
  */
 interface LocalWhisperCallbacks {
     fun setCallbacks(
-        progressCallback: WhisperProgressCallback? = null,
-        segmentCallback: WhisperSegmentCallback? = null
+        progressCallback: WhisperProgressCallback?,
+        segmentCallback: WhisperSegmentCallback?
     )
     fun clearCallbacks()
 }
