@@ -4,10 +4,13 @@ import android.util.Log
 import com.hyperwhisper.data.*
 import com.hyperwhisper.native_whisper.AudioConverter
 import com.hyperwhisper.native_whisper.WhisperContext
+import com.hyperwhisper.native_whisper.WhisperProgressCallback
+import com.hyperwhisper.native_whisper.WhisperSegmentCallback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,10 +24,37 @@ class LocalWhisperStrategy @Inject constructor(
     private val audioConverter: AudioConverter,
     private val modelRepository: ModelRepository,
     private val settingsRepository: SettingsRepository
-) : AudioProcessingStrategy {
+) : AudioProcessingStrategy, LocalWhisperCallbacks {
 
     companion object {
         private const val TAG = "LocalWhisperStrategy"
+    }
+
+    // Thread-safe callback references
+    private val progressCallbackRef = AtomicReference<WhisperProgressCallback?>(null)
+    private val segmentCallbackRef = AtomicReference<WhisperSegmentCallback?>(null)
+
+    /**
+     * Set callbacks for real-time progress and segment streaming
+     * Call this before processAudio to enable real-time updates
+     */
+    fun setCallbacks(
+        progressCallback: WhisperProgressCallback? = null,
+        segmentCallback: WhisperSegmentCallback? = null
+    ) {
+        progressCallbackRef.set(progressCallback)
+        segmentCallbackRef.set(segmentCallback)
+        Log.d(TAG, "Callbacks registered: progress=${progressCallback != null}, segment=${segmentCallback != null}")
+    }
+
+    /**
+     * Clear all callbacks
+     */
+    fun clearCallbacks() {
+        progressCallbackRef.set(null)
+        segmentCallbackRef.set(null)
+        whisperContext.clearCallbacks()
+        Log.d(TAG, "Callbacks cleared")
     }
 
     override suspend fun processAudio(
@@ -107,7 +137,20 @@ class LocalWhisperStrategy @Inject constructor(
 
             Log.d(TAG, "Language: $language")
 
-            // 6. Transcribe with whisper.cpp
+            // 6. Set up callbacks for real-time updates
+            val progressCallback = progressCallbackRef.get()
+            val segmentCallback = segmentCallbackRef.get()
+
+            if (progressCallback != null) {
+                whisperContext.setProgressCallback(progressCallback)
+                Log.d(TAG, "Progress callback enabled for transcription")
+            }
+            if (segmentCallback != null) {
+                whisperContext.setSegmentCallback(segmentCallback)
+                Log.d(TAG, "Segment callback enabled for transcription")
+            }
+
+            // 7. Transcribe with whisper.cpp
             Log.d(TAG, "[TIMING] Transcription started...")
             val transcriptionStart = System.currentTimeMillis()
 
@@ -120,13 +163,18 @@ class LocalWhisperStrategy @Inject constructor(
             val transcriptionTimeMs = System.currentTimeMillis() - transcriptionStart
             Log.d(TAG, "[TIMING] Transcription completed in ${transcriptionTimeMs}ms (${String.format("%.2f", transcriptionTimeMs / 1000.0)}s)")
 
-            // 7. Cleanup temporary WAV file if we created it
+            // 8. Cleanup callbacks after transcription
+            whisperContext.clearCallbacks()
+
+            // 9. Cleanup temporary WAV file if we created it
             if (wavFile != audioFile) {
                 wavFile.delete()
                 Log.d(TAG, "Cleaned up temporary WAV file")
             }
 
             if (transcribeResult.isFailure) {
+                // Clear callbacks on error
+                whisperContext.clearCallbacks()
                 val error = transcribeResult.exceptionOrNull()?.message ?: "Transcription failed"
                 Log.e(TAG, "Transcription failed: $error")
                 return@withContext ApiResult.Error("Transcription failed: $error")
@@ -149,7 +197,7 @@ class LocalWhisperStrategy @Inject constructor(
             Log.d(TAG, "[TIMING] Processing ended at: ${java.text.SimpleDateFormat("HH:mm:ss.SSS").format(java.util.Date())}")
             Log.d(TAG, "========== LOCAL WHISPER PROCESSING END ==========")
 
-            // 8. Create processing info for transparency
+            // 10. Create processing info for transparency
             val processingInfo = ProcessingInfo(
                 processingMode = "local",
                 strategy = "whisper.cpp",

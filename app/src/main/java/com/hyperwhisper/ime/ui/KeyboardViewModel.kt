@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
+import com.hyperwhisper.network.LocalWhisperCallbacks
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.utils.TraceLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +20,8 @@ class KeyboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val voiceRepository: VoiceRepository,
     private val settingsRepository: SettingsRepository,
-    private val voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
+    private val voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor,
+    private val localWhisperCallbacks: LocalWhisperCallbacks
 ) : ViewModel() {
 
     companion object {
@@ -45,6 +47,10 @@ class KeyboardViewModel @Inject constructor(
 
     private val _processingStage = MutableStateFlow<ProcessingStage?>(null)
     val processingStage: StateFlow<ProcessingStage?> = _processingStage.asStateFlow()
+
+    // Streaming text during transcription (for local whisper real-time updates)
+    private val _streamingText = MutableStateFlow<String?>(null)
+    val streamingText: StateFlow<String?> = _streamingText.asStateFlow()
 
     // Pending configuration command for confirmation dialog
     private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
@@ -202,6 +208,32 @@ class KeyboardViewModel @Inject constructor(
                 Log.d(TAG, "Processing audio with mode: ${mode.name}")
                 TraceLogger.trace("KeyboardViewModel", "Processing audio with mode: ${mode.name}, provider: ${settings.provider}")
 
+                // Set up real-time callbacks for LOCAL provider
+                if (settings.provider == ApiProvider.LOCAL) {
+                    // Clear previous streaming text
+                    _streamingText.value = ""
+
+                    // Create streaming text builder
+                    val streamingTextBuilder = StringBuilder()
+
+                    localWhisperCallbacks.setCallbacks(
+                        progressCallback = object : com.hyperwhisper.native_whisper.WhisperProgressCallback {
+                            override fun onProgress(progress: Int) {
+                                _transcriptionProgress.value = progress / 100f
+                                Log.d(TAG, "Local transcription progress: $progress%")
+                            }
+                        },
+                        segmentCallback = object : com.hyperwhisper.native_whisper.WhisperSegmentCallback {
+                            override fun onSegment(text: String, startTime: Long, endTime: Long) {
+                                streamingTextBuilder.append(text)
+                                _streamingText.value = streamingTextBuilder.toString()
+                                Log.d(TAG, "Streaming segment: $text")
+                            }
+                        }
+                    )
+                    Log.d(TAG, "Local whisper callbacks registered")
+                }
+
                 // Save audio file to persistent storage
                 val savedAudioPath = saveAudioFileToPersistentStorage(audioFile)
                 Log.d(TAG, "Audio file saved to: $savedAudioPath")
@@ -217,27 +249,13 @@ class KeyboardViewModel @Inject constructor(
                         _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
 
                         // Launch progress updater with realistic stage-based simulation
+                        // Skip for LOCAL provider - we get real progress from callbacks
                         val progressJob = launch {
                             if (isLocalProvider) {
-                                // Local processing stages: prepare -> convert -> load model -> transcribe
-                                val stages = listOf(
-                                    ProcessingStage.PREPARING to 200L,
-                                    ProcessingStage.CONVERTING_AUDIO to 500L,
-                                    ProcessingStage.LOADING_MODEL to 300L,
-                                    ProcessingStage.TRANSCRIBING to 3000L,  // Main transcription - takes longest
-                                    ProcessingStage.FINISHING to 200L
-                                )
-
-                                for ((stage, duration) in stages) {
-                                    _processingStage.value = stage
-                                    // Smoothly animate progress within the stage
-                                    val steps = (duration / 100).toInt().coerceAtLeast(1)
-                                    val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
-                                    for (i in 0 until steps) {
-                                        _transcriptionProgress.value = stage.progressStart + (progressIncrement * i)
-                                        kotlinx.coroutines.delay(100)
-                                    }
-                                }
+                                // Local provider uses real callbacks - just show initial stage
+                                _processingStage.value = ProcessingStage.TRANSCRIBING
+                                // Wait for actual transcription to complete
+                                kotlinx.coroutines.delay(Long.MAX_VALUE)
                             } else {
                                 // Cloud processing stages: prepare -> upload -> wait for API -> finish
                                 val stages = listOf(
@@ -267,6 +285,13 @@ class KeyboardViewModel @Inject constructor(
                         progressJob.cancel()
                         _processingStage.value = ProcessingStage.FINISHING
                         _transcriptionProgress.value = 1.0f
+
+                        // Clear callbacks and streaming text
+                        if (settings.provider == ApiProvider.LOCAL) {
+                            localWhisperCallbacks.clearCallbacks()
+                            _streamingText.value = null
+                            Log.d(TAG, "Local whisper callbacks cleared")
+                        }
 
                         when (result) {
                     is ApiResult.Success -> {
@@ -317,6 +342,13 @@ class KeyboardViewModel @Inject constructor(
                     is ApiResult.Error -> {
                         Log.e(TAG, "Transcription failed: ${result.message}")
                         TraceLogger.error("KeyboardViewModel", "Transcription failed: ${result.message}")
+
+                        // Clear callbacks and streaming text
+                        if (settings.provider == ApiProvider.LOCAL) {
+                            localWhisperCallbacks.clearCallbacks()
+                            _streamingText.value = null
+                        }
+
                         _errorMessage.value = "API Error: ${result.message}"
                         _recordingState.value = RecordingState.ERROR
                         _transcriptionProgress.value = null
@@ -329,6 +361,13 @@ class KeyboardViewModel @Inject constructor(
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         Log.d(TAG, "Transcription cancelled by user")
                         TraceLogger.trace("KeyboardViewModel", "Transcription cancelled")
+
+                        // Clear callbacks and streaming text
+                        if (settings.provider == ApiProvider.LOCAL) {
+                            localWhisperCallbacks.clearCallbacks()
+                            _streamingText.value = null
+                        }
+
                         _recordingState.value = RecordingState.IDLE
                         _transcriptionProgress.value = null
                         _processingStage.value = null
@@ -336,6 +375,13 @@ class KeyboardViewModel @Inject constructor(
                     } catch (e: Exception) {
                         Log.e(TAG, "Error during transcription", e)
                         TraceLogger.error("KeyboardViewModel", "Transcription error", e)
+
+                        // Clear callbacks and streaming text
+                        if (settings.provider == ApiProvider.LOCAL) {
+                            localWhisperCallbacks.clearCallbacks()
+                            _streamingText.value = null
+                        }
+
                         _errorMessage.value = e.message
                         _recordingState.value = RecordingState.ERROR
                         _transcriptionProgress.value = null

@@ -45,21 +45,38 @@ object FlavorModule {
         return ModelRepository(context, okHttpClient)
     }
 
+    // First, create the singleton instance
+    private var localWhisperStrategyInstance: LocalWhisperStrategy? = null
+
     @Provides
     @Singleton
-    @Named("localWhisperStrategy")
-    fun provideLocalWhisperStrategy(
+    fun provideLocalWhisperStrategyConcrete(
         whisperContext: WhisperContext,
         audioConverter: AudioConverter,
         modelRepository: ModelRepository,
         settingsRepository: SettingsRepository
-    ): AudioProcessingStrategy {
-        return LocalWhisperStrategy(
+    ): LocalWhisperStrategy {
+        return localWhisperStrategyInstance ?: LocalWhisperStrategy(
             whisperContext,
             audioConverter,
             modelRepository,
             settingsRepository
-        )
+        ).also { localWhisperStrategyInstance = it }
+    }
+
+    @Provides
+    @Singleton
+    fun provideLocalWhisperCallbacks(concrete: LocalWhisperStrategy): LocalWhisperCallbacks {
+        return concrete
+    }
+
+    @Provides
+    @Singleton
+    @Named("localWhisperStrategy")
+    fun provideLocalWhisperStrategy(
+        concrete: LocalWhisperStrategy
+    ): AudioProcessingStrategy {
+        return concrete
     }
 
     @Provides

@@ -18,12 +18,25 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object FlavorModule {
 
+    private var localWhisperStrategyInstance: LocalWhisperStrategyStub? = null
+
+    @Provides
+    @Singleton
+    fun provideLocalWhisperStrategyConcrete(): LocalWhisperStrategyStub {
+        return localWhisperStrategyInstance ?: LocalWhisperStrategyStub().also { localWhisperStrategyInstance = it }
+    }
+
+    @Provides
+    @Singleton
+    fun provideLocalWhisperCallbacks(stub: LocalWhisperStrategyStub): LocalWhisperCallbacks {
+        return stub
+    }
+
     @Provides
     @Singleton
     @Named("localWhisperStrategy")
-    fun provideLocalWhisperStrategy(): AudioProcessingStrategy {
-        // Return stub that returns errors when local processing is attempted
-        return LocalWhisperStrategyStub()
+    fun provideLocalWhisperStrategy(stub: LocalWhisperStrategyStub): AudioProcessingStrategy {
+        return stub
     }
 
     @Provides

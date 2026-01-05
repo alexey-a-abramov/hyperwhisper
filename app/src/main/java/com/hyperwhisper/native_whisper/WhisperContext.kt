@@ -6,6 +6,30 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Progress callback for real-time transcription progress updates
+ */
+interface WhisperProgressCallback {
+    /**
+     * Called when transcription progress updates
+     * @param progress Progress value from 0 to 100
+     */
+    fun onProgress(progress: Int)
+}
+
+/**
+ * Segment callback for real-time text streaming during transcription
+ */
+interface WhisperSegmentCallback {
+    /**
+     * Called when a new text segment is transcribed
+     * @param text The transcribed text segment
+     * @param startTime Start time in milliseconds
+     * @param endTime End time in milliseconds
+     */
+    fun onSegment(text: String, startTime: Long, endTime: Long)
+}
+
+/**
  * Kotlin wrapper for whisper.cpp JNI interface
  * Provides safe access to native whisper transcription functionality
  */
@@ -51,6 +75,9 @@ class WhisperContext @Inject constructor() {
     ): String
     private external fun nativeUnloadModel()
     private external fun nativeIsModelLoaded(): Boolean
+    private external fun nativeSetProgressCallback(callback: Any?)
+    private external fun nativeSetSegmentCallback(callback: Any?)
+    private external fun nativeClearCallbacks()
 
     /**
      * Load a whisper model from file
@@ -161,6 +188,50 @@ class WhisperContext @Inject constructor() {
         } catch (e: Throwable) {
             Log.e(TAG, "Error checking if model is loaded", e)
             false
+        }
+    }
+
+    /**
+     * Set progress callback for real-time transcription updates
+     * @param callback Callback to receive progress updates (0-100), or null to clear
+     */
+    fun setProgressCallback(callback: WhisperProgressCallback?) {
+        if (!libraryLoadSuccess) return
+
+        try {
+            nativeSetProgressCallback(callback)
+            Log.d(TAG, "Progress callback ${if (callback == null) "cleared" else "set"}")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error setting progress callback", e)
+        }
+    }
+
+    /**
+     * Set segment callback for real-time text streaming
+     * @param callback Callback to receive transcribed segments, or null to clear
+     */
+    fun setSegmentCallback(callback: WhisperSegmentCallback?) {
+        if (!libraryLoadSuccess) return
+
+        try {
+            nativeSetSegmentCallback(callback)
+            Log.d(TAG, "Segment callback ${if (callback == null) "cleared" else "set"}")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error setting segment callback", e)
+        }
+    }
+
+    /**
+     * Clear all callbacks (progress and segment)
+     */
+    fun clearCallbacks() {
+        if (!libraryLoadSuccess) return
+
+        try {
+            nativeClearCallbacks()
+            Log.d(TAG, "All callbacks cleared")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error clearing callbacks", e)
         }
     }
 }

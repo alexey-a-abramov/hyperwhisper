@@ -12,7 +12,46 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 // Version marker for native library - update this to force rebuild
-#define JNI_VERSION "1.1.0-multithreaded"
+#define JNI_VERSION "1.2.0-progress-callbacks"
+
+// Global reference to Java VM and callback objects
+static JavaVM* g_jvm = nullptr;
+static jobject g_progress_callback = nullptr;
+static jobject g_segment_callback = nullptr;
+
+// Mutex for callback safety
+static std::mutex g_callback_mutex;
+
+/**
+ * Initialize JNI on library load
+ */
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    g_jvm = vm;
+    return JNI_VERSION_1_6;
+}
+
+/**
+ * Cleanup on library unload
+ */
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    if (g_progress_callback != nullptr) {
+        JNIEnv* env = nullptr;
+        if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(g_progress_callback);
+        }
+        g_progress_callback = nullptr;
+    }
+
+    if (g_segment_callback != nullptr) {
+        JNIEnv* env = nullptr;
+        if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(g_segment_callback);
+        }
+        g_segment_callback = nullptr;
+    }
+}
 
 /**
  * Get optimal number of threads for whisper processing.
@@ -36,6 +75,87 @@ static struct whisper_context* g_context = nullptr;
 
 // Forward declaration
 extern bool read_wav(const char* filename, std::vector<float>& pcm_data, int& sample_rate);
+
+/**
+ * Progress callback - called by whisper.cpp during processing
+ */
+static void progress_callback(struct whisper_context* ctx, struct whisper_state* state, int progress, void* user_data) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    if (g_progress_callback == nullptr || g_jvm == nullptr) {
+        return;
+    }
+
+    JNIEnv* env = nullptr;
+    JavaVMAttachArgs args = { JNI_VERSION_1_6, "WhisperProgressThread", nullptr };
+
+    if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        if (g_jvm->AttachCurrentThread(&env, &args) != JNI_OK) {
+            LOGE("Failed to attach thread to JVM");
+            return;
+        }
+    }
+
+    jclass callback_class = env->GetObjectClass(g_progress_callback);
+    if (callback_class == nullptr) {
+        g_jvm->DetachCurrentThread();
+        return;
+    }
+
+    jmethodID on_progress_method = env->GetMethodID(callback_class, "onProgress", "(I)V");
+    if (on_progress_method != nullptr) {
+        env->CallVoidMethod(g_progress_callback, on_progress_method, (jint)progress);
+    }
+
+    env->DeleteLocalRef(callback_class);
+    // Don't detach - keep thread attached for performance
+}
+
+/**
+ * New segment callback - called when whisper.cpp completes a text segment
+ */
+static void new_segment_callback(struct whisper_context* ctx, struct whisper_state* state, int n_new, void* user_data) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    if (g_segment_callback == nullptr || g_jvm == nullptr) {
+        return;
+    }
+
+    JNIEnv* env = nullptr;
+    JavaVMAttachArgs args = { JNI_VERSION_1_6, "WhisperProgressThread", nullptr };
+
+    if (g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        if (g_jvm->AttachCurrentThread(&env, &args) != JNI_OK) {
+            LOGE("Failed to attach thread to JVM");
+            return;
+        }
+    }
+
+    jclass callback_class = env->GetObjectClass(g_segment_callback);
+    if (callback_class == nullptr) {
+        g_jvm->DetachCurrentThread();
+        return;
+    }
+
+    // Get the newly added segments
+    const int n_segments = whisper_full_n_segments(ctx);
+
+    for (int i = n_segments - n_new; i < n_segments; i++) {
+        const char* text = whisper_full_get_segment_text(ctx, i);
+        int64_t t0 = whisper_full_get_segment_t0(ctx, i);
+        int64_t t1 = whisper_full_get_segment_t1(ctx, i);
+
+        jmethodID on_segment_method = env->GetMethodID(callback_class, "onSegment", "(Ljava/lang/String;JJ)V");
+        if (on_segment_method != nullptr) {
+            jstring jtext = env->NewStringUTF(text);
+            env->CallVoidMethod(g_segment_callback, on_segment_method, jtext, (jlong)t0, (jlong)t1);
+            env->DeleteLocalRef(jtext);
+        }
+    }
+
+    env->DeleteLocalRef(callback_class);
+    // Don't detach - keep thread attached for performance
+}
 
 extern "C" {
 
@@ -122,6 +242,19 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeTranscribe(
     params.no_context = true;
     params.single_segment = false;
 
+    // Set up progress and segment callbacks
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+    if (g_progress_callback != nullptr) {
+        params.progress_callback = progress_callback;
+        params.progress_callback_user_data = nullptr;
+        LOGI("Progress callback enabled");
+    }
+    if (g_segment_callback != nullptr) {
+        params.new_segment_callback = new_segment_callback;
+        params.new_segment_callback_user_data = nullptr;
+        LOGI("Segment callback enabled");
+    }
+
     // Set language if provided
     if (strlen(lang) > 0 && strcmp(lang, "auto") != 0) {
         params.language = lang;
@@ -186,6 +319,83 @@ Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeIsModelLoaded(
     jobject thiz
 ) {
     return g_context != nullptr ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * Set progress callback for real-time transcription updates
+ * @param progressCallback Object implementing onProgress(I)V
+ */
+JNIEXPORT void JNICALL
+Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeSetProgressCallback(
+    JNIEnv* env,
+    jobject thiz,
+    jobject progressCallback
+) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    // Clear previous callback
+    if (g_progress_callback != nullptr) {
+        env->DeleteGlobalRef(g_progress_callback);
+        g_progress_callback = nullptr;
+    }
+
+    // Set new callback
+    if (progressCallback != nullptr) {
+        g_progress_callback = env->NewGlobalRef(progressCallback);
+        LOGI("Progress callback registered");
+    } else {
+        LOGI("Progress callback cleared");
+    }
+}
+
+/**
+ * Set segment callback for real-time text streaming
+ * @param segmentCallback Object implementing onSegment(Ljava/lang/String;JJ)V
+ */
+JNIEXPORT void JNICALL
+Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeSetSegmentCallback(
+    JNIEnv* env,
+    jobject thiz,
+    jobject segmentCallback
+) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    // Clear previous callback
+    if (g_segment_callback != nullptr) {
+        env->DeleteGlobalRef(g_segment_callback);
+        g_segment_callback = nullptr;
+    }
+
+    // Set new callback
+    if (segmentCallback != nullptr) {
+        g_segment_callback = env->NewGlobalRef(segmentCallback);
+        LOGI("Segment callback registered");
+    } else {
+        LOGI("Segment callback cleared");
+    }
+}
+
+/**
+ * Clear all callbacks
+ */
+JNIEXPORT void JNICALL
+Java_com_hyperwhisper_native_1whisper_WhisperContext_nativeClearCallbacks(
+    JNIEnv* env,
+    jobject thiz
+) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    if (g_progress_callback != nullptr) {
+        env->DeleteGlobalRef(g_progress_callback);
+        g_progress_callback = nullptr;
+    }
+
+    if (g_segment_callback != nullptr) {
+        env->DeleteGlobalRef(g_segment_callback);
+        g_segment_callback = nullptr;
+    }
+
+    LOGI("All callbacks cleared");
 }
 
 } // extern "C"
