@@ -29,10 +29,6 @@ annotation class TranscriptionRetrofit
 @Retention(AnnotationRetention.BINARY)
 annotation class ChatCompletionRetrofit
 
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-annotation class ModelDownloadClient
-
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -87,27 +83,6 @@ object NetworkModule {
             .writeTimeout(60, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
-            .build()
-    }
-
-    /**
-     * Separate OkHttpClient for model downloads
-     * Without auth interceptor to avoid adding API keys to HuggingFace requests
-     */
-    @Provides
-    @Singleton
-    @ModelDownloadClient
-    fun provideModelDownloadClient(
-        loggingInterceptor: HttpLoggingInterceptor
-    ): OkHttpClient {
-        return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor) // Add logging for debugging
-            .connectTimeout(120, TimeUnit.SECONDS)
-            .readTimeout(300, TimeUnit.SECONDS) // 5 minutes for large downloads
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -189,8 +164,4 @@ object NetworkModule {
     ): ChatCompletionStrategy {
         return ChatCompletionStrategy(apiService, settingsRepository)
     }
-
-    // Note: Local whisper.cpp providers moved to flavor-specific FlavorModule
-    // - Local flavor: Provides real WhisperContext, AudioConverter, ModelRepository, LocalWhisperStrategy
-    // - Cloud flavor: Provides stub LocalWhisperStrategy that returns errors
 }

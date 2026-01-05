@@ -13,9 +13,7 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
-    @Named("localWhisperStrategy") private val localWhisperStrategy: AudioProcessingStrategy,
-    private val settingsRepository: SettingsRepository,
-    @Named("isLocalFlavorEnabled") private val isLocalFlavorEnabled: Boolean
+    private val settingsRepository: SettingsRepository
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
@@ -150,15 +148,6 @@ class VoiceRepository @Inject constructor(
         val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
             apiSettings.outputLanguage != apiSettings.inputLanguage
 
-        // LOCAL provider: check second-stage flag
-        if (apiSettings.provider == ApiProvider.LOCAL) {
-            if (!apiSettings.localSettings.enableSecondStageProcessing) {
-                return false // No cloud processing
-            }
-            // Second-stage enabled: need two-step unless verbatim without translation
-            return voiceMode.id != "verbatim" || needsTranslation
-        }
-
         // OpenRouter supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.OPENROUTER) return false
 
@@ -210,12 +199,8 @@ class VoiceRepository @Inject constructor(
             Log.d(TAG, "Post-processing text with system prompt: $systemPrompt")
 
             // Determine which chat model to use for post-processing
-            // Use second-stage settings for LOCAL provider
-            val (postProcessProvider, postProcessModel) = if (apiSettings.provider == ApiProvider.LOCAL) {
-                Pair(apiSettings.localSettings.secondStageProvider, apiSettings.localSettings.secondStageModel)
-            } else {
-                Pair(apiSettings.provider, "gpt-4o-mini")
-            }
+            val postProcessProvider = apiSettings.provider
+            val postProcessModel = "gpt-4o-mini"
 
             Log.d(TAG, "Using provider for post-processing: ${postProcessProvider.displayName}, model: $postProcessModel")
             if (apiSettings.outputLanguage.isNotEmpty()) {
@@ -313,7 +298,6 @@ class VoiceRepository @Inject constructor(
      * Select appropriate strategy based on voice mode and API provider
      *
      * Logic:
-     * - For LOCAL provider: Use Local Whisper Strategy (whisper.cpp)
      * - For "Verbatim" mode with OpenAI/Groq: Use Transcription Strategy
      * - For transformation modes (Polite, Casual, etc.): Use Chat Completion Strategy
      * - For OpenRouter: Always use Chat Completion Strategy
@@ -323,18 +307,6 @@ class VoiceRepository @Inject constructor(
         provider: ApiProvider
     ): AudioProcessingStrategy {
         return when {
-            // LOCAL provider uses whisper.cpp (only if local flavor is enabled)
-            provider == ApiProvider.LOCAL -> {
-                if (!isLocalFlavorEnabled) {
-                    throw IllegalStateException(
-                        "Local processing is not available in this build variant. " +
-                        "Use the 'local' flavor to enable on-device processing with whisper.cpp, " +
-                        "or select a cloud-based API provider (OpenAI, Groq, etc.)."
-                    )
-                }
-                Log.d(TAG, "Selected LocalWhisperStrategy (On-Device)")
-                localWhisperStrategy
-            }
             // OpenRouter always uses chat completion
             provider == ApiProvider.OPENROUTER -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (OpenRouter)")

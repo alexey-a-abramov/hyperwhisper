@@ -6,13 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.AppearanceSettings
-import com.hyperwhisper.data.LocalModelValidator
-import com.hyperwhisper.data.LocalSettings
-import com.hyperwhisper.data.ModelDownloadState
-import com.hyperwhisper.data.ModelRepository
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.data.VoiceMode
-import com.hyperwhisper.data.WhisperModel
 import com.hyperwhisper.network.ChatCompletionApiService
 import com.hyperwhisper.network.TranscriptionApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,9 +34,7 @@ sealed class ConnectionTestState {
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val transcriptionApiService: TranscriptionApiService,
-    private val chatCompletionApiService: ChatCompletionApiService,
-    private val modelRepository: ModelRepository,
-    private val localModelValidator: LocalModelValidator
+    private val chatCompletionApiService: ChatCompletionApiService
 ) : ViewModel() {
 
     companion object {
@@ -57,9 +50,6 @@ class SettingsViewModel @Inject constructor(
     val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
 
-    val modelStates: StateFlow<Map<WhisperModel, ModelDownloadState>> = modelRepository.modelStates
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
-
     private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
     val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
 
@@ -69,11 +59,10 @@ class SettingsViewModel @Inject constructor(
         apiKey: String,
         modelId: String,
         inputLanguage: String = "",
-        outputLanguage: String = "",
-        localSettings: LocalSettings = LocalSettings()
+        outputLanguage: String = ""
     ) {
         viewModelScope.launch {
-            saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+            saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
         }
     }
 
@@ -87,10 +76,9 @@ class SettingsViewModel @Inject constructor(
         apiKey: String,
         modelId: String,
         inputLanguage: String = "",
-        outputLanguage: String = "",
-        localSettings: LocalSettings = LocalSettings()
+        outputLanguage: String = ""
     ) {
-        saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage, localSettings)
+        saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
     }
 
     private suspend fun saveApiSettingsInternal(
@@ -99,20 +87,9 @@ class SettingsViewModel @Inject constructor(
         apiKey: String,
         modelId: String,
         inputLanguage: String,
-        outputLanguage: String,
-        localSettings: LocalSettings
+        outputLanguage: String
     ) {
         try {
-            // Log warning if LOCAL provider is selected but model is not downloaded
-            // Don't block saving - user should be able to save their preference
-            if (provider == ApiProvider.LOCAL) {
-                val validationResult = localModelValidator.validateModel(localSettings.selectedModel)
-                if (validationResult.isFailure) {
-                    Log.w(TAG, "LOCAL provider selected but model not ready: ${validationResult.exceptionOrNull()?.message}")
-                    Log.w(TAG, "Settings will be saved but model must be downloaded before use")
-                }
-            }
-
             // Get current settings to preserve other provider API keys
             val currentSettings = apiSettings.value
             val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
@@ -245,37 +222,5 @@ class SettingsViewModel @Inject constructor(
 
     fun resetConnectionTestState() {
         _connectionTestState.value = ConnectionTestState.Idle
-    }
-
-    /**
-     * Download a whisper.cpp model
-     */
-    fun downloadModel(model: WhisperModel) {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting download for model: ${model.displayName}")
-                val result = modelRepository.downloadModel(model)
-
-                if (result.isSuccess) {
-                    Log.d(TAG, "Model downloaded successfully: ${model.displayName}")
-                } else {
-                    Log.e(TAG, "Model download failed: ${result.exceptionOrNull()?.message}")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error downloading model: ${model.displayName}", e)
-            }
-        }
-    }
-
-    /**
-     * Validate a local whisper model
-     */
-    suspend fun validateLocalModel(model: WhisperModel): Result<Boolean> {
-        return try {
-            localModelValidator.validateModel(model)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error validating model: ${model.displayName}", e)
-            Result.failure(e)
-        }
     }
 }

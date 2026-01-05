@@ -3,7 +3,6 @@ package com.hyperwhisper.data
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import com.google.gson.annotations.SerializedName
-import com.hyperwhisper.BuildConfig
 import java.io.File
 
 /**
@@ -113,30 +112,16 @@ data class VoiceMode(
     val inputLanguageHint: String = "" // Hint for input language if model supports it
 )
 
-/**
- * Settings specific to LOCAL provider
- */
-data class LocalSettings(
-    val selectedModel: WhisperModel = WhisperModel.BASE,
-    val enableSecondStageProcessing: Boolean = false,
-    val secondStageProvider: ApiProvider = ApiProvider.OPENAI,
-    val secondStageModel: String = "gpt-4o-mini"
-)
-
 data class ApiSettings(
     val provider: ApiProvider = ApiProvider.OPENAI,
     val baseUrl: String = "",
     val apiKeys: Map<ApiProvider, String> = emptyMap(), // Per-provider API keys
     val modelId: String = "whisper-1",
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
-    val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
-    val localSettings: LocalSettings = LocalSettings()
+    val outputLanguage: String = "" // ISO-639-1 code for output - empty to keep original
 ) {
     // Helper to get API key for current provider
     fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
-
-    // Helper to get API key for second-stage processing
-    fun getSecondStageApiKey(): String = apiKeys[localSettings.secondStageProvider] ?: ""
 }
 
 enum class ApiProvider(
@@ -198,27 +183,7 @@ enum class ApiProvider(
         displayName = "Hugging Face",
         defaultEndpoint = "https://api-inference.huggingface.co/models/",
         defaultModels = listOf("openai/whisper-large-v3", "openai/whisper-medium", "openai/whisper-small")
-    ),
-    LOCAL(
-        displayName = "Local (On-Device)",
-        defaultEndpoint = "",
-        defaultModels = listOf("tiny", "base", "small")
     )
-}
-
-/**
- * Helper function to get available API providers based on build variant.
- * In cloudOnly builds, LOCAL provider is not available.
- * In cloud and local builds, all providers are available.
- */
-fun getAvailableProviders(): List<ApiProvider> {
-    return if (BuildConfig.CLOUD_ONLY_BUILD) {
-        // Cloud-only build: exclude LOCAL provider
-        ApiProvider.entries.filter { it != ApiProvider.LOCAL }
-    } else {
-        // Cloud or Local build: all providers available
-        ApiProvider.entries
-    }
 }
 
 enum class RecordingState {
@@ -529,70 +494,3 @@ fun getModelPricing(modelId: String): ModelPricing {
         else -> ModelPricing(inputPricePer1M = 1.0, outputPricePer1M = 2.0)
     }
 }
-
-/**
- * Local Whisper Model Information
- */
-enum class WhisperModel(
-    val modelName: String,
-    val displayName: String,
-    val fileSize: Long, // Bytes
-    val fileName: String,
-    val downloadUrl: String,
-    val isRecommended: Boolean = false
-) {
-    TINY(
-        modelName = "tiny",
-        displayName = "Tiny (Fast)",
-        fileSize = 75L * 1024 * 1024, // ~75 MB
-        fileName = "ggml-tiny.bin",
-        // Using direct CDN link with proper redirect handling
-        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-        isRecommended = true
-    ),
-    BASE(
-        modelName = "base",
-        displayName = "Base (Balanced)",
-        fileSize = 142L * 1024 * 1024, // ~142 MB
-        fileName = "ggml-base.bin",
-        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
-        isRecommended = true
-    ),
-    SMALL(
-        modelName = "small",
-        displayName = "Small (Accurate)",
-        fileSize = 466L * 1024 * 1024, // ~466 MB
-        fileName = "ggml-small.bin",
-        downloadUrl = "https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
-    );
-
-    fun getFormattedSize(): String {
-        val mb = fileSize / (1024.0 * 1024.0)
-        return "%.0f MB".format(mb)
-    }
-}
-
-/**
- * Model download state
- */
-sealed class ModelDownloadState {
-    object NotDownloaded : ModelDownloadState()
-    data class Downloading(
-        val progress: Float,            // 0.0 - 1.0
-        val downloadedBytes: Long = 0L,
-        val totalBytes: Long = 0L,
-        val speedBytesPerSecond: Long = 0L,
-        val etaSeconds: Long = 0L
-    ) : ModelDownloadState()
-    object Downloaded : ModelDownloadState()
-    data class Error(val message: String) : ModelDownloadState()
-}
-
-/**
- * Model info with download state
- */
-data class WhisperModelInfo(
-    val model: WhisperModel,
-    val downloadState: ModelDownloadState,
-    val localPath: File? = null
-)

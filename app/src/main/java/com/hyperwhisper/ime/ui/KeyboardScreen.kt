@@ -66,7 +66,6 @@ fun KeyboardScreen(
     val recordingDuration by viewModel.recordingDuration.collectAsState()
     val transcriptionProgress by viewModel.transcriptionProgress.collectAsState()
     val processingStage by viewModel.processingStage.collectAsState()
-    val streamingText by viewModel.streamingText.collectAsState()
     val transcriptionHistory by viewModel.transcriptionHistory.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
@@ -262,29 +261,18 @@ fun KeyboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            // Show mode: "Local" or "Cloud"
-                            val mode = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) "Local" else "Cloud"
-                            val modelDisplay = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) {
-                                // For local mode, show selected whisper model
-                                apiSettings.localSettings.selectedModel.displayName
-                            } else {
-                                // For cloud mode, show provider name
-                                apiSettings.provider.displayName
-                            }
+                            // Show provider and model
+                            val modelDisplay = apiSettings.provider.displayName
 
                             Text(
-                                text = "$mode - $modelDisplay",
+                                text = modelDisplay,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 maxLines = 1
                             )
                             Text(
-                                text = if (apiSettings.provider == com.hyperwhisper.data.ApiProvider.LOCAL) {
-                                    apiSettings.localSettings.selectedModel.modelName
-                                } else {
-                                    apiSettings.modelId
-                                },
+                                text = apiSettings.modelId,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Light,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
@@ -386,7 +374,6 @@ fun KeyboardScreen(
                             recordingDuration = recordingDuration,
                             transcriptionProgress = transcriptionProgress,
                             processingStage = processingStage,
-                            streamingText = streamingText,
                             modifier = Modifier
                         )
 
@@ -696,7 +683,6 @@ fun MicrophoneButton(
     recordingDuration: Long = 0L,
     transcriptionProgress: Float? = null,
     processingStage: ProcessingStage? = null,
-    streamingText: String? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -717,7 +703,6 @@ fun MicrophoneButton(
                 ProcessingIndicator(
                     progress = transcriptionProgress,
                     processingStage = processingStage,
-                    streamingText = streamingText,
                     onCancel = onCancelTranscription
                 )
             }
@@ -795,7 +780,6 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
 fun ProcessingIndicator(
     progress: Float? = null,
     processingStage: ProcessingStage? = null,
-    streamingText: String? = null,
     onCancel: () -> Unit = {}
 ) {
     Column(
@@ -856,20 +840,6 @@ fun ProcessingIndicator(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 maxLines = 1
             )
-        }
-
-        // Show streaming text (real-time transcription for local mode)
-        streamingText?.let { text ->
-            if (text.isNotEmpty()) {
-                Text(
-                    text = text,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 3,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-            }
         }
     }
 }

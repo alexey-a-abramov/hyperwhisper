@@ -65,9 +65,6 @@ class VoiceInputMethodService : InputMethodService(),
     lateinit var voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
 
     @Inject
-    lateinit var localWhisperCallbacks: com.hyperwhisper.network.LocalWhisperCallbacks
-
-    @Inject
     lateinit var transcriptionStrategy: TranscriptionStrategy
 
     @Inject
@@ -116,8 +113,7 @@ class VoiceInputMethodService : InputMethodService(),
                 this,
                 voiceRepository,
                 settingsRepository,
-                voiceCommandProcessor,
-                localWhisperCallbacks
+                voiceCommandProcessor
             )
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {

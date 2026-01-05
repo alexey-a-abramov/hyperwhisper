@@ -30,78 +30,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        // BuildConfig fields for conditional features
-        buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
-        buildConfigField("boolean", "CLOUD_BUILD", "false")
-        buildConfigField("boolean", "LOCAL_BUILD", "false")
-        buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
     }
-
-    // Product flavors for different build variants
-    // - cloudOnly: Cloud APIs only, no local mode option (built locally on Android)
-    // - cloud: Cloud APIs with option to use local mode (built on GitHub)
-    // - local: Pre-built native libs included (built on GitHub)
-    flavorDimensions += "mode"
-
-    productFlavors {
-        create("cloudOnly") {
-            dimension = "mode"
-            // applicationIdSuffix = ".cloudonly"
-            versionNameSuffix = "-cloudOnly"
-
-            // BuildConfig: Cloud-only build, no local mode option
-            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "true")
-            buildConfigField("boolean", "CLOUD_BUILD", "true")
-            buildConfigField("boolean", "LOCAL_BUILD", "false")
-            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
-        }
-
-        create("cloud") {
-            dimension = "mode"
-            // applicationIdSuffix = ".cloud"
-            versionNameSuffix = "-cloud"
-
-            // BuildConfig: Cloud build with local mode option available
-            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
-            buildConfigField("boolean", "CLOUD_BUILD", "true")
-            buildConfigField("boolean", "LOCAL_BUILD", "false")
-            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "false")
-        }
-
-        create("local") {
-            dimension = "mode"
-            // applicationIdSuffix = ".local"
-            versionNameSuffix = "-local"
-
-            // BuildConfig: Local build with pre-built native libs
-            buildConfigField("boolean", "CLOUD_ONLY_BUILD", "false")
-            buildConfigField("boolean", "CLOUD_BUILD", "false")
-            buildConfigField("boolean", "LOCAL_BUILD", "true")
-            buildConfigField("boolean", "INCLUDES_NATIVE_LIBS", "true")
-
-            // NDK configuration for whisper.cpp (local flavor only)
-            ndk {
-                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-            }
-
-            // CMake configuration (local flavor only)
-            externalNativeBuild {
-                cmake {
-                    cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
-                    arguments += listOf(
-                        "-DANDROID_STL=c++_shared",
-                        "-DANDROID_PLATFORM=android-26"
-                    )
-                }
-            }
-        }
-    }
-
-    // Note: Native whisper code is included in both flavors but:
-    // - Local flavor: Uses real native implementations via FlavorModule
-    // - Cloud flavor: Uses stub implementations, ProGuard/R8 removes unused native code
-    // - Model assets (75MB) are excluded from cloud via packaging options below
 
     packaging {
         resources {
@@ -153,33 +82,8 @@ android {
     }
 
     buildFeatures {
-        buildConfig = true  // Enable BuildConfig generation
+        buildConfig = true
         compose = true
-        prefab = true
-    }
-
-    // External native build for whisper.cpp
-    // NOTE: This requires NDK and CMake, which are incompatible with Termux on Android
-    // For Termux builds: Pre-built .so files should be placed in src/main/jniLibs/
-    // For CI/desktop builds: Uncomment the section below
-
-    // Check if pre-built native libs exist
-    val hasPreBuiltLibs = file("src/main/jniLibs/arm64-v8a/libhyperwhisper_jni.so").exists() ||
-                         file("src/main/jniLibs/armeabi-v7a/libhyperwhisper_jni.so").exists()
-
-    // Check if whisper submodule exists (needed for native build)
-    val hasWhisperSubmodule = file("src/main/cpp/whisper/CMakeLists.txt").exists()
-
-    // Only configure CMake if:
-    // - Pre-built libs don't exist AND
-    // - Whisper submodule is present (cloud flavor skips submodules)
-    if (!hasPreBuiltLibs && hasWhisperSubmodule) {
-        externalNativeBuild {
-            cmake {
-                path = file("src/main/cpp/CMakeLists.txt")
-                version = "3.22.1"
-            }
-        }
     }
 
     lint {
@@ -272,15 +176,9 @@ tasks.whenTaskAdded {
 android.applicationVariants.all {
     val variant = this
     val variantName = variant.name
-    val flavorName = variant.flavorName ?: "default"
 
-    // Define output directory based on flavor
-    val outputDir = when (flavorName) {
-        "cloudOnly" -> file("${rootProject.projectDir}/builds/cloudonly")
-        "cloud" -> file("${rootProject.projectDir}/builds/cloud")
-        "local" -> file("${rootProject.projectDir}/builds/local")
-        else -> file("${rootProject.projectDir}/builds/${flavorName}")
-    }
+    // Single output directory
+    val outputDir = file("${rootProject.projectDir}/builds")
 
     // Create task to copy APK to custom location
     val variantNameCapitalized = variantName.replaceFirstChar { it.uppercase() }
