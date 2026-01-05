@@ -38,7 +38,7 @@ class LocalWhisperStrategy @Inject constructor(
      * Set callbacks for real-time progress and segment streaming
      * Call this before processAudio to enable real-time updates
      */
-    fun setCallbacks(
+    override fun setCallbacks(
         progressCallback: WhisperProgressCallback? = null,
         segmentCallback: WhisperSegmentCallback? = null
     ) {
@@ -50,7 +50,7 @@ class LocalWhisperStrategy @Inject constructor(
     /**
      * Clear all callbacks
      */
-    fun clearCallbacks() {
+    override fun clearCallbacks() {
         progressCallbackRef.set(null)
         segmentCallbackRef.set(null)
         whisperContext.clearCallbacks()

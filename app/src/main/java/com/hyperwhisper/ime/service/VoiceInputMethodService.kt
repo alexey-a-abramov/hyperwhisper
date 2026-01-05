@@ -65,6 +65,9 @@ class VoiceInputMethodService : InputMethodService(),
     lateinit var voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
 
     @Inject
+    lateinit var localWhisperCallbacks: com.hyperwhisper.network.LocalWhisperCallbacks
+
+    @Inject
     lateinit var transcriptionStrategy: TranscriptionStrategy
 
     @Inject
@@ -109,7 +112,13 @@ class VoiceInputMethodService : InputMethodService(),
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
             // Initialize ViewModel using ViewModelProvider
-            viewModel = KeyboardViewModel(this, voiceRepository, settingsRepository, voiceCommandProcessor)
+            viewModel = KeyboardViewModel(
+                this,
+                voiceRepository,
+                settingsRepository,
+                voiceCommandProcessor,
+                localWhisperCallbacks
+            )
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)
