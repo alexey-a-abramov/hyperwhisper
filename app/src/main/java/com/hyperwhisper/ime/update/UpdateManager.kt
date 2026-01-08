@@ -79,7 +79,12 @@ data class UpdateProbeDetails(
     val installedApkPath: String,
     val probeResults: List<ApkProbeResult>,
     val updateAvailable: Boolean,
-    val updateSource: String? = null
+    val updateSource: String? = null,
+    // GitHub release info
+    val githubReleaseChecked: Boolean = false,
+    val githubReleaseVersion: String? = null,
+    val githubReleaseUrl: String? = null,
+    val githubReleaseError: String? = null
 )
 
 @Singleton
@@ -91,7 +96,16 @@ class UpdateManager @Inject constructor(
         private const val TAG = "UpdateManager"
         private const val SKIPPED_VERSION_KEY = "skipped_update_version"
         private const val SKIPPED_BUILD_TIMESTAMP_KEY = "skipped_build_timestamp"
-        private const val UPDATE_CHECK_URL = "https://raw.githubusercontent.com/yourusername/hyperwhisper/refs/heads/main/latest-version.json"
+
+        // GitHub repository info
+        private const val GITHUB_OWNER = "alexey-a-abramov"
+        private const val GITHUB_REPO = "hyperwhisper"
+
+        // GitHub Releases API URL
+        private const val GITHUB_RELEASES_API = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+
+        // Fallback: raw JSON file in repo (for testing or if API rate limited)
+        private const val UPDATE_CHECK_URL = "https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/latest-version.json"
 
         // Minimum time difference (in ms) to consider an APK as newer
         // This prevents false positives from minor timestamp variations
@@ -270,6 +284,29 @@ class UpdateManager @Inject constructor(
             }
         }
 
+        // Also check GitHub Releases
+        var githubReleaseChecked = false
+        var githubReleaseVersion: String? = null
+        var githubReleaseUrl: String? = null
+        var githubReleaseError: String? = null
+
+        try {
+            val githubUpdate = fetchFromGitHubReleases()
+            githubReleaseChecked = true
+            if (githubUpdate != null) {
+                githubReleaseVersion = githubUpdate.versionName
+                githubReleaseUrl = githubUpdate.apkUrl
+                // Check if GitHub version is newer
+                if (githubUpdate.versionCode > currentVersionCode && !updateAvailable) {
+                    updateAvailable = true
+                    updateSource = "GitHub Release v${githubUpdate.versionName}"
+                }
+            }
+        } catch (e: Exception) {
+            githubReleaseChecked = true
+            githubReleaseError = e.message
+        }
+
         return UpdateProbeDetails(
             currentVersionName = currentVersionName,
             currentVersionCode = currentVersionCode,
@@ -278,7 +315,11 @@ class UpdateManager @Inject constructor(
             installedApkPath = installedApkPath,
             probeResults = probeResults,
             updateAvailable = updateAvailable,
-            updateSource = updateSource
+            updateSource = updateSource,
+            githubReleaseChecked = githubReleaseChecked,
+            githubReleaseVersion = githubReleaseVersion,
+            githubReleaseUrl = githubReleaseUrl,
+            githubReleaseError = githubReleaseError
         )
     }
 
@@ -480,10 +521,140 @@ class UpdateManager @Inject constructor(
     }
 
     /**
-     * Fetch update info from server
-     * TODO: Replace with actual GitHub URL or other source
+     * Fetch update info from GitHub Releases API or fallback sources
      */
     private suspend fun fetchUpdateInfo(): UpdateInfo? {
+        // Try GitHub Releases API first
+        val githubUpdate = fetchFromGitHubReleases()
+        if (githubUpdate != null) {
+            Log.d(TAG, "  Got update info from GitHub Releases API")
+            return githubUpdate
+        }
+
+        // Fallback to raw JSON file
+        val jsonUpdate = fetchFromJsonFile()
+        if (jsonUpdate != null) {
+            Log.d(TAG, "  Got update info from JSON file")
+            return jsonUpdate
+        }
+
+        // Try local test file for development
+        return tryLocalUpdateFile()
+    }
+
+    /**
+     * Fetch update info from GitHub Releases API
+     * API: https://api.github.com/repos/{owner}/{repo}/releases/latest
+     */
+    private fun fetchFromGitHubReleases(): UpdateInfo? {
+        return try {
+            val request = Request.Builder()
+                .url(GITHUB_RELEASES_API)
+                .header("Accept", "application/vnd.github.v3+json")
+                .header("User-Agent", "HyperWhisper-Android")
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                Log.w(TAG, "  GitHub API response: ${response.code}")
+                return null
+            }
+
+            val body = response.body?.string() ?: return null
+            parseGitHubRelease(body)
+        } catch (e: Exception) {
+            Log.w(TAG, "  Failed to fetch from GitHub Releases: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Parse GitHub Releases API response
+     * Example response structure:
+     * {
+     *   "tag_name": "v1.96",
+     *   "name": "HyperWhisper v1.96",
+     *   "body": "Release notes...",
+     *   "published_at": "2024-01-08T12:00:00Z",
+     *   "assets": [
+     *     {
+     *       "name": "app-debug.apk",
+     *       "browser_download_url": "https://github.com/.../app-debug.apk"
+     *     }
+     *   ]
+     * }
+     */
+    private fun parseGitHubRelease(json: String): UpdateInfo? {
+        return try {
+            val jsonObject = org.json.JSONObject(json)
+
+            // Parse version from tag_name (e.g., "v1.96" -> "1.96")
+            val tagName = jsonObject.optString("tag_name", "")
+            val versionName = tagName.removePrefix("v").removePrefix("V")
+            if (versionName.isEmpty()) return null
+
+            // Extract version code from version name (e.g., "1.96" -> 96)
+            val versionCode = versionName.replace(".", "").removePrefix("1").toIntOrNull() ?: return null
+
+            // Get release notes from body
+            val releaseNotes = jsonObject.optString("body", "Bug fixes and improvements")
+
+            // Get published timestamp
+            val publishedAt = jsonObject.optString("published_at", "")
+            val buildTimestamp = parseIsoTimestamp(publishedAt)
+
+            // Find APK download URL from assets
+            var apkUrl: String? = null
+            val assets = jsonObject.optJSONArray("assets")
+            if (assets != null) {
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    val assetName = asset.optString("name", "")
+                    // Prefer app-debug.apk or any .apk file
+                    if (assetName == "app-debug.apk" || assetName.endsWith(".apk")) {
+                        apkUrl = asset.optString("browser_download_url")
+                        if (assetName == "app-debug.apk") break // Prefer this one
+                    }
+                }
+            }
+
+            if (apkUrl == null) {
+                Log.w(TAG, "  No APK asset found in release")
+                return null
+            }
+
+            UpdateInfo(
+                versionCode = versionCode,
+                versionName = versionName,
+                apkUrl = apkUrl,
+                releaseNotes = releaseNotes,
+                buildTimestamp = buildTimestamp
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "  Failed to parse GitHub release: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Parse ISO 8601 timestamp to milliseconds
+     */
+    private fun parseIsoTimestamp(isoString: String): Long {
+        return try {
+            if (isoString.isEmpty()) return System.currentTimeMillis()
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            sdf.parse(isoString)?.time ?: System.currentTimeMillis()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+    }
+
+    /**
+     * Fetch update info from raw JSON file
+     */
+    private fun fetchFromJsonFile(): UpdateInfo? {
         return try {
             val request = Request.Builder()
                 .url(UPDATE_CHECK_URL)
@@ -496,13 +667,10 @@ class UpdateManager @Inject constructor(
             }
 
             val body = response.body?.string() ?: return null
-
-            // Parse JSON response
-            // Expected format: {"versionCode": 54, "versionName": "1.0.1", "apkUrl": "...", "releaseNotes": "..."}
             parseUpdateInfo(body)
         } catch (e: Exception) {
-            // Try local test file for development
-            tryLocalUpdateFile()
+            Log.w(TAG, "  Failed to fetch from JSON file: ${e.message}")
+            null
         }
     }
 

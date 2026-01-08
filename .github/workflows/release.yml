@@ -1,0 +1,120 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g., 1.96)'
+        required: true
+        default: '1.96'
+      release_notes:
+        description: 'Release notes'
+        required: false
+        default: 'Bug fixes and improvements'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Extract version from tag or input
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "push" ]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION_CODE=$(echo $VERSION | sed 's/\.//g' | sed 's/^1//')
+        else
+          VERSION="${{ github.event.inputs.version_name }}"
+          VERSION_CODE=$(echo $VERSION | sed 's/\.//g' | sed 's/^1//')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+        echo "Building version $VERSION (code: $VERSION_CODE)"
+
+    - name: Update version in gradle.properties
+      run: |
+        sed -i "s/VERSION_CODE=.*/VERSION_CODE=${{ steps.version.outputs.version_code }}/" gradle.properties
+        cat gradle.properties
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: Build Release APK
+      run: ./gradlew assembleRelease --no-daemon
+      continue-on-error: true
+
+    - name: Rename APKs
+      run: |
+        mkdir -p release-artifacts
+        cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/hyperwhisper-v${{ steps.version.outputs.version }}-debug.apk
+        if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+          cp app/build/outputs/apk/release/app-release.apk release-artifacts/hyperwhisper-v${{ steps.version.outputs.version }}-release.apk
+        fi
+        # Also create a standard named file for easy auto-update
+        cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/app-debug.apk
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          NOTES="${{ github.event.inputs.release_notes }}"
+        else
+          NOTES="Release ${{ steps.version.outputs.version }}"
+        fi
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        echo "$NOTES" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "---" >> $GITHUB_OUTPUT
+        echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+        echo "**Version Code:** ${{ steps.version.outputs.version_code }}" >> $GITHUB_OUTPUT
+        echo "**Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: HyperWhisper v${{ steps.version.outputs.version }}
+        body: ${{ steps.release_notes.outputs.notes }}
+        draft: false
+        prerelease: false
+        files: |
+          release-artifacts/hyperwhisper-v${{ steps.version.outputs.version }}-debug.apk
+          release-artifacts/app-debug.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update latest-version.json
+      run: |
+        cat > latest-version.json << EOF
+        {
+          "versionCode": ${{ steps.version.outputs.version_code }},
+          "versionName": "${{ steps.version.outputs.version }}",
+          "apkUrl": "https://github.com/alexey-a-abramov/hyperwhisper/releases/download/v${{ steps.version.outputs.version }}/app-debug.apk",
+          "releaseNotes": "${{ github.event.inputs.release_notes || 'Bug fixes and improvements' }}",
+          "buildTimestamp": $(date +%s)000
+        }
+        EOF
+        cat latest-version.json
+
+    - name: Upload latest-version.json as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: latest-version
+        path: latest-version.json

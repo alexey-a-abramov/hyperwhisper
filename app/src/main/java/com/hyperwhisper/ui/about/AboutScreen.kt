@@ -457,9 +457,82 @@ private fun UpdateProbeSection(
                 thickness = 0.5.dp
             )
 
+            // GitHub Release check
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "GitHub Releases",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (probeDetails.githubReleaseChecked) {
+                            Icon(
+                                imageVector = if (probeDetails.githubReleaseVersion != null) {
+                                    Icons.Default.Check
+                                } else {
+                                    Icons.Default.Close
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = if (probeDetails.githubReleaseVersion != null) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                }
+                            )
+                        }
+                    }
+                    if (probeDetails.githubReleaseVersion != null) {
+                        Text(
+                            text = "Latest: v${probeDetails.githubReleaseVersion}",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = probeDetails.githubReleaseUrl ?: "",
+                            fontSize = 7.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (probeDetails.githubReleaseError != null) {
+                        Text(
+                            text = probeDetails.githubReleaseError,
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        )
+                    } else {
+                        Text(
+                            text = "No releases found",
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+
+            Divider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                thickness = 0.5.dp
+            )
+
             // Probe locations
             Text(
-                text = "Checked Locations:",
+                text = "Local APK Locations:",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
