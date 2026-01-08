@@ -1,0 +1,244 @@
+package com.hyperwhisper.localization
+
+object SpanishStrings : Strings {
+    // App Info
+    override val appName = "HyperWhisper"
+    override val imeName = "Teclado de Voz HyperWhisper"
+
+    // Common Actions
+    override val cancel = "Cancelar"
+    override val save = "Guardar"
+    override val delete = "Eliminar"
+    override val edit = "Editar"
+    override val add = "Añadir"
+    override val close = "Cerrar"
+    override val back = "Volver"
+    override val copy = "Copiar"
+    override val clear = "Limpiar"
+
+    // Keyboard UI
+    override val tapToSpeak = "Toca para hablar"
+    override val recording = "Grabando..."
+    override val processing = "Procesando..."
+    override val space = "espacio"
+    override val pasteLastTranscription = "PEGAR ÚLTIMO (mantén: historial)"
+    override val pasteLastHold = "PEGAR ÚLTIMO (mantén: historial)"
+    override val holdForHistory = "Mantén presionado para historial"
+
+    // Buttons
+    override val switchKeyboard = "Cambiar teclado"
+    override val helpAndAbout = "Ayuda e información"
+    override val settings = "Configuración"
+    override val viewLogs = "Ver registros"
+    override val stopRecording = "Detener grabación"
+    override val startRecording = "Iniciar grabación"
+
+    // Content Descriptions (for accessibility)
+    override val switchKeyboardDesc = "Cambiar teclado"
+    override val helpAndAboutDesc = "Ayuda e información"
+    override val settingsDesc = "Configuración"
+    override val viewLogsDesc = "Ver registros"
+    override val cancelDesc = "Cancelar"
+    override val enterDesc = "Intro"
+
+    // Language Selectors
+    override val inputLanguageSpeech = "Idioma de entrada (Voz)"
+    override val outputLanguageTranslation = "Idioma de salida (Traducción)"
+    override val autoDetect = "Detección automática"
+    override val searchLanguages = "Buscar..."
+    override val searchPlaceholder = "Buscar..."
+    override val noLanguagesFound = "No se encontraron idiomas"
+
+    // Settings Screen
+    override val settingsTitle = "Configuración de HyperWhisper"
+    override val apiConfiguration = "Configuración de API"
+    override val apiProvider = "Proveedor de API"
+    override val baseUrl = "URL base"
+    override val baseUrlHint = "Debe terminar con /"
+    override val apiKey = "Clave API"
+    override val apiKeyPlaceholder = "sk-..."
+    override val modelId = "ID del modelo"
+    override val testConnection = "Probar conexión"
+    override val testingConnection = "Probando conexión..."
+    override val resetToDefaults = "Restablecer valores predeterminados"
+    override val reset = "RESTABLECER"
+    override val saveAndCloseSettings = "Guardar y cerrar configuración"
+    override val inputLanguageHintLabel = "Sugerencia de idioma de entrada"
+    override val inputLanguageHintText = "Usar solo para detección automática (idioma de voz)\nNota: La mayoría de los modelos ignoran esto\n• whisper-1 y variantes: Ignorado\n• distil-whisper-large-v3: Lo usa"
+    override val viewApiLogs = "Ver registros de API"
+    override val logsInfoTitle = "Registros de API y diagnóstico"
+    override val logsInfoDescription = "Ver registros detallados de llamadas API, pasos de procesamiento y errores. Los registros se borran al reiniciar la aplicación."
+
+    // API Providers
+    override val providerDescription = "Elige tu proveedor de voz a texto"
+
+    // Voice Modes
+    override val voiceModes = "Modos de procesamiento de voz"
+    override val selectMode = "Seleccionar modo"
+    override val addVoiceMode = "Añadir modo de voz"
+    override val editVoiceMode = "Editar modo de voz"
+    override val deleteVoiceMode = "Eliminar modo"
+    override val modeName = "Nombre del modo"
+    override val systemPrompt = "Indicación del sistema"
+    override val enterPrompt = "Introduce la indicación del sistema para este modo"
+
+    // Default Voice Modes
+    override val modeVerbatim = "Literal"
+    override val modeVerbatimPrompt = "Transcribir el audio exactamente como se habla."
+    override val modeFixGrammar = "Corregir gramática"
+    override val modeFixGrammarPrompt = "Transcribir este audio y corregir cualquier error de gramática, ortografía y puntuación mientras se preserva el significado y tono original."
+    override val modePromptFormatter = "Formateador de indicaciones"
+    override val modePromptFormatterPrompt = "Reformular la entrada del usuario en una indicación clara y efectiva adecuada para procesamiento LLM. Mejorar la claridad, añadir contexto necesario y estructurarlo para una comprensión óptima de la IA. Mantener la intención del usuario mientras se hace más preciso y accionable."
+    override val modeLlmResponse = "Respuesta LLM"
+    override val modeLlmResponsePrompt = "El usuario está haciendo una pregunta. Proporcionar una respuesta directa y concisa a la pregunta sin ninguna explicación o contexto adicional. Devolver SOLO la respuesta misma."
+
+    // Appearance Settings
+    override val appearanceSettings = "Apariencia"
+    override val colorScheme = "Esquema de colores"
+    override val useDynamicColor = "Usar color dinámico"
+    override val useDynamicColorDesc = "Coincidir con los colores del fondo de pantalla del sistema"
+    override val themeMode = "Modo de tema"
+    override val darkMode = "Modo oscuro"
+    override val textSize = "Tamaño del texto"
+    override val fontFamily = "Familia de fuentes"
+    override val uiLanguage = "Idioma de la interfaz"
+
+    // Dark Mode Options
+    override val darkModeFollowSystem = "Seguir sistema"
+    override val darkModeAlwaysLight = "Siempre claro"
+    override val darkModeAlwaysDark = "Siempre oscuro"
+
+    // Advanced Settings
+    override val advancedSettings = "Avanzado"
+    override val autoCopyToClipboard = "Copiar automáticamente al portapapeles"
+    override val autoCopyToClipboardDesc = "Copiar transcripciones automáticamente"
+    override val enableHistoryPanel = "Habilitar panel de historial"
+    override val enableHistoryPanelDesc = "Mantén presionado el botón de pegar para ver el historial"
+
+    // About Screen
+    override val aboutHyperWhisper = "Acerca de HyperWhisper"
+    override val version = "Versión"
+    override val versionCode = "Código"
+    override val description = "HyperWhisper es un método de entrada de voz a texto (teclado) que utiliza APIs avanzadas de reconocimiento de voz para proporcionar transcripciones rápidas y precisas. Está diseñado para desarrolladores y usuarios avanzados que desean personalizar su experiencia de entrada de voz."
+    override val features = "Características:"
+    override val featuresList = "• Proveedor de API personalizable (OpenAI, Groq, OpenRouter, etc.)\n• Múltiples modos de voz (Literal, Corrección gramatical, Cortés, etc.)\n• Soporte para diferentes idiomas de entrada y salida\n• Interfaz moderna y responsive construida con Jetpack Compose"
+    override val usageStatisticsAndCosts = "Estadísticas de uso y costos:"
+    override val noUsageDataYet = "Aún no hay datos de uso. ¡Comienza a usar el teclado para ver estadísticas!"
+    override val totalAudio = "Audio total"
+    override val estimatedTotalCost = "Costo total estimado"
+    override val modelBreakdown = "Desglose por modelo:"
+    override val inputTokens = "Entrada"
+    override val outputTokens = "Salida"
+    override val totalTokens = "Total"
+    override val audioBasedPricing = "Precio basado en audio (tokens no rastreados)"
+    override val costsEstimateNote = "* Los costos son estimados basados en los precios actuales de la API. Los costos reales pueden variar."
+    override val clearStatistics = "LIMPIAR ESTADÍSTICAS"
+
+    // Logs Screen
+    override val traceLogs = "Registros de seguimiento"
+    override val diagnosticLogs = "Registros de diagnóstico"
+    override val diagnosticLogsDesc = "Estos registros muestran llamadas API, pasos de procesamiento y errores. Los registros se borran al reiniciar la aplicación. Puedes copiarlos o limpiarlos usando los botones de arriba."
+    override val logsStoredAt = "Los registros se almacenan en"
+    override val noLogsYet = "Aún no hay registros.\nComienza a usar el teclado para ver registros de actividad."
+    override val copyLogs = "Copiar registros"
+    override val clearLogs = "Limpiar registros"
+    override val logsCopiedToClipboard = "Registros copiados al portapapeles"
+
+    // Configuration Info
+    override val currentConfiguration = "Configuración actual"
+    override val provider = "Proveedor"
+    override val transcriptionModel = "Modelo de transcripción"
+    override val postProcessingModel = "Modelo de post-procesamiento"
+    override val postProcessingModelDesc = "gpt-4o-mini (para modos no literales y traducción)"
+    override val none = "Ninguno"
+    override val keepOriginal = "mantener original"
+    override val notConfigured = "No configurado"
+
+    // Transcription History
+    override val transcriptionHistory = "Historial de transcripciones"
+    override val historyCount = "{count}/20"
+    override val noHistoryYet = "Aún no hay historial"
+    override val clearAll = "LIMPIAR TODO"
+
+    // Connection Test
+    override val connectionTesting = "Probando conexión..."
+    override val connectionSuccess = "¡Conexión exitosa! La API está respondiendo."
+    override val connectionFailed = "Conexión fallida"
+    override val authenticationFailed = "Autenticación fallida. Verifica tu clave API."
+    override val endpointNotFound = "Endpoint no encontrado. Verifica la URL base y el ID del modelo."
+    override val connectionTimeout = "Tiempo de conexión agotado. Verifica tu conexión a internet."
+    override val sslError = "Error SSL/TLS. Verifica la URL del endpoint (https)."
+
+    // Errors
+    override val error = "Error"
+    override val copyError = "COPIAR ERROR"
+    override val openSettings = "ABRIR CONFIGURACIÓN"
+    override val dismiss = "DESCARTAR"
+    override val errorConfigureApiKey = "Por favor configura la clave API en configuración"
+    override val errorNoModeSelected = "No se ha seleccionado ningún modo de voz"
+    override val errorRecordingFailed = "Grabación fallida"
+    override val errorNetworkFailed = "Error de red. Por favor verifica tu conexión."
+    override val errorApiCall = "Error de API"
+    override val errorPermissionMicrophone = "Permiso de micrófono no concedido. Por favor habilita el acceso al micrófono en la configuración de Android."
+    override val errorMicrophoneInUse = "No se puede acceder al micrófono. Puede estar en uso por otra aplicación."
+
+    // Processing Info Toast
+    override val translated = "Traducido a"
+    override val twoStepProcessing = "Procesamiento en dos pasos"
+
+    // Time units
+    override val minutes = "m"
+    override val seconds = "s"
+
+    // Input Field Information
+    override val inputFieldType = "Tipo"
+    override val inputFieldApp = "App"
+    override val inputFieldAction = "Acción"
+    override val fieldTypeText = "Texto"
+    override val fieldTypeEmail = "Correo electrónico"
+    override val fieldTypePassword = "Contraseña"
+    override val fieldTypeNumber = "Número"
+    override val fieldTypePhone = "Teléfono"
+    override val fieldTypeUrl = "URL"
+    override val fieldTypeMultiline = "Multilínea"
+    override val fieldTypeUnknown = "Desconocido"
+    override val actionNone = "Ninguna"
+    override val actionDone = "Listo"
+    override val actionGo = "Ir"
+    override val actionSearch = "Buscar"
+    override val actionSend = "Enviar"
+    override val actionNext = "Siguiente"
+    override val actionPrevious = "Anterior"
+
+    // Usage Guide (About Screen)
+    override val usageGuideTitle = "Cómo usar"
+    override val voiceModesGuide = "Modos de voz"
+    override val voiceModeVerbatimDesc = "Literal - Transcripción exacta como se habla"
+    override val voiceModeFixGrammarDesc = "Corregir gramática - Corrige gramática y ortografía"
+    override val voiceModePoliteDesc = "Cortés - Hace el habla profesional y amigable"
+    override val voiceModePromptFormatterDesc = "Formateador de indicaciones - Optimiza el texto para indicaciones de IA"
+    override val voiceModeLlmResponseDesc = "Respuesta LLM - Obtén respuestas directas a preguntas"
+    override val voiceModeConfigurationDesc = "Configuración - Controla la configuración de la app por voz"
+    override val configurationModeTitle = "Modo de configuración"
+    override val configurationModeDesc = "Cambia al modo \"Configuración\" para controlar la configuración con comandos de voz. Cuando hables un comando, verás un diálogo de confirmación mostrando qué cambiará."
+    override val sampleVoiceCommandsTitle = "Ejemplos de comandos de voz"
+    override val sampleCommandLanguage = "\"Cambiar idioma de entrada a español\" / \"Traducir al francés\""
+    override val sampleCommandMode = "\"Cambiar modo a literal\" / \"Activar modo de corrección gramatical\""
+    override val sampleCommandTheme = "\"Cambiar a modo oscuro\" / \"Usar tema claro\" / \"Seguir tema del sistema\""
+    override val sampleCommandHistory = "\"Activar historial\" / \"Desactivar historial\""
+    override val sampleCommandDeveloper = "\"Activar modo desarrollador\" / \"Desactivar modo técnico\""
+    override val sampleCommandInterface = "\"Cambiar interfaz a ruso\" / \"Establecer idioma de interfaz en árabe\""
+    override val sampleCommandExit = "\"Salir del modo de configuración\" / \"Desactivar modo de comandos\""
+    override val howItWorksTitle = "Cómo funciona"
+    override val howItWorksStep1 = "1. Selecciona \"Configuración\" del selector de modos"
+    override val howItWorksStep2 = "2. Toca el micrófono y di tu comando"
+    override val howItWorksStep3 = "3. Revisa el cambio en el diálogo de confirmación"
+    override val howItWorksStep4 = "4. Toca \"Aplicar cambio\" para confirmar o \"Cancelar\" para descartar"
+    override val howItWorksConfirmation = "Después de confirmar, verás una notificación de que la configuración se actualizó."
+    override val deleteButtonTitle = "Botón de eliminar"
+    override val deleteButtonTap = "Tocar - Eliminar un carácter (o texto seleccionado)"
+    override val deleteButtonHold = "Mantener - Eliminar repetidamente de forma continua"
+    override val deleteButtonLongHold = "Mantener 5 segundos - Eliminar TODO el texto (el botón se pone rojo)"
+    override val languageSelectionTitle = "Selección de idioma"
+    override val languageSelectionDesc = "Usa el modo de configuración para cambiar idiomas sin usar las manos, o toca los botones de idioma debajo del micrófono para seleccionar de la lista."
+}

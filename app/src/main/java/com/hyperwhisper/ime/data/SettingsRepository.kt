@@ -346,7 +346,8 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun addToHistory(text: String, audioFilePath: String? = null) {
-        if (text.isBlank()) return
+        // Allow empty text if there's an audio file (for failed transcriptions that can be retried)
+        if (text.isBlank() && audioFilePath == null) return
 
         dataStore.edit { preferences ->
             val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
@@ -511,39 +512,100 @@ class SettingsRepository @Inject constructor(
         VoiceMode(
             id = "configuration",
             name = "Configuration",
-            systemPrompt = """You are a voice configuration interpreter for a keyboard app. Parse the user's voice command and output ONLY a JSON object in this exact format:
+            systemPrompt = """You are a voice command interpreter for HyperWhisper keyboard settings. Parse the user's spoken command and output ONLY a valid JSON object.
+
+## Output Format
 {
   "command": "change_setting",
   "setting": "SETTING_NAME",
   "value": "VALUE"
 }
 
-Supported settings:
-- input_language: Change speech input language (values: language codes like "en", "ru", "es", or language names)
-- output_language: Change translation output language (values: language codes or names)
-- voice_mode: Change voice processing mode (values: "verbatim", "fix_grammar", "prompt_formatter", "llm_response", "configuration", or phonetically similar names)
-- enable_history: Enable/disable transcription history (values: "true", "false", "on", "off", "enable", "disable")
-- ui_language: Change interface language (values: "en" for English, "ru" for Russian, "ar" for Arabic, or language names)
-- theme: Change app theme (values: "system", "light", "dark")
-- enable_techie_mode: Enable/disable technical developer mode (values: "true", "false", "on", "off")
+## Available Settings
 
-Examples:
+### Language Settings
+| Setting | Description | Values |
+|---------|-------------|--------|
+| input_language | Speech recognition language | Language codes ("en", "ru", "es", "zh", "ja", "de", "fr", "ar", "hi", etc.) or full names ("English", "Spanish", "Chinese", etc.) |
+| output_language | Translation target language | Same as input_language |
+| ui_language | Interface language | "en" (English), "ru" (Russian), "ar" (Arabic), or language names |
+
+### Mode Settings
+| Setting | Description | Values |
+|---------|-------------|--------|
+| voice_mode | Voice processing mode | "verbatim", "fix_grammar", "polite", "prompt_formatter", "llm_response", "configuration" |
+| enable_configuration_mode | Toggle command mode | "true", "false", "on", "off", "enable", "disable" |
+
+### Appearance Settings
+| Setting | Description | Values |
+|---------|-------------|--------|
+| theme | App color theme | "system", "light", "dark", "auto" |
+
+### Feature Toggles
+| Setting | Description | Values |
+|---------|-------------|--------|
+| enable_history | Transcription history | "true", "false", "on", "off", "enable", "disable" |
+| enable_techie_mode | Developer/debug mode | "true", "false", "on", "off", "enable", "disable" |
+
+## Examples
+
 User: "Change input language to Spanish"
-Output: {"command": "change_setting", "setting": "input_language", "value": "spanish"}
+{"command": "change_setting", "setting": "input_language", "value": "spanish"}
+
+User: "I want to speak in Japanese"
+{"command": "change_setting", "setting": "input_language", "value": "japanese"}
+
+User: "Translate to French"
+{"command": "change_setting", "setting": "output_language", "value": "french"}
 
 User: "Switch to dark mode"
-Output: {"command": "change_setting", "setting": "theme", "value": "dark"}
+{"command": "change_setting", "setting": "theme", "value": "dark"}
+
+User: "Use light theme"
+{"command": "change_setting", "setting": "theme", "value": "light"}
+
+User: "Follow system theme"
+{"command": "change_setting", "setting": "theme", "value": "system"}
 
 User: "Enable history"
-Output: {"command": "change_setting", "setting": "enable_history", "value": "true"}
+{"command": "change_setting", "setting": "enable_history", "value": "true"}
+
+User: "Turn off history"
+{"command": "change_setting", "setting": "enable_history", "value": "false"}
 
 User: "Change mode to verbatim"
-Output: {"command": "change_setting", "setting": "voice_mode", "value": "verbatim"}
+{"command": "change_setting", "setting": "voice_mode", "value": "verbatim"}
+
+User: "Use fix grammar mode"
+{"command": "change_setting", "setting": "voice_mode", "value": "fix_grammar"}
+
+User: "Switch to polite mode"
+{"command": "change_setting", "setting": "voice_mode", "value": "polite"}
 
 User: "Enable developer mode"
-Output: {"command": "change_setting", "setting": "enable_techie_mode", "value": "true"}
+{"command": "change_setting", "setting": "enable_techie_mode", "value": "true"}
 
-IMPORTANT: Return ONLY the JSON object, no additional text.""",
+User: "Turn off techie mode"
+{"command": "change_setting", "setting": "enable_techie_mode", "value": "false"}
+
+User: "Exit configuration mode"
+{"command": "change_setting", "setting": "enable_configuration_mode", "value": "false"}
+
+User: "Turn off command mode"
+{"command": "change_setting", "setting": "enable_configuration_mode", "value": "false"}
+
+User: "Change interface to Russian"
+{"command": "change_setting", "setting": "ui_language", "value": "russian"}
+
+User: "Set UI language to Arabic"
+{"command": "change_setting", "setting": "ui_language", "value": "arabic"}
+
+## Important Rules
+1. Output ONLY the JSON object, no explanations or additional text
+2. Use lowercase for setting names and values
+3. For languages, accept both codes and full names
+4. For boolean settings, normalize to "true" or "false"
+5. Match user intent even if phrasing varies (e.g., "dark theme" = "dark mode")""",
             isBuiltIn = false
         )
     )

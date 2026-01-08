@@ -23,13 +23,22 @@ android {
         applicationId = "com.hyperwhisper"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("VERSION_CODE") as String).toInt()
-        versionName = project.findProperty("VERSION_NAME") as String
+        val versionCodeValue = (project.findProperty("VERSION_CODE") as String).toInt()
+        versionCode = versionCodeValue
+        // Version format: 1.{incrementalNumber}
+        versionName = "1.$versionCodeValue"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Build timestamp for update checking - captured at configuration time
+        val buildTime = System.currentTimeMillis()
+        buildConfigField("long", "BUILD_TIMESTAMP", "${buildTime}L")
+        // Also store human-readable build date for display
+        val buildDateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date(buildTime))
+        buildConfigField("String", "BUILD_DATE", "\"$buildDateStr\"")
     }
 
     packaging {

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1667,102 +1668,172 @@ fun ColorSchemeSelector(
     selectedScheme: ColorSchemeOption,
     onSchemeSelected: (ColorSchemeOption) -> Unit
 ) {
-    // Grid layout with 2 columns for better fit
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    // Scrollable vertical list of theme cards
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 400.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ColorSchemeOption.values().toList().chunked(2).forEach { rowThemes ->
-            Row(
+        items(ColorSchemeOption.values().size) { index ->
+            val option = ColorSchemeOption.values()[index]
+            val isSelected = option == selectedScheme
+
+            // Theme card with mini preview
+            Surface(
+                onClick = { onSchemeSelected(option) },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                },
+                border = if (isSelected) {
+                    BorderStroke(2.dp, option.primaryColor)
+                } else {
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                }
             ) {
-                rowThemes.forEach { option ->
-                    Column(
-                        horizontalAlignment = Alignment.Start,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onSchemeSelected(option) }
-                            .background(
-                                color = if (option == selectedScheme)
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .padding(12.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mini theme preview card
+                    Surface(
+                        modifier = Modifier.size(width = 80.dp, height = 56.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = option.primaryColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, option.primaryColor.copy(alpha = 0.3f))
                     ) {
-                        // Three color circles in a row
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(6.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Mini header bar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .background(
+                                        color = option.primaryColor,
+                                        shape = RoundedCornerShape(2.dp)
+                                    )
+                            )
+                            // Mini content area with accent colors
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Mini button
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = 24.dp, height = 12.dp)
+                                        .background(
+                                            color = option.secondaryColor,
+                                            shape = RoundedCornerShape(3.dp)
+                                        )
+                                )
+                                // Mini FAB
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .background(
+                                            color = option.tertiaryColor,
+                                            shape = CircleShape
+                                        )
+                                )
+                            }
+                            // Mini text lines
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.7f)
+                                        .height(4.dp)
+                                        .background(
+                                            color = option.primaryColor.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(1.dp)
+                                        )
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.5f)
+                                        .height(4.dp)
+                                        .background(
+                                            color = option.secondaryColor.copy(alpha = 0.4f),
+                                            shape = RoundedCornerShape(1.dp)
+                                        )
+                                )
+                            }
+                        }
+                    }
+
+                    // Theme name and color dots
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = option.displayName,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) {
+                                option.primaryColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                        // Color dots row
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Primary color
+                            // Primary
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = option.primaryColor,
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = Color.Black.copy(alpha = 0.1f),
-                                        shape = CircleShape
-                                    )
+                                    .size(16.dp)
+                                    .background(option.primaryColor, CircleShape)
+                                    .border(1.dp, Color.Black.copy(alpha = 0.1f), CircleShape)
                             )
-                            // Secondary color
+                            // Secondary
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = option.secondaryColor,
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = Color.Black.copy(alpha = 0.1f),
-                                        shape = CircleShape
-                                    )
+                                    .size(16.dp)
+                                    .background(option.secondaryColor, CircleShape)
+                                    .border(1.dp, Color.Black.copy(alpha = 0.1f), CircleShape)
                             )
-                            // Tertiary color
+                            // Tertiary
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .background(
-                                        color = option.tertiaryColor,
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = Color.Black.copy(alpha = 0.1f),
-                                        shape = CircleShape
-                                    )
+                                    .size(16.dp)
+                                    .background(option.tertiaryColor, CircleShape)
+                                    .border(1.dp, Color.Black.copy(alpha = 0.1f), CircleShape)
                             )
-
-                            // Check mark if selected
-                            if (option == selectedScheme) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        // Theme name
-                        Text(
-                            text = option.displayName,
-                            fontSize = 11.sp,
-                            fontWeight = if (option == selectedScheme) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    }
+
+                    // Selection indicator
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Selected",
+                            tint = option.primaryColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.RadioButtonUnchecked,
+                            contentDescription = "Not selected",
+                            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                }
-                // Fill empty space if odd number of themes
-                if (rowThemes.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

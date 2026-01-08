@@ -1,11 +1,31 @@
+# HyperWhisper Translation Template
+
+This file contains all UI strings for translation. To add a new language:
+
+1. Copy the template below
+2. Translate all values (keep the property names unchanged)
+3. Create `[Language]Strings.kt` in `app/src/main/java/com/hyperwhisper/ime/localization/`
+4. Add to `AppLanguage.kt` enum and `getStrings()` function
+
+---
+
+## Quick Start: Copy This Template
+
+Create a new file like `SpanishStrings.kt`:
+
+```kotlin
 package com.hyperwhisper.localization
 
-object EnglishStrings : Strings {
-    // App Info
-    override val appName = "HyperWhisper"
-    override val imeName = "HyperWhisper Voice Keyboard"
+object SpanishStrings : Strings {
+    // ============================================================
+    // APP INFO
+    // ============================================================
+    override val appName = "HyperWhisper"  // Keep as-is (brand name)
+    override val imeName = "HyperWhisper Voice Keyboard"  // TRANSLATE
 
-    // Common Actions
+    // ============================================================
+    // COMMON ACTIONS
+    // ============================================================
     override val cancel = "Cancel"
     override val save = "Save"
     override val delete = "Delete"
@@ -16,7 +36,9 @@ object EnglishStrings : Strings {
     override val copy = "Copy"
     override val clear = "Clear"
 
-    // Keyboard UI
+    // ============================================================
+    // KEYBOARD UI
+    // ============================================================
     override val tapToSpeak = "Tap to speak"
     override val recording = "Recording..."
     override val processing = "Processing..."
@@ -25,7 +47,9 @@ object EnglishStrings : Strings {
     override val pasteLastHold = "PASTE LAST (hold: history)"
     override val holdForHistory = "Hold for history"
 
-    // Buttons
+    // ============================================================
+    // BUTTONS
+    // ============================================================
     override val switchKeyboard = "Switch Keyboard"
     override val helpAndAbout = "Help & About"
     override val settings = "Settings"
@@ -33,7 +57,9 @@ object EnglishStrings : Strings {
     override val stopRecording = "Stop Recording"
     override val startRecording = "Start Recording"
 
-    // Content Descriptions (for accessibility)
+    // ============================================================
+    // ACCESSIBILITY DESCRIPTIONS
+    // ============================================================
     override val switchKeyboardDesc = "Switch Keyboard"
     override val helpAndAboutDesc = "Help & About"
     override val settingsDesc = "Settings"
@@ -41,7 +67,9 @@ object EnglishStrings : Strings {
     override val cancelDesc = "Cancel"
     override val enterDesc = "Enter"
 
-    // Language Selectors
+    // ============================================================
+    // LANGUAGE SELECTORS
+    // ============================================================
     override val inputLanguageSpeech = "Input Language (Speech)"
     override val outputLanguageTranslation = "Output Language (Translation)"
     override val autoDetect = "Auto-detect"
@@ -49,14 +77,16 @@ object EnglishStrings : Strings {
     override val searchPlaceholder = "Search..."
     override val noLanguagesFound = "No languages found"
 
-    // Settings Screen
+    // ============================================================
+    // SETTINGS SCREEN
+    // ============================================================
     override val settingsTitle = "HyperWhisper Settings"
     override val apiConfiguration = "API Configuration"
     override val apiProvider = "API Provider"
     override val baseUrl = "Base URL"
     override val baseUrlHint = "Must end with /"
     override val apiKey = "API Key"
-    override val apiKeyPlaceholder = "sk-..."
+    override val apiKeyPlaceholder = "sk-..."  // Keep as-is
     override val modelId = "Model ID"
     override val testConnection = "Test Connection"
     override val testingConnection = "Testing connection..."
@@ -69,10 +99,14 @@ object EnglishStrings : Strings {
     override val logsInfoTitle = "API & Diagnostic Logs"
     override val logsInfoDescription = "View detailed logs of API calls, processing steps, and errors. Logs are cleared on app restart."
 
-    // API Providers
+    // ============================================================
+    // API PROVIDERS
+    // ============================================================
     override val providerDescription = "Choose your speech-to-text provider"
 
-    // Voice Modes
+    // ============================================================
+    // VOICE MODES
+    // ============================================================
     override val voiceModes = "Voice Processing Modes"
     override val selectMode = "Select Mode"
     override val addVoiceMode = "Add Voice Mode"
@@ -82,7 +116,9 @@ object EnglishStrings : Strings {
     override val systemPrompt = "System Prompt"
     override val enterPrompt = "Enter the system prompt for this mode"
 
-    // Default Voice Modes
+    // ============================================================
+    // DEFAULT VOICE MODE NAMES & PROMPTS
+    // ============================================================
     override val modeVerbatim = "Verbatim"
     override val modeVerbatimPrompt = "Transcribe the audio exactly as spoken."
     override val modeFixGrammar = "Fix Grammar"
@@ -92,7 +128,9 @@ object EnglishStrings : Strings {
     override val modeLlmResponse = "LLM Response"
     override val modeLlmResponsePrompt = "The user is asking a question. Provide a direct, concise answer to the question without any additional explanation or context. Return ONLY the answer itself."
 
-    // Appearance Settings
+    // ============================================================
+    // APPEARANCE SETTINGS
+    // ============================================================
     override val appearanceSettings = "Appearance"
     override val colorScheme = "Color Scheme"
     override val useDynamicColor = "Use Dynamic Color"
@@ -103,19 +141,25 @@ object EnglishStrings : Strings {
     override val fontFamily = "Font Family"
     override val uiLanguage = "Interface Language"
 
-    // Dark Mode Options
+    // ============================================================
+    // DARK MODE OPTIONS
+    // ============================================================
     override val darkModeFollowSystem = "Follow System"
     override val darkModeAlwaysLight = "Always Light"
     override val darkModeAlwaysDark = "Always Dark"
 
-    // Advanced Settings
+    // ============================================================
+    // ADVANCED SETTINGS
+    // ============================================================
     override val advancedSettings = "Advanced"
     override val autoCopyToClipboard = "Auto-copy to Clipboard"
     override val autoCopyToClipboardDesc = "Automatically copy transcriptions"
     override val enableHistoryPanel = "Enable History Panel"
     override val enableHistoryPanelDesc = "Long-press paste button to view history"
 
-    // About Screen
+    // ============================================================
+    // ABOUT SCREEN
+    // ============================================================
     override val aboutHyperWhisper = "About HyperWhisper"
     override val version = "Version"
     override val versionCode = "Code"
@@ -134,7 +178,9 @@ object EnglishStrings : Strings {
     override val costsEstimateNote = "* Costs are estimated based on current API pricing. Actual costs may vary."
     override val clearStatistics = "CLEAR STATISTICS"
 
-    // Logs Screen
+    // ============================================================
+    // LOGS SCREEN
+    // ============================================================
     override val traceLogs = "Trace Logs"
     override val diagnosticLogs = "Diagnostic Logs"
     override val diagnosticLogsDesc = "These logs show API calls, processing steps, and errors. Logs are cleared on app restart. You can copy or clear them using the buttons above."
@@ -144,7 +190,9 @@ object EnglishStrings : Strings {
     override val clearLogs = "Clear Logs"
     override val logsCopiedToClipboard = "Logs copied to clipboard"
 
-    // Configuration Info
+    // ============================================================
+    // CONFIGURATION INFO
+    // ============================================================
     override val currentConfiguration = "Current Configuration"
     override val provider = "Provider"
     override val transcriptionModel = "Transcription Model"
@@ -154,13 +202,17 @@ object EnglishStrings : Strings {
     override val keepOriginal = "keep original"
     override val notConfigured = "Not configured"
 
-    // Transcription History
+    // ============================================================
+    // TRANSCRIPTION HISTORY
+    // ============================================================
     override val transcriptionHistory = "Transcription History"
-    override val historyCount = "{count}/20"
+    override val historyCount = "{count}/20"  // Keep format, translate if needed
     override val noHistoryYet = "No history yet"
     override val clearAll = "CLEAR ALL"
 
-    // Connection Test
+    // ============================================================
+    // CONNECTION TEST RESULTS
+    // ============================================================
     override val connectionTesting = "Testing connection..."
     override val connectionSuccess = "Connection successful! API is responding."
     override val connectionFailed = "Connection failed"
@@ -169,7 +221,9 @@ object EnglishStrings : Strings {
     override val connectionTimeout = "Connection timeout. Check your internet connection."
     override val sslError = "SSL/TLS error. Check endpoint URL (https)."
 
-    // Errors
+    // ============================================================
+    // ERROR MESSAGES
+    // ============================================================
     override val error = "Error"
     override val copyError = "COPY ERROR"
     override val openSettings = "OPEN SETTINGS"
@@ -182,15 +236,21 @@ object EnglishStrings : Strings {
     override val errorPermissionMicrophone = "Microphone permission not granted. Please enable microphone access in Android Settings."
     override val errorMicrophoneInUse = "Cannot access microphone. It may be in use by another app."
 
-    // Processing Info Toast
+    // ============================================================
+    // PROCESSING INFO
+    // ============================================================
     override val translated = "Translated to"
     override val twoStepProcessing = "Two-step processing"
 
-    // Time units
+    // ============================================================
+    // TIME UNITS (keep short)
+    // ============================================================
     override val minutes = "m"
     override val seconds = "s"
 
-    // Input Field Information
+    // ============================================================
+    // INPUT FIELD INFORMATION
+    // ============================================================
     override val inputFieldType = "Type"
     override val inputFieldApp = "App"
     override val inputFieldAction = "Action"
@@ -210,7 +270,9 @@ object EnglishStrings : Strings {
     override val actionNext = "Next"
     override val actionPrevious = "Previous"
 
-    // Usage Guide (About Screen)
+    // ============================================================
+    // USAGE GUIDE (ABOUT SCREEN)
+    // ============================================================
     override val usageGuideTitle = "How to Use"
     override val voiceModesGuide = "Voice Modes"
     override val voiceModeVerbatimDesc = "Verbatim - Exact transcription as spoken"
@@ -242,3 +304,140 @@ object EnglishStrings : Strings {
     override val languageSelectionTitle = "Language Selection"
     override val languageSelectionDesc = "Use Configuration mode to change languages hands-free, or tap the language buttons below the microphone to select from the list."
 }
+```
+
+---
+
+## Step-by-Step: Adding a New Language
+
+### 1. Create the Strings File
+
+Copy the template above to:
+```
+app/src/main/java/com/hyperwhisper/ime/localization/[Language]Strings.kt
+```
+
+Example: `SpanishStrings.kt`, `FrenchStrings.kt`, `GermanStrings.kt`
+
+### 2. Update AppLanguage.kt
+
+Add your language to the enum:
+
+```kotlin
+enum class AppLanguage(
+    val displayName: String,
+    val nativeName: String,
+    val code: String,
+    val isRTL: Boolean = false
+) {
+    ENGLISH("English", "English", "en", false),
+    RUSSIAN("Russian", "Русский", "ru", false),
+    ARABIC("Arabic", "العربية", "ar", true),
+    SPANISH("Spanish", "Español", "es", false),  // ADD THIS
+    // ... more languages
+}
+```
+
+### 3. Update getStrings() Function
+
+Add the mapping in `AppLanguage.kt`:
+
+```kotlin
+fun AppLanguage.getStrings(): Strings {
+    return when (this) {
+        AppLanguage.ENGLISH -> EnglishStrings
+        AppLanguage.RUSSIAN -> RussianStrings
+        AppLanguage.ARABIC -> ArabicStrings
+        AppLanguage.SPANISH -> SpanishStrings  // ADD THIS
+    }
+}
+```
+
+### 4. Build and Test
+
+```bash
+./build-android.sh
+```
+
+---
+
+## Translation Notes
+
+### Keep These Unchanged
+- `appName` = "HyperWhisper" (brand name)
+- `apiKeyPlaceholder` = "sk-..." (technical format)
+- `historyCount` = "{count}/20" (format string)
+- Technical terms like URLs, API, SSL, etc.
+
+### RTL Languages
+For Right-to-Left languages (Arabic, Hebrew, Farsi):
+- Set `isRTL = true` in the enum
+- UI will automatically mirror
+
+### Long Strings
+Some languages have longer words. Test these carefully:
+- Button labels
+- Settings titles
+- Error messages
+
+### Special Characters
+Ensure proper encoding for:
+- Cyrillic (Russian)
+- Arabic script
+- Chinese/Japanese characters
+- Accented Latin (French, German, Spanish)
+
+---
+
+## String Count Summary
+
+Total strings to translate: **120**
+
+| Category | Count |
+|----------|-------|
+| App Info | 2 |
+| Common Actions | 9 |
+| Keyboard UI | 7 |
+| Buttons | 6 |
+| Accessibility | 6 |
+| Language Selectors | 6 |
+| Settings | 15 |
+| Voice Modes | 13 |
+| Appearance | 11 |
+| About Screen | 17 |
+| Logs | 10 |
+| Configuration | 8 |
+| History | 4 |
+| Connection Test | 7 |
+| Errors | 12 |
+| Processing | 2 |
+| Time Units | 2 |
+| Input Field Info | 17 |
+| Usage Guide | 25 |
+
+---
+
+## Quick Reference: Common Translations
+
+| English | Spanish | French | German |
+|---------|---------|--------|--------|
+| Cancel | Cancelar | Annuler | Abbrechen |
+| Save | Guardar | Enregistrer | Speichern |
+| Delete | Eliminar | Supprimer | Löschen |
+| Settings | Configuración | Paramètres | Einstellungen |
+| Error | Error | Erreur | Fehler |
+| Recording... | Grabando... | Enregistrement... | Aufnahme... |
+| Processing... | Procesando... | Traitement... | Verarbeitung... |
+
+---
+
+## Validation Checklist
+
+Before submitting a translation:
+
+- [ ] All 120 strings translated
+- [ ] No English left (except brand names)
+- [ ] Special characters display correctly
+- [ ] Long strings don't break UI
+- [ ] RTL layout works (if applicable)
+- [ ] Tested on actual device

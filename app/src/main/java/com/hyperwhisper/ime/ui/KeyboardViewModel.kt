@@ -50,6 +50,13 @@ class KeyboardViewModel @Inject constructor(
     private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
     val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
 
+    // Audio file info for progress display
+    private val _lastAudioFileSize = MutableStateFlow<Long>(0L)
+    val lastAudioFileSize: StateFlow<Long> = _lastAudioFileSize.asStateFlow()
+
+    private val _lastAudioDuration = MutableStateFlow<Double>(0.0)
+    val lastAudioDuration: StateFlow<Double> = _lastAudioDuration.asStateFlow()
+
     // Job for current transcription (to allow cancellation)
     private var transcriptionJob: kotlinx.coroutines.Job? = null
 
@@ -162,6 +169,11 @@ class KeyboardViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Capture audio file info for progress display
+                _lastAudioFileSize.value = audioFile.length()
+                _lastAudioDuration.value = calculateAudioDuration(audioFile)
+                Log.d(TAG, "Audio file info: size=${audioFile.length()} bytes, est duration=${_lastAudioDuration.value}s")
+
                 // Get current settings and mode
                 val settings = apiSettings.value
                 val mode = selectedMode.value
@@ -273,6 +285,12 @@ class KeyboardViewModel @Inject constructor(
                         Log.e(TAG, "Transcription failed: ${result.message}")
                         TraceLogger.error("KeyboardViewModel", "Transcription failed: ${result.message}")
 
+                        // Save audio to history even on error (with empty text) so user can retry
+                        if (savedAudioPath != null) {
+                            settingsRepository.addToHistory("", savedAudioPath)
+                            Log.d(TAG, "Audio saved to history for retry: $savedAudioPath")
+                        }
+
                         _errorMessage.value = "API Error: ${result.message}"
                         _recordingState.value = RecordingState.ERROR
                         _transcriptionProgress.value = null
@@ -293,6 +311,12 @@ class KeyboardViewModel @Inject constructor(
                     } catch (e: Exception) {
                         Log.e(TAG, "Error during transcription", e)
                         TraceLogger.error("KeyboardViewModel", "Transcription error", e)
+
+                        // Save audio to history even on error (with empty text) so user can retry
+                        if (savedAudioPath != null) {
+                            settingsRepository.addToHistory("", savedAudioPath)
+                            Log.d(TAG, "Audio saved to history for retry after exception: $savedAudioPath")
+                        }
 
                         _errorMessage.value = e.message
                         _recordingState.value = RecordingState.ERROR
@@ -592,6 +616,27 @@ class KeyboardViewModel @Inject constructor(
             Log.e(TAG, "Failed to save audio file to persistent storage", e)
             TraceLogger.error("KeyboardViewModel", "Failed to save audio file", e)
             null
+        }
+    }
+
+    /**
+     * Calculate audio duration from file
+     * For WAV files, estimates duration based on file size and format assumptions
+     */
+    private fun calculateAudioDuration(audioFile: File): Double {
+        return try {
+            // Standard WAV format assumptions for our recorder:
+            // 16-bit PCM, mono, 16kHz sample rate
+            // Bytes per second = 16000 samples/sec * 2 bytes/sample = 32000 bytes/sec
+            val WAV_HEADER_SIZE = 44
+            val BYTES_PER_SECOND = 32000.0 // 16kHz * mono * 16-bit (2 bytes)
+
+            val dataSize = audioFile.length() - WAV_HEADER_SIZE
+            val duration = dataSize / BYTES_PER_SECOND
+            duration.coerceAtLeast(0.0)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating audio duration", e)
+            0.0
         }
     }
 

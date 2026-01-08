@@ -74,6 +74,8 @@ fun KeyboardScreen(
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
     val usageStatistics by viewModel.usageStatistics.collectAsState()
     val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
+    val lastAudioFileSize by viewModel.lastAudioFileSize.collectAsState()
+    val lastAudioDuration by viewModel.lastAudioDuration.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
@@ -374,6 +376,8 @@ fun KeyboardScreen(
                             recordingDuration = recordingDuration,
                             transcriptionProgress = transcriptionProgress,
                             processingStage = processingStage,
+                            audioFileSize = lastAudioFileSize,
+                            audioDurationSeconds = lastAudioDuration,
                             modifier = Modifier
                         )
 
@@ -618,7 +622,6 @@ fun KeyboardScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModeSelector(
     modes: List<VoiceMode>,
@@ -630,44 +633,93 @@ fun ModeSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedMode = modes.firstOrNull { it.id == selectedModeId }
 
-    // Reset expanded state when mode changes
-    androidx.compose.runtime.LaunchedEffect(selectedModeId) {
-        expanded = false
-    }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = it },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selectedMode?.name ?: "Select Mode",
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            singleLine = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+    Box(modifier = modifier) {
+        // Clickable surface that opens the dropdown
+        Surface(
+            onClick = { if (enabled) expanded = true },
             modifier = Modifier
-                .menuAnchor()
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-        )
+                .heightIn(min = 48.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = if (enabled) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            },
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (expanded) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedMode?.name ?: "Select Mode",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                    contentDescription = "Dropdown",
+                    tint = if (enabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    },
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
 
-        ExposedDropdownMenu(
+        // Dropdown menu
+        DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .heightIn(max = 300.dp)
         ) {
             modes.forEach { mode ->
                 DropdownMenuItem(
-                    text = { Text(mode.name) },
+                    text = {
+                        Text(
+                            mode.name,
+                            fontWeight = if (mode.id == selectedModeId) FontWeight.Bold else FontWeight.Normal,
+                            color = if (mode.id == selectedModeId) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    },
                     onClick = {
                         onModeSelected(mode.id)
                         expanded = false
                     },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    leadingIcon = if (mode.id == selectedModeId) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else null,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
         }
@@ -683,6 +735,8 @@ fun MicrophoneButton(
     recordingDuration: Long = 0L,
     transcriptionProgress: Float? = null,
     processingStage: ProcessingStage? = null,
+    audioFileSize: Long = 0L,
+    audioDurationSeconds: Double = 0.0,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -703,6 +757,8 @@ fun MicrophoneButton(
                 ProcessingIndicator(
                     progress = transcriptionProgress,
                     processingStage = processingStage,
+                    audioFileSize = audioFileSize,
+                    audioDurationSeconds = audioDurationSeconds,
                     onCancel = onCancelTranscription
                 )
             }
@@ -780,8 +836,31 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
 fun ProcessingIndicator(
     progress: Float? = null,
     processingStage: ProcessingStage? = null,
+    audioFileSize: Long = 0L,
+    audioDurationSeconds: Double = 0.0,
     onCancel: () -> Unit = {}
 ) {
+    // Format file size for display
+    val fileSizeText = when {
+        audioFileSize < 1024 -> "${audioFileSize}B"
+        audioFileSize < 1024 * 1024 -> "${audioFileSize / 1024}KB"
+        else -> "${audioFileSize / (1024 * 1024)}MB"
+    }
+
+    // Format duration for display
+    val durationText = if (audioDurationSeconds > 0) {
+        val minutes = (audioDurationSeconds / 60).toInt()
+        val seconds = (audioDurationSeconds % 60).toInt()
+        if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
+    } else ""
+
+    // Estimate time based on file size (rough estimate: ~1KB/sec processing)
+    val estimatedSeconds = (audioFileSize / 1024.0).toInt().coerceAtLeast(1)
+    val estimatedText = when {
+        audioFileSize > 0 -> "Est: ~${estimatedSeconds}s"
+        else -> ""
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -832,12 +911,43 @@ fun ProcessingIndicator(
             }
         }
 
-        // Show processing stage text
+        // Show file info in small text
+        if (fileSizeText.isNotEmpty() || durationText.isNotEmpty() || estimatedText.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            ) {
+                if (fileSizeText.isNotEmpty()) {
+                    Text(
+                        text = fileSizeText,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                if (durationText.isNotEmpty()) {
+                    Text(
+                        text = "• $durationText",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                if (estimatedText.isNotEmpty()) {
+                    Text(
+                        text = "• $estimatedText",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+
+        // Show processing stage text below file info
         processingStage?.let { stage ->
             Text(
                 text = stage.displayName,
                 fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary,
                 maxLines = 1
             )
         }
@@ -1564,7 +1674,7 @@ fun RecordingTimer(
 }
 
 /**
- * Transcription history panel
+ * Transcription history panel - fullscreen compact view
  */
 @Composable
 fun TranscriptionHistoryPanel(
@@ -1576,210 +1686,232 @@ fun TranscriptionHistoryPanel(
     onReprocessWithNewSettings: ((TranscriptionHistoryItem) -> Unit)? = null
 ) {
     val strings = LocalStrings.current
-    // Full-screen overlay
+
+    // Fullscreen overlay - no padding for maximum space
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        tonalElevation = 16.dp
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
     ) {
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(16.dp)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Compact header row with title, count, and action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Title
+                // Title and count
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         strings.transcriptionHistory,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        strings.historyCount.replace("{count}", history.size.toString()),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-
-                Divider()
-
-                // History list
-                if (history.isEmpty()) {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            strings.noHistoryYet,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            strings.historyCount.replace("{count}", history.size.toString()),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(history.size) { index ->
-                            val item = history[index]
-                            val dateTime = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
-                                .format(java.util.Date(item.timestamp))
-                            val hasAudio = item.audioFilePath != null
+                }
 
-                            Surface(
-                                onClick = { onSelect(item.text) },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(8.dp)
+                // Compact action buttons
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (history.isNotEmpty()) {
+                        // Clear all - small icon button
+                        IconButton(
+                            onClick = onClearAll,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteSweep,
+                                contentDescription = strings.clearAll,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    // Close button
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = strings.close,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // History list - fullscreen
+            if (history.isEmpty()) {
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            strings.noHistoryYet,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(history.size) { index ->
+                        val item = history[index]
+                        val dateTime = java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(item.timestamp))
+                        val hasAudio = item.audioFilePath != null
+                        val hasText = item.text.isNotBlank()
+                        val isAudioOnly = hasAudio && !hasText
+
+                        Surface(
+                            onClick = { if (hasText) onSelect(item.text) },
+                            enabled = hasText,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = when {
+                                isAudioOnly -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                                else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                // Compact header: timestamp + audio indicator + reprocess buttons inline
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Header with timestamp and audio indicator
+                                    // Left: timestamp and status
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             dateTime,
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             color = MaterialTheme.colorScheme.primary,
                                             fontWeight = FontWeight.Bold
                                         )
                                         if (hasAudio) {
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Mic,
-                                                    contentDescription = "Has audio",
-                                                    modifier = Modifier.size(14.dp),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                                Text(
-                                                    "Audio saved",
-                                                    fontSize = 9.sp,
-                                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            }
+                                            Icon(
+                                                imageVector = Icons.Default.Mic,
+                                                contentDescription = "Has audio",
+                                                modifier = Modifier.size(12.dp),
+                                                tint = if (isAudioOnly) {
+                                                    MaterialTheme.colorScheme.error
+                                                } else {
+                                                    MaterialTheme.colorScheme.primary
+                                                }
+                                            )
+                                        }
+                                        if (isAudioOnly) {
+                                            Text(
+                                                "Audio only",
+                                                fontSize = 9.sp,
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Medium
+                                            )
                                         }
                                     }
 
-                                    // Transcription text
-                                    Text(
-                                        item.text,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 3
-                                    )
-
-                                    // Process buttons (only if audio exists)
+                                    // Right: compact reprocess buttons (icons only)
                                     if (hasAudio && (onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                             if (onReprocessWithCurrentSettings != null) {
-                                                OutlinedButton(
+                                                IconButton(
                                                     onClick = { onReprocessWithCurrentSettings(item) },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 8.dp),
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.secondary
-                                                    )
+                                                    modifier = Modifier.size(28.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Replay,
-                                                        contentDescription = "Reprocess",
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text(
-                                                        "Current",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold
+                                                        contentDescription = "Reprocess with current settings",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.secondary
                                                     )
                                                 }
                                             }
                                             if (onReprocessWithNewSettings != null) {
-                                                Button(
+                                                IconButton(
                                                     onClick = { onReprocessWithNewSettings(item) },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = PaddingValues(vertical = 4.dp, horizontal = 8.dp),
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.secondary
-                                                    )
+                                                    modifier = Modifier.size(28.dp)
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Settings,
-                                                        contentDescription = "Settings",
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text(
-                                                        "New Settings",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold
+                                                        imageVector = Icons.Default.Tune,
+                                                        contentDescription = "Reprocess with new settings",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
                                                     )
                                                 }
                                             }
                                         }
                                     }
                                 }
+
+                                // Transcription text (or placeholder for audio-only)
+                                if (hasText) {
+                                    Text(
+                                        item.text,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        lineHeight = 14.sp
+                                    )
+                                } else if (isAudioOnly) {
+                                    Text(
+                                        "Tap replay to transcribe this audio",
+                                        fontSize = 11.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
                             }
                         }
-                    }
-                }
-
-                // Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (history.isNotEmpty()) {
-                        OutlinedButton(
-                            onClick = onClearAll,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("CLEAR ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("CLOSE", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     }
 }
+
 /**
- * Dialog for selecting new settings for reprocessing audio
+ * Inline panel for selecting new settings for reprocessing audio
+ * Uses Surface overlay instead of Dialog to work in keyboard (IME) context
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1794,97 +1926,152 @@ fun ReprocessSettingsDialog(
     var selectedProvider by remember { mutableStateOf(currentApiSettings.provider) }
     var selectedModeId by remember { mutableStateOf(currentSelectedModeId) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Reprocess Audio",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+    // Fullscreen overlay panel (works in IME context unlike Dialog)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header with title and close button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Select provider and mode for reprocessing:",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "Reprocess Audio",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
-                // Provider selection
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "Provider:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        modifier = Modifier.size(20.dp)
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ApiProvider.values().forEach { provider ->
-                            FilterChip(
-                                selected = selectedProvider == provider,
-                                onClick = { selectedProvider = provider },
-                                label = {
-                                    Text(
-                                        provider.displayName,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            )
-                        }
-                    }
                 }
+            }
 
-                // Mode selection
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "Mode:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    currentVoiceModes.forEach { mode ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedModeId == mode.id,
-                                onClick = { selectedModeId = mode.id }
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                mode.name,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+            Text(
+                "Select provider and mode:",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Provider selection - horizontal chips
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Provider:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ApiProvider.values().forEach { provider ->
+                        FilterChip(
+                            selected = selectedProvider == provider,
+                            onClick = { selectedProvider = provider },
+                            label = {
+                                Text(provider.displayName, fontSize = 10.sp)
+                            },
+                            modifier = Modifier.height(28.dp)
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val selectedMode = currentVoiceModes.firstOrNull { it.id == selectedModeId }
-                    if (selectedMode != null) {
-                        val newSettings = currentApiSettings.copy(provider = selectedProvider)
-                        onConfirm(newSettings, selectedMode)
-                    }
-                },
-                enabled = currentVoiceModes.any { it.id == selectedModeId }
+
+            // Mode selection - scrollable list
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                Text("REPROCESS", fontWeight = FontWeight.Bold)
+                Text(
+                    "Mode:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(currentVoiceModes.size) { index ->
+                        val mode = currentVoiceModes[index]
+                        val isSelected = selectedModeId == mode.id
+                        Surface(
+                            onClick = { selectedModeId = mode.id },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            },
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedModeId = mode.id },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    mode.name,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL")
+
+            // Action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("CANCEL", fontSize = 12.sp)
+                }
+                Button(
+                    onClick = {
+                        val selectedMode = currentVoiceModes.firstOrNull { it.id == selectedModeId }
+                        if (selectedMode != null) {
+                            val newSettings = currentApiSettings.copy(provider = selectedProvider)
+                            onConfirm(newSettings, selectedMode)
+                        }
+                    },
+                    enabled = currentVoiceModes.any { it.id == selectedModeId },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("REPROCESS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
-    )
+    }
 }

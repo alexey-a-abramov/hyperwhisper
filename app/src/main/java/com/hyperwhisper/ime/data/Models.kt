@@ -219,7 +219,16 @@ data class TranscriptionRequest(
 )
 
 data class TranscriptionResponse(
-    @SerializedName("text") val text: String
+    @SerializedName("text") val text: String,
+    @SerializedName("duration") val duration: Double? = null,
+    @SerializedName("words") val words: List<WordInfo>? = null,
+    @SerializedName("usage") val usage: TokenUsage? = null
+)
+
+data class WordInfo(
+    @SerializedName("word") val word: String,
+    @SerializedName("start") val start: Double,
+    @SerializedName("end") val end: Double
 )
 
 // Strategy B: Chat Completion with Audio
@@ -355,7 +364,7 @@ data class AppearanceSettings(
     val uiLanguage: String = "en", // UI language code (en, ru, etc.)
     val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
     val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
-    val autoCopyToClipboard: Boolean = true,
+    val autoCopyToClipboard: Boolean = false,
     val enableHistoryPanel: Boolean = true,
     val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
     val showKeyboardSwitcher: Boolean = false // Show keyboard switcher button on main screen

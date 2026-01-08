@@ -20,6 +20,16 @@ interface TranscriptionApiService {
         @Part("response_format") responseFormat: RequestBody? = null,
         @Part("language") language: RequestBody? = null
     ): Response<TranscriptionResponse>
+
+    @Multipart
+    @POST("audio/transcriptions")
+    suspend fun transcribeWithDetails(
+        @Part file: MultipartBody.Part,
+        @Part("model") model: RequestBody,
+        @Part("response_format") responseFormat: RequestBody? = null,
+        @Part("timestamp_granularity") timestampGranularity: RequestBody? = null,
+        @Part("language") language: RequestBody? = null
+    ): Response<TranscriptionResponse>
 }
 
 /**

@@ -55,7 +55,9 @@ class TranscriptionStrategy(
                 requestFile
             )
             val modelPart = modelId.toRequestBody("text/plain".toMediaTypeOrNull())
-            val formatPart = "json".toRequestBody("text/plain".toMediaTypeOrNull())
+            // Use verbose_json to get token usage and duration info
+            val formatPart = "verbose_json".toRequestBody("text/plain".toMediaTypeOrNull())
+            val timestampGranularityPart = "word".toRequestBody("text/plain".toMediaTypeOrNull())
             val languagePart = if (apiSettings.inputLanguage.isNotEmpty()) {
                 apiSettings.inputLanguage.toRequestBody("text/plain".toMediaTypeOrNull())
             } else null
@@ -69,14 +71,16 @@ class TranscriptionStrategy(
             Log.d(TAG, "  Language: ${if (apiSettings.inputLanguage.isEmpty()) "auto-detect" else apiSettings.inputLanguage}")
             Log.d(TAG, "  Audio file: ${audioFile.name} (${audioFile.length()} bytes)")
             Log.d(TAG, "  Audio format: ${audioFile.extension}")
-            Log.d(TAG, "  Response format: json")
+            Log.d(TAG, "  Response format: verbose_json")
+            Log.d(TAG, "  Timestamp granularity: word")
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
-            // Make API call
-            val response = apiService.transcribe(
+            // Make API call with additional parameters for token usage
+            val response = apiService.transcribeWithDetails(
                 file = filePart,
                 model = modelPart,
                 responseFormat = formatPart,
+                timestampGranularity = timestampGranularityPart,
                 language = languagePart
             )
 
@@ -87,12 +91,42 @@ class TranscriptionStrategy(
             Log.d(TAG, "  Headers: ${response.headers()}")
 
             if (response.isSuccessful) {
-                val transcription = response.body()?.text ?: ""
+                val body = response.body()
+                val transcription = body?.text ?: ""
+                val tokenUsage = body?.usage
+                // Calculate duration from file if API doesn't provide it
+                // WAV format: 16kHz, mono, 16-bit = 32000 bytes/sec (minus 44 byte header)
+                val estimatedDuration = if (audioFile.length() > 44) {
+                    (audioFile.length() - 44) / 32000.0
+                } else 0.0
+                val duration = body?.duration ?: estimatedDuration
+
                 Log.d(TAG, "✓ Transcription successful")
                 Log.d(TAG, "  Result length: ${transcription.length} chars")
+                Log.d(TAG, "  Duration: $duration seconds")
+                tokenUsage?.let {
+                    Log.d(TAG, "  Token usage: in=${it.promptTokens}, out=${it.completionTokens}, total=${it.totalTokens}")
+                }
                 Log.d(TAG, "  Result preview: ${transcription.take(100)}...")
                 Log.d(TAG, "========== END REQUEST ==========")
-                ApiResult.Success(transcription)
+
+                // Create ProcessingInfo with token usage
+                val processingInfo = ProcessingInfo(
+                    processingMode = "single-step",
+                    strategy = "transcription",
+                    transcriptionModel = modelId,
+                    postProcessingModel = null,
+                    translationEnabled = false,
+                    translationTarget = null,
+                    originalTranscription = null,
+                    voiceModeName = voiceMode.name,
+                    systemPrompt = voiceMode.systemPrompt,
+                    audioDurationSeconds = duration,
+                    transcriptionTokens = tokenUsage,
+                    postProcessingTokens = null
+                )
+
+                ApiResult.Success(transcription, processingInfo)
             } else {
                 val errorBody = response.errorBody()?.string() ?: "No error details"
                 val statusCode = response.code()

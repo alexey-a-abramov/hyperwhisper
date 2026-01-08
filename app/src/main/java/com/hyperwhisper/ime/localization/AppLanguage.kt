@@ -33,10 +33,15 @@ enum class AppLanguage(
         nativeName = "العربية",
         code = "ar",
         isRTL = true
+    ),
+    SPANISH(
+        displayName = "Spanish",
+        nativeName = "Español",
+        code = "es",
+        isRTL = false
     );
     // Add more languages here:
     // GERMAN("German", "Deutsch", "de", false),
-    // SPANISH("Spanish", "Español", "es", false),
     // FRENCH("French", "Français", "fr", false),
     // HEBREW("Hebrew", "עברית", "he", true),
     // FARSI("Farsi", "فارسی", "fa", true),
@@ -51,9 +56,9 @@ fun AppLanguage.getStrings(): Strings {
         AppLanguage.ENGLISH -> EnglishStrings
         AppLanguage.RUSSIAN -> RussianStrings
         AppLanguage.ARABIC -> ArabicStrings
+        AppLanguage.SPANISH -> SpanishStrings
         // Add new languages here:
         // AppLanguage.GERMAN -> GermanStrings
-        // AppLanguage.SPANISH -> SpanishStrings
     }
 }
 

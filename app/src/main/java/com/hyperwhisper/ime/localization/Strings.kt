@@ -218,4 +218,36 @@ interface Strings {
     val actionSend: String
     val actionNext: String
     val actionPrevious: String
+
+    // Usage Guide (About Screen)
+    val usageGuideTitle: String
+    val voiceModesGuide: String
+    val voiceModeVerbatimDesc: String
+    val voiceModeFixGrammarDesc: String
+    val voiceModePoliteDesc: String
+    val voiceModePromptFormatterDesc: String
+    val voiceModeLlmResponseDesc: String
+    val voiceModeConfigurationDesc: String
+    val configurationModeTitle: String
+    val configurationModeDesc: String
+    val sampleVoiceCommandsTitle: String
+    val sampleCommandLanguage: String
+    val sampleCommandMode: String
+    val sampleCommandTheme: String
+    val sampleCommandHistory: String
+    val sampleCommandDeveloper: String
+    val sampleCommandInterface: String
+    val sampleCommandExit: String
+    val howItWorksTitle: String
+    val howItWorksStep1: String
+    val howItWorksStep2: String
+    val howItWorksStep3: String
+    val howItWorksStep4: String
+    val howItWorksConfirmation: String
+    val deleteButtonTitle: String
+    val deleteButtonTap: String
+    val deleteButtonHold: String
+    val deleteButtonLongHold: String
+    val languageSelectionTitle: String
+    val languageSelectionDesc: String
 }
