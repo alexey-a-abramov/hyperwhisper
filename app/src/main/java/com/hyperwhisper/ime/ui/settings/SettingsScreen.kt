@@ -1578,7 +1578,7 @@ fun AppearanceSection(
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
-                    text = "Long press paste button to view last 20 transcriptions",
+                    text = "Long press paste button to view recent transcriptions",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -1591,6 +1591,107 @@ fun AppearanceSection(
                     onSettingsChange(newSettings)
                 }
             )
+        }
+
+        // History size configuration (shown when history panel is enabled)
+        if (localSettings.enableHistoryPanel) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Unlimited history toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Unlimited History",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Keep all transcriptions (may use more storage)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                Switch(
+                    checked = localSettings.unlimitedHistory,
+                    onCheckedChange = { enabled ->
+                        val newSettings = localSettings.copy(unlimitedHistory = enabled)
+                        localSettings = newSettings
+                        onSettingsChange(newSettings)
+                    }
+                )
+            }
+
+            // Max history items (shown when unlimited is off)
+            if (!localSettings.unlimitedHistory) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var maxHistoryText by remember(localSettings.maxHistoryItems) {
+                    mutableStateOf(localSettings.maxHistoryItems.toString())
+                }
+                var showHistoryWarning by remember { mutableStateOf(false) }
+                var pendingMaxHistory by remember { mutableStateOf(0) }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Maximum History Items",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Number of transcriptions to keep (1-100)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    OutlinedTextField(
+                        value = maxHistoryText,
+                        onValueChange = { newValue ->
+                            maxHistoryText = newValue
+                            val newMax = newValue.toIntOrNull()
+                            if (newMax != null && newMax in 1..100) {
+                                if (newMax < localSettings.maxHistoryItems) {
+                                    // Reducing history - show warning
+                                    pendingMaxHistory = newMax
+                                    showHistoryWarning = true
+                                } else {
+                                    // Increasing or same - apply immediately
+                                    val newSettings = localSettings.copy(maxHistoryItems = newMax)
+                                    localSettings = newSettings
+                                    onSettingsChange(newSettings)
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = maxHistoryText.toIntOrNull()?.let { it !in 1..100 } ?: true
+                    )
+                }
+
+                // History reduction warning dialog
+                if (showHistoryWarning) {
+                    HistoryReductionWarningDialog(
+                        currentSize = localSettings.maxHistoryItems,
+                        newSize = pendingMaxHistory,
+                        onConfirm = {
+                            val newSettings = localSettings.copy(maxHistoryItems = pendingMaxHistory)
+                            localSettings = newSettings
+                            onSettingsChange(newSettings)
+                            showHistoryWarning = false
+                        },
+                        onDismiss = {
+                            maxHistoryText = localSettings.maxHistoryItems.toString()
+                            showHistoryWarning = false
+                        }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -2112,4 +2213,64 @@ fun ModeCardWithTooltip(
             }
         )
     }
+}
+
+@Composable
+fun HistoryReductionWarningDialog(
+    currentSize: Int,
+    newSize: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val itemsToDelete = (currentSize - newSize).coerceAtLeast(0)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = { Text("Reduce History Size?") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "You are reducing the maximum history size from $currentSize to $newSize items.",
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "$itemsToDelete history items including their audio files will be permanently deleted.",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "This action cannot be undone.",
+                    fontSize = 13.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("DELETE $itemsToDelete ITEMS")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL")
+            }
+        }
+    )
 }

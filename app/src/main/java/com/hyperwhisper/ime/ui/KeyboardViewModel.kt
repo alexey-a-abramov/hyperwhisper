@@ -505,8 +505,8 @@ class KeyboardViewModel @Inject constructor(
                         _processingInfo.value = result.processingInfo
                         _recordingState.value = RecordingState.IDLE
 
-                        // Update history with new transcription
-                        settingsRepository.addToHistory(result.data, audioFilePath)
+                        // Update existing history item instead of creating a new one
+                        settingsRepository.updateHistoryItem(item.id, result.data)
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "Reprocessing failed: ${result.message}")
@@ -566,8 +566,8 @@ class KeyboardViewModel @Inject constructor(
                         _processingInfo.value = result.processingInfo
                         _recordingState.value = RecordingState.IDLE
 
-                        // Update history with new transcription
-                        settingsRepository.addToHistory(result.data, audioFilePath)
+                        // Update existing history item instead of creating a new one
+                        settingsRepository.updateHistoryItem(item.id, result.data)
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "Reprocessing failed: ${result.message}")

@@ -45,6 +45,8 @@ class SettingsRepository @Inject constructor(
         private val APPEARANCE_ENABLE_HISTORY_KEY = booleanPreferencesKey("appearance_enable_history")
         private val APPEARANCE_TECHIE_MODE_KEY = booleanPreferencesKey("appearance_techie_mode")
         private val APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY = booleanPreferencesKey("appearance_show_keyboard_switcher")
+        private val APPEARANCE_MAX_HISTORY_ITEMS_KEY = stringPreferencesKey("appearance_max_history_items")
+        private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
 
         // Transcription history key
         private val TRANSCRIPTION_HISTORY_KEY = stringPreferencesKey("transcription_history")
@@ -265,7 +267,9 @@ class SettingsRepository @Inject constructor(
             autoCopyToClipboard = preferences[APPEARANCE_AUTO_COPY_KEY] ?: true,
             enableHistoryPanel = preferences[APPEARANCE_ENABLE_HISTORY_KEY] ?: true,
             techieModeEnabled = preferences[APPEARANCE_TECHIE_MODE_KEY] ?: false,
-            showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false
+            showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false,
+            maxHistoryItems = preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY]?.toIntOrNull() ?: 20,
+            unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false
         )
     }
 
@@ -281,6 +285,8 @@ class SettingsRepository @Inject constructor(
             preferences[APPEARANCE_ENABLE_HISTORY_KEY] = settings.enableHistoryPanel
             preferences[APPEARANCE_TECHIE_MODE_KEY] = settings.techieModeEnabled
             preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] = settings.showKeyboardSwitcher
+            preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY] = settings.maxHistoryItems.toString()
+            preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
         }
     }
 
@@ -350,6 +356,10 @@ class SettingsRepository @Inject constructor(
         if (text.isBlank() && audioFilePath == null) return
 
         dataStore.edit { preferences ->
+            // Get current appearance settings to determine max history items
+            val maxHistoryItems = preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY]?.toIntOrNull() ?: 20
+            val unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false
+
             val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
             val currentHistory = if (currentHistoryJson.isNullOrEmpty()) {
                 emptyList()
@@ -366,11 +376,19 @@ class SettingsRepository @Inject constructor(
             val newItem = TranscriptionHistoryItem(text = text, audioFilePath = audioFilePath)
             val updatedHistory = listOf(newItem) + currentHistory
 
-            // Keep only last MAX_HISTORY_ITEMS items
-            val trimmedHistory = updatedHistory.take(MAX_HISTORY_ITEMS)
+            // Trim history if not unlimited
+            val trimmedHistory = if (unlimitedHistory) {
+                updatedHistory
+            } else {
+                updatedHistory.take(maxHistoryItems)
+            }
 
             // Delete audio files for items that are being removed
-            val removedItems = updatedHistory.drop(MAX_HISTORY_ITEMS)
+            val removedItems = if (unlimitedHistory) {
+                emptyList()
+            } else {
+                updatedHistory.drop(maxHistoryItems)
+            }
             removedItems.forEach { item ->
                 item.audioFilePath?.let { path ->
                     try {
@@ -382,6 +400,35 @@ class SettingsRepository @Inject constructor(
             }
 
             preferences[TRANSCRIPTION_HISTORY_KEY] = gson.toJson(trimmedHistory)
+        }
+    }
+
+    /**
+     * Update an existing history item with new transcription text
+     * Used when reprocessing audio with different settings
+     */
+    suspend fun updateHistoryItem(itemId: String, newText: String) {
+        dataStore.edit { preferences ->
+            val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
+            if (!currentHistoryJson.isNullOrEmpty()) {
+                try {
+                    val type = object : TypeToken<List<TranscriptionHistoryItem>>() {}.type
+                    val currentHistory = gson.fromJson<List<TranscriptionHistoryItem>>(currentHistoryJson, type) ?: emptyList()
+
+                    // Find and update the item
+                    val updatedHistory = currentHistory.map { item ->
+                        if (item.id == itemId) {
+                            item.copy(text = newText, timestamp = System.currentTimeMillis())
+                        } else {
+                            item
+                        }
+                    }
+
+                    preferences[TRANSCRIPTION_HISTORY_KEY] = gson.toJson(updatedHistory)
+                } catch (e: Exception) {
+                    // Ignore parsing errors
+                }
+            }
         }
     }
 
@@ -410,6 +457,52 @@ class SettingsRepository @Inject constructor(
             }
 
             preferences.remove(TRANSCRIPTION_HISTORY_KEY)
+        }
+    }
+
+    /**
+     * Check how many items will be deleted if history size is reduced
+     * Returns number of items that will be deleted (0 if none)
+     */
+    suspend fun checkHistorySizeReduction(newMaxSize: Int, newUnlimited: Boolean): Int {
+        if (newUnlimited) return 0 // Unlimited means nothing deleted
+
+        val currentHistory = transcriptionHistory.first()
+        val itemsToDelete = (currentHistory.size - newMaxSize).coerceAtLeast(0)
+        return itemsToDelete
+    }
+
+    /**
+     * Trim history to new size, deleting excess items and their audio files
+     */
+    suspend fun trimHistoryToSize(maxSize: Int) {
+        dataStore.edit { preferences ->
+            val currentHistoryJson = preferences[TRANSCRIPTION_HISTORY_KEY]
+            if (!currentHistoryJson.isNullOrEmpty()) {
+                try {
+                    val type = object : TypeToken<List<TranscriptionHistoryItem>>() {}.type
+                    val currentHistory = gson.fromJson<List<TranscriptionHistoryItem>>(currentHistoryJson, type) ?: emptyList()
+
+                    // Keep only the most recent maxSize items
+                    val trimmedHistory = currentHistory.take(maxSize)
+
+                    // Delete audio files for removed items
+                    val removedItems = currentHistory.drop(maxSize)
+                    removedItems.forEach { item ->
+                        item.audioFilePath?.let { path ->
+                            try {
+                                java.io.File(path).delete()
+                            } catch (e: Exception) {
+                                // Ignore deletion errors
+                            }
+                        }
+                    }
+
+                    preferences[TRANSCRIPTION_HISTORY_KEY] = gson.toJson(trimmedHistory)
+                } catch (e: Exception) {
+                    // Ignore parsing errors
+                }
+            }
         }
     }
 

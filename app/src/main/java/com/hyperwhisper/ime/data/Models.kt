@@ -367,7 +367,9 @@ data class AppearanceSettings(
     val autoCopyToClipboard: Boolean = false,
     val enableHistoryPanel: Boolean = true,
     val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
-    val showKeyboardSwitcher: Boolean = false // Show keyboard switcher button on main screen
+    val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
+    val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
+    val unlimitedHistory: Boolean = false // If true, maxHistoryItems is ignored
 )
 
 /**

@@ -135,8 +135,21 @@ class SettingsViewModel @Inject constructor(
     fun saveAppearanceSettings(settings: AppearanceSettings) {
         viewModelScope.launch {
             try {
+                // Check if history size is being reduced
+                val currentSettings = appearanceSettings.value
+                val needsTrimming = !settings.unlimitedHistory &&
+                    (settings.maxHistoryItems < currentSettings.maxHistoryItems ||
+                     (currentSettings.unlimitedHistory && !settings.unlimitedHistory))
+
+                // Save settings first
                 settingsRepository.saveAppearanceSettings(settings)
                 Log.d(TAG, "Appearance settings saved: $settings")
+
+                // Trim history if needed
+                if (needsTrimming) {
+                    settingsRepository.trimHistoryToSize(settings.maxHistoryItems)
+                    Log.d(TAG, "History trimmed to ${settings.maxHistoryItems} items")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving appearance settings", e)
             }
