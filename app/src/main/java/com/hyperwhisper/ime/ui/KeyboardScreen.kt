@@ -52,6 +52,8 @@ import com.hyperwhisper.ui.overlays.ConfigurationConfirmationDialog
 import com.hyperwhisper.ui.overlays.ErrorOverlay
 import com.hyperwhisper.ui.panels.ReprocessSettingsDialog
 import com.hyperwhisper.ui.panels.TranscriptionHistoryPanel
+import com.hyperwhisper.ui.sections.BottomActionsRow
+import com.hyperwhisper.ui.sections.TopControlsRow
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
 
@@ -170,80 +172,16 @@ fun KeyboardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
             // Top Row: Switch Keyboard + Mode Selector + Help + Settings Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Switch to Previous Keyboard button (only shown if enabled in settings)
-                if (appearanceSettings.showKeyboardSwitcher) {
-                    IconButton(onClick = onSwitchKeyboard) {
-                        Icon(
-                            imageVector = Icons.Default.Keyboard,
-                            contentDescription = strings.switchKeyboardDesc,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-
-                ModeSelector(
-                    modes = voiceModes,
-                    selectedModeId = selectedModeId,
-                    onModeSelected = { viewModel.selectMode(it) },
-                    enabled = recordingState == RecordingState.IDLE,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Logs button (only shown in techie mode)
-                if (appearanceSettings.techieModeEnabled) {
-                    IconButton(
-                        onClick = {
-                            val intent = Intent(context, com.hyperwhisper.ui.logs.LogsActivity::class.java)
-                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            context.startActivity(intent)
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Assignment,
-                            contentDescription = strings.viewLogsDesc,
-                            tint = MaterialTheme.colorScheme.tertiary
-                        )
-                    }
-                }
-
-                // Help/About button
-                IconButton(
-                    onClick = {
-                        val intent = Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Help,
-                        contentDescription = strings.helpAndAboutDesc,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        val intent = Intent(context, com.hyperwhisper.ui.settings.SettingsActivity::class.java)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = strings.settingsDesc,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+            TopControlsRow(
+                context = context,
+                voiceModes = voiceModes,
+                selectedModeId = selectedModeId,
+                recordingState = recordingState,
+                showKeyboardSwitcher = appearanceSettings.showKeyboardSwitcher,
+                techieModeEnabled = appearanceSettings.techieModeEnabled,
+                onSwitchKeyboard = onSwitchKeyboard,
+                onModeSelected = { viewModel.selectMode(it) }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -444,93 +382,14 @@ fun KeyboardScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Bottom row: Paste (left) + Space button (center/right)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Paste last transcribed text button with long press for history
-                // Show if there's last transcribed text OR if there's history available
-                if (lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()) {
-                    // Use lastTranscribedText if available, otherwise use first history item
-                    val textToShow = if (lastTranscribedText.isNotEmpty()) lastTranscribedText else transcriptionHistory.first().text
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(56.dp)
-                            .pointerInput(appearanceSettings.enableHistoryPanel) {
-                                detectTapGestures(
-                                    onTap = { onTextCommit(textToShow) },
-                                    onLongPress = {
-                                        if (appearanceSettings.enableHistoryPanel) {
-                                            showHistoryPanel = true
-                                        }
-                                    }
-                                )
-                            },
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentPaste,
-                                contentDescription = strings.pasteLastTranscription,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Column(
-                                horizontalAlignment = Alignment.Start,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    strings.pasteLastHold.uppercase(),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                                Text(
-                                    if (textToShow.length > 40) {
-                                        textToShow.take(40) + "..."
-                                    } else {
-                                        textToShow
-                                    },
-                                    fontSize = 8.sp,
-                                    maxLines = 1,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Space button (minimal elongated bar like a space bar)
-                Button(
-                    onClick = onSpace,
-                    modifier = Modifier
-                        .weight(if (lastTranscribedText.isEmpty() && transcriptionHistory.isEmpty()) 1f else 0.6f)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    ),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text = strings.space,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFeatureSettings = "smcp" // Small caps
-                        )
-                    )
-                }
-            }
+            BottomActionsRow(
+                lastTranscribedText = lastTranscribedText,
+                transcriptionHistory = transcriptionHistory,
+                enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                onPasteText = onTextCommit,
+                onShowHistory = { showHistoryPanel = true },
+                onSpace = onSpace
+            )
         }
         }
 
