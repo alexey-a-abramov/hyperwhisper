@@ -53,6 +53,8 @@ import com.hyperwhisper.ui.overlays.ErrorOverlay
 import com.hyperwhisper.ui.panels.ReprocessSettingsDialog
 import com.hyperwhisper.ui.panels.TranscriptionHistoryPanel
 import com.hyperwhisper.ui.sections.BottomActionsRow
+import com.hyperwhisper.ui.sections.LanguageModelRow
+import com.hyperwhisper.ui.sections.RecordingSection
 import com.hyperwhisper.ui.sections.TopControlsRow
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
@@ -186,198 +188,38 @@ fun KeyboardScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Language & Model Info Row: Input | Model | Output
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Input Language Selector (LEFT)
-                InputLanguageButton(
-                    currentLanguage = apiSettings.inputLanguage,
-                    onClick = { showInputLanguageDialog = true },
-                    enabled = recordingState == RecordingState.IDLE
-                )
-
-                // Provider/Model Info (MIDDLE) - Shows current transcription mode and model
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            // Show provider and model
-                            val modelDisplay = apiSettings.provider.displayName
-
-                            Text(
-                                text = modelDisplay,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = apiSettings.modelId,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Light,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                                maxLines = 1
-                            )
-                        }
-                        // Config info button (only shown in techie mode)
-                        if (appearanceSettings.techieModeEnabled) {
-                            IconButton(
-                                onClick = { showConfigInfo = true },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Configuration Info",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Output Language Selector (RIGHT)
-                OutputLanguageButton(
-                    currentLanguage = apiSettings.outputLanguage,
-                    onClick = { showOutputLanguageDialog = true },
-                    enabled = recordingState == RecordingState.IDLE
-                )
-            }
+            LanguageModelRow(
+                apiSettings = apiSettings,
+                recordingState = recordingState,
+                techieModeEnabled = appearanceSettings.techieModeEnabled,
+                onShowInputLanguageDialog = { showInputLanguageDialog = true },
+                onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
+                onShowConfigInfo = { showConfigInfo = true }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Middle section: Cancel (far left) + Mic (center) + Controls (right)
-            Row(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Far left: Input field info OR Cancel button
-                Box(
-                    modifier = Modifier.width(80.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    when (recordingState) {
-                        RecordingState.RECORDING -> {
-                            // Show cancel button during recording
-                            OutlinedButton(
-                                onClick = { viewModel.cancelRecording() },
-                                modifier = Modifier.fillMaxWidth().height(50.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ),
-                                contentPadding = PaddingValues(4.dp)
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Cancel,
-                                        contentDescription = strings.cancelDesc,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        strings.cancel.uppercase(),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                        else -> {
-                            // Show input field info when not recording (only in techie mode)
-                            if (appearanceSettings.techieModeEnabled) {
-                                InputFieldInfo(
-                                    editorInfo = editorInfo,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Center: Microphone Button + Timer
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        MicrophoneButton(
-                            recordingState = recordingState,
-                            onStartRecording = { viewModel.startRecording() },
-                            onStopRecording = { viewModel.stopRecording() },
-                            onCancelTranscription = { viewModel.cancelTranscription() },
-                            recordingDuration = recordingDuration,
-                            transcriptionProgress = transcriptionProgress,
-                            processingStage = processingStage,
-                            audioFileSize = lastAudioFileSize,
-                            audioDurationSeconds = lastAudioDuration,
-                            modifier = Modifier
-                        )
-
-                        // Timer display (right of mic) - clickable to toggle
-                        if (recordingState == RecordingState.RECORDING) {
-                            Spacer(Modifier.width(8.dp))
-                            RecordingTimer(
-                                durationMs = recordingDuration,
-                                maxDurationMs = 180000L,
-                                isVisible = showTimerText,
-                                onToggle = { showTimerText = !showTimerText }
-                            )
-                        }
-                    }
-                }
-
-                // Right side: Delete and Enter buttons stacked
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.width(80.dp)
-                ) {
-                    // Delete button with repeat functionality
-                    RepeatableDeleteButton(
-                        onDelete = onDelete,
-                        onDeleteAll = onDeleteAll,
-                        modifier = Modifier.fillMaxWidth().height(50.dp)
-                    )
-
-                    // Enter button (minimal with just icon)
-                    Surface(
-                        onClick = onEnter,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                        tonalElevation = 2.dp
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardReturn,
-                                contentDescription = strings.enterDesc,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            RecordingSection(
+                recordingState = recordingState,
+                recordingDuration = recordingDuration,
+                transcriptionProgress = transcriptionProgress,
+                processingStage = processingStage,
+                lastAudioFileSize = lastAudioFileSize,
+                lastAudioDuration = lastAudioDuration,
+                editorInfo = editorInfo,
+                techieModeEnabled = appearanceSettings.techieModeEnabled,
+                showTimerText = showTimerText,
+                onCancelRecording = { viewModel.cancelRecording() },
+                onStartRecording = { viewModel.startRecording() },
+                onStopRecording = { viewModel.stopRecording() },
+                onCancelTranscription = { viewModel.cancelTranscription() },
+                onToggleTimer = { showTimerText = !showTimerText },
+                onDelete = onDelete,
+                onDeleteAll = onDeleteAll,
+                onEnter = onEnter,
+                modifier = Modifier.weight(1f)
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
