@@ -35,6 +35,8 @@ class KeyboardViewModel @Inject constructor(
 
     val recordingState: StateFlow<RecordingState> = recordingViewModel.recordingState
     val recordingDuration: StateFlow<Long> = recordingViewModel.recordingDuration
+    val walkieTalkieMode: StateFlow<Boolean> = recordingViewModel.walkieTalkieMode
+    val modeChangeMessage: StateFlow<String?> = recordingViewModel.modeChangeMessage
 
     // ============================================================================
     // Transcription State - Delegated to TranscriptionViewModel
@@ -138,6 +140,7 @@ class KeyboardViewModel @Inject constructor(
                     // Handle results based on transcription state
                     launch {
                         // Monitor for transcription completion or error
+                        val inWalkieTalkieMode = walkieTalkieMode.value
                         combine(
                             transcriptionViewModel.transcribedText,
                             transcriptionViewModel.errorMessage
@@ -146,16 +149,16 @@ class KeyboardViewModel @Inject constructor(
                                 error != null -> {
                                     // Error occurred
                                     recordingViewModel.setError(error)
-                                    // Save audio to history even on error
-                                    if (savedAudioPath != null) {
+                                    // Save audio to history even on error (but not in walkie-talkie mode)
+                                    if (!inWalkieTalkieMode && savedAudioPath != null) {
                                         historyViewModel.addToHistory("", savedAudioPath)
                                     }
                                 }
                                 text.isNotEmpty() -> {
                                     // Success
                                     recordingViewModel.setIdle()
-                                    // Save to history with audio file path
-                                    if (savedAudioPath != null) {
+                                    // Save to history with audio file path (but not in walkie-talkie mode)
+                                    if (!inWalkieTalkieMode && savedAudioPath != null) {
                                         historyViewModel.addToHistory(text, savedAudioPath)
                                     }
                                 }
@@ -329,6 +332,37 @@ class KeyboardViewModel @Inject constructor(
      */
     fun rejectPendingCommand() {
         transcriptionViewModel.rejectPendingCommand()
+    }
+
+    /**
+     * Enable walkie-talkie mode
+     */
+    fun enableWalkieTalkieMode() {
+        viewModelScope.launch {
+            val strings = settingsRepository.appearanceSettings.value
+            // Use localized string - need to get from string resources
+            recordingViewModel.enableWalkieTalkieMode(
+                "Walkie-Talkie mode enabled. To exit, double-tap the button."
+            )
+        }
+    }
+
+    /**
+     * Disable walkie-talkie mode
+     */
+    fun disableWalkieTalkieMode() {
+        viewModelScope.launch {
+            recordingViewModel.disableWalkieTalkieMode(
+                "Normal mode enabled. Long press to activate Walkie-Talkie mode."
+            )
+        }
+    }
+
+    /**
+     * Clear mode change message
+     */
+    fun clearModeChangeMessage() {
+        recordingViewModel.clearModeChangeMessage()
     }
 
     /**

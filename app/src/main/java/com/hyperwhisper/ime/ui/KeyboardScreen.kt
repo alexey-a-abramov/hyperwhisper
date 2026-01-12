@@ -91,6 +91,8 @@ fun KeyboardScreen(
     val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
     val lastAudioFileSize by viewModel.lastAudioFileSize.collectAsState()
     val lastAudioDuration by viewModel.lastAudioDuration.collectAsState()
+    val walkieTalkieMode by viewModel.walkieTalkieMode.collectAsState()
+    val modeChangeMessage by viewModel.modeChangeMessage.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
@@ -126,6 +128,14 @@ fun KeyboardScreen(
 
             onTextCommit(transcribedText)
             viewModel.clearTranscribedText()
+        }
+    }
+
+    // Show walkie-talkie mode change message
+    LaunchedEffect(modeChangeMessage) {
+        modeChangeMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            viewModel.clearModeChangeMessage()
         }
     }
 
@@ -210,10 +220,13 @@ fun KeyboardScreen(
                 editorInfo = editorInfo,
                 techieModeEnabled = appearanceSettings.techieModeEnabled,
                 showTimerText = showTimerText,
+                walkieTalkieMode = walkieTalkieMode,
                 onCancelRecording = { viewModel.cancelRecording() },
                 onStartRecording = { viewModel.startRecording() },
                 onStopRecording = { viewModel.stopRecording() },
                 onCancelTranscription = { viewModel.cancelTranscription() },
+                onEnableWalkieTalkieMode = { viewModel.enableWalkieTalkieMode() },
+                onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
                 onToggleTimer = { showTimerText = !showTimerText },
                 onDelete = onDelete,
                 onDeleteAll = onDeleteAll,

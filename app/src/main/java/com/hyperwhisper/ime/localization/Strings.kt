@@ -42,6 +42,11 @@ interface Strings {
     val stopRecording: String
     val startRecording: String
 
+    // Walkie-Talkie Mode
+    val walkieTalkieModeEnabled: String  // "Walkie-Talkie mode enabled. To exit, double-tap the button."
+    val normalModeEnabled: String  // "Normal mode enabled. Long press to activate Walkie-Talkie mode."
+    val walkieTalkieLongPressHint: String  // "Long press for Walkie-Talkie mode"
+
     // Content Descriptions (for accessibility)
     val switchKeyboardDesc: String
     val helpAndAboutDesc: String

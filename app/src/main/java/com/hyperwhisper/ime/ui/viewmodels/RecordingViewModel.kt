@@ -42,6 +42,14 @@ class RecordingViewModel @Inject constructor(
     private val _recordedAudioFile = MutableStateFlow<File?>(null)
     val recordedAudioFile: StateFlow<File?> = _recordedAudioFile.asStateFlow()
 
+    // Walkie-talkie mode state
+    private val _walkieTalkieMode = MutableStateFlow(false)
+    val walkieTalkieMode: StateFlow<Boolean> = _walkieTalkieMode.asStateFlow()
+
+    // Mode change message for UI
+    private val _modeChangeMessage = MutableStateFlow<String?>(null)
+    val modeChangeMessage: StateFlow<String?> = _modeChangeMessage.asStateFlow()
+
     /**
      * Start recording audio
      */
@@ -183,6 +191,33 @@ class RecordingViewModel @Inject constructor(
      */
     fun clearRecordedAudioFile() {
         _recordedAudioFile.value = null
+    }
+
+    /**
+     * Enable walkie-talkie mode
+     */
+    fun enableWalkieTalkieMode(message: String) {
+        Log.d(TAG, "Enabling walkie-talkie mode")
+        TraceLogger.trace("RecordingViewModel", "Walkie-talkie mode enabled")
+        _walkieTalkieMode.value = true
+        _modeChangeMessage.value = message
+    }
+
+    /**
+     * Disable walkie-talkie mode
+     */
+    fun disableWalkieTalkieMode(message: String) {
+        Log.d(TAG, "Disabling walkie-talkie mode")
+        TraceLogger.trace("RecordingViewModel", "Walkie-talkie mode disabled")
+        _walkieTalkieMode.value = false
+        _modeChangeMessage.value = message
+    }
+
+    /**
+     * Clear mode change message
+     */
+    fun clearModeChangeMessage() {
+        _modeChangeMessage.value = null
     }
 
     init {

@@ -33,6 +33,11 @@ object RussianStrings : Strings {
     override val stopRecording = "Остановить запись"
     override val startRecording = "Начать запись"
 
+    // Walkie-Talkie Mode
+    override val walkieTalkieModeEnabled = "Режим рации включен. Для выхода дважды нажмите кнопку."
+    override val normalModeEnabled = "Обычный режим включен. Удерживайте для активации режима рации."
+    override val walkieTalkieLongPressHint = "Удерживайте для режима рации"
+
     // Content Descriptions (for accessibility)
     override val switchKeyboardDesc = "Сменить клавиатуру"
     override val helpAndAboutDesc = "Справка и О программе"

@@ -24,14 +24,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun IdleMicButton(onClick: () -> Unit) {
+fun IdleMicButton(
+    onClick: () -> Unit,
+    onLongPress: () -> Unit = {},
+    onDoubleTap: () -> Unit = {},
+    walkieTalkieMode: Boolean = false
+) {
     FloatingActionButton(
         onClick = onClick,
-        modifier = Modifier.size(72.dp),
+        modifier = Modifier
+            .size(72.dp)
+            .micGestureDetector(
+                onSingleTap = onClick,
+                onDoubleTap = onDoubleTap,
+                onLongPress = onLongPress
+            ),
+        shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = Color.White
     ) {
@@ -44,7 +58,12 @@ fun IdleMicButton(onClick: () -> Unit) {
 }
 
 @Composable
-fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
+fun RecordingMicButton(
+    onClick: () -> Unit,
+    onDoubleTap: () -> Unit = {},
+    recordingDuration: Long = 0L,
+    walkieTalkieMode: Boolean = false
+) {
     // Pulsing animation
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -66,7 +85,12 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
         onClick = onClick,
         modifier = Modifier
             .size(72.dp)
-            .scale(scale),
+            .scale(scale)
+            .micGestureDetector(
+                onSingleTap = onClick,
+                onDoubleTap = onDoubleTap
+            ),
+        shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
         containerColor = Color(0xFFE53935), // Red
         contentColor = Color.White
     ) {

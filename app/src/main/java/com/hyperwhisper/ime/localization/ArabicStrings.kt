@@ -33,6 +33,11 @@ object ArabicStrings : Strings {
     override val stopRecording = "إيقاف التسجيل"
     override val startRecording = "بدء التسجيل"
 
+    // Walkie-Talkie Mode
+    override val walkieTalkieModeEnabled = "تم تفعيل وضع الاتصال اللاسلكي. للخروج، انقر مرتين على الزر."
+    override val normalModeEnabled = "تم تفعيل الوضع العادي. اضغط مطولاً لتفعيل وضع الاتصال اللاسلكي."
+    override val walkieTalkieLongPressHint = "اضغط مطولاً لوضع الاتصال اللاسلكي"
+
     // Content Descriptions (for accessibility)
     override val switchKeyboardDesc = "تبديل لوحة المفاتيح"
     override val helpAndAboutDesc = "مساعدة ومعلومات"

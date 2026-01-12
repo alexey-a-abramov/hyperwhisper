@@ -33,6 +33,11 @@ object SpanishStrings : Strings {
     override val stopRecording = "Detener grabación"
     override val startRecording = "Iniciar grabación"
 
+    // Walkie-Talkie Mode
+    override val walkieTalkieModeEnabled = "Modo walkie-talkie activado. Para salir, toca dos veces el botón."
+    override val normalModeEnabled = "Modo normal activado. Mantén presionado para activar modo walkie-talkie."
+    override val walkieTalkieLongPressHint = "Mantén presionado para modo walkie-talkie"
+
     // Content Descriptions (for accessibility)
     override val switchKeyboardDesc = "Cambiar teclado"
     override val helpAndAboutDesc = "Ayuda e información"

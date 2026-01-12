@@ -33,6 +33,11 @@ object EnglishStrings : Strings {
     override val stopRecording = "Stop Recording"
     override val startRecording = "Start Recording"
 
+    // Walkie-Talkie Mode
+    override val walkieTalkieModeEnabled = "Walkie-Talkie mode enabled. To exit, double-tap the button."
+    override val normalModeEnabled = "Normal mode enabled. Long press to activate Walkie-Talkie mode."
+    override val walkieTalkieLongPressHint = "Long press for Walkie-Talkie mode"
+
     // Content Descriptions (for accessibility)
     override val switchKeyboardDesc = "Switch Keyboard"
     override val helpAndAboutDesc = "Help & About"
