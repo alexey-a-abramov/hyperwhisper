@@ -25,7 +25,9 @@ class UpdateManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val apkProber: ApkProber,
-    private val gitHubUpdateChecker: GitHubUpdateChecker
+    private val gitHubUpdateChecker: GitHubUpdateChecker,
+    private val apkDownloader: ApkDownloader,
+    private val apkInstaller: ApkInstaller
 ) {
     companion object {
         private const val TAG = "UpdateManager"
@@ -316,112 +318,21 @@ class UpdateManager @Inject constructor(
     suspend fun downloadApk(
         url: String,
         onProgress: (Int) -> Unit = {}
-    ): DownloadResult = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder().url(url).build()
-            val response = okHttpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                return@withContext DownloadResult.Error("Download failed: ${response.code}")
-            }
-
-            val responseBody = response.body
-            if (responseBody == null) {
-                return@withContext DownloadResult.Error("Empty response body")
-            }
-
-            val contentLength = responseBody.contentLength()
-            val apkFile = File(context.getExternalFilesDir(null), "update.apk")
-            apkFile.delete()
-
-            responseBody.byteStream().use { input ->
-                apkFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalBytesRead = 0L
-
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytesRead += bytesRead
-
-                        // Report progress
-                        if (contentLength > 0) {
-                            val percent = ((totalBytesRead * 100) / contentLength).toInt()
-                            onProgress(percent)
-                        }
-                    }
-                    output.flush()
-                }
-            }
-
-            DownloadResult.Success
-        } catch (e: Exception) {
-            DownloadResult.Error(e.message ?: "Download failed")
-        }
-    }
+    ): DownloadResult = apkDownloader.downloadApk(url, onProgress)
 
     /**
      * Check if a path is a local file (not a URL)
      */
-    fun isLocalPath(path: String): Boolean {
-        return path.startsWith("/") && !path.startsWith("http")
-    }
+    fun isLocalPath(path: String): Boolean = apkDownloader.isLocalPath(path)
 
     /**
      * Install APK from path (local file or downloaded update.apk)
      * @param apkPath Optional path to APK file. If null, uses the downloaded update.apk
      */
-    fun installApk(apkPath: String? = null) {
-        try {
-            val apkFile = if (apkPath != null && isLocalPath(apkPath)) {
-                File(apkPath)
-            } else {
-                File(context.getExternalFilesDir(null), "update.apk")
-            }
-
-            if (!apkFile.exists()) {
-                Log.e(TAG, "APK file not found: ${apkFile.absolutePath}")
-                return
-            }
-
-            Log.i(TAG, "Installing APK: ${apkFile.absolutePath}")
-
-            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    apkFile
-                )
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            } else {
-                @Suppress("DEPRECATION")
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(Uri.fromFile(apkFile), "application/vnd.android.package-archive")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-            }
-
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to install APK", e)
-        }
-    }
+    fun installApk(apkPath: String? = null) = apkInstaller.installApk(apkPath)
 
     /**
      * Delete downloaded APK to free space
      */
-    fun cleanupApk() {
-        try {
-            val apkFile = File(context.getExternalFilesDir(null), "update.apk")
-            if (apkFile.exists()) {
-                apkFile.delete()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    fun cleanupApk() = apkInstaller.cleanupApk()
 }
