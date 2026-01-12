@@ -58,6 +58,6 @@ object UpdateFormatters {
         val first = parts.take(2).joinToString("/")
         val last = parts.takeLast(1).joinToString("/")
 
-        return "$first/.../$ last"
+        return "$first/.../$last"
     }
 }

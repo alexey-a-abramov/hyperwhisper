@@ -23,39 +23,17 @@ import javax.inject.Singleton
 @Singleton
 class UpdateManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val apkProber: ApkProber,
+    private val gitHubUpdateChecker: GitHubUpdateChecker
 ) {
     companion object {
         private const val TAG = "UpdateManager"
         private const val SKIPPED_VERSION_KEY = "skipped_update_version"
         private const val SKIPPED_BUILD_TIMESTAMP_KEY = "skipped_build_timestamp"
 
-        // GitHub repository info
-        private const val GITHUB_OWNER = "alexey-a-abramov"
-        private const val GITHUB_REPO = "hyperwhisper"
-
-        // GitHub Releases API URL
-        private const val GITHUB_RELEASES_API = "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
-
         // Fallback: raw JSON file in repo (for testing or if API rate limited)
-        private const val UPDATE_CHECK_URL = "https://raw.githubusercontent.com/$GITHUB_OWNER/$GITHUB_REPO/main/latest-version.json"
-
-        // Minimum time difference (in ms) to consider an APK as newer
-        // This prevents false positives from minor timestamp variations
-        private const val MIN_UPDATE_THRESHOLD_MS = 60_000L // 1 minute
-
-        // Local APK locations to check for updates (in order of priority)
-        private val LOCAL_APK_LOCATIONS = listOf(
-            // Primary: SD card standard location for easy access
-            "/storage/emulated/0/HyperWhisper/app-debug.apk",
-            // Termux project builds folder (auto-copied by gradle)
-            "/data/data/com.termux/files/home/projects/hyperwhisper/builds/app-debug.apk",
-            // Direct gradle output
-            "/data/data/com.termux/files/home/projects/hyperwhisper/app/build/outputs/apk/debug/app-debug.apk",
-            // Download folder alternatives
-            "/storage/emulated/0/Download/hyperwhisper-debug.apk",
-            "/storage/emulated/0/Download/app-debug.apk"
-        )
+        private const val UPDATE_CHECK_URL = "https://raw.githubusercontent.com/alexey-a-abramov/hyperwhisper/main/latest-version.json"
     }
 
     private val prefs = context.getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
@@ -116,7 +94,7 @@ class UpdateManager @Inject constructor(
         return try {
             BuildConfig.BUILD_DATE
         } catch (e: Exception) {
-            formatTimestamp(BuildConfig.BUILD_TIMESTAMP)
+            UpdateFormatters.formatTimestamp(BuildConfig.BUILD_TIMESTAMP)
         }
     }
 
@@ -140,91 +118,25 @@ class UpdateManager @Inject constructor(
         val currentBuildTimestamp = BuildConfig.BUILD_TIMESTAMP
         val installedApkPath = getInstalledApkPath()
 
-        val probeResults = mutableListOf<ApkProbeResult>()
-        var updateAvailable = false
-        var updateSource: String? = null
-
-        // Also add alternate path representations that Android might use
-        val allPaths = LOCAL_APK_LOCATIONS.toMutableList()
-
-        // Add common Android path aliases
-        LOCAL_APK_LOCATIONS.forEach { path ->
-            if (path.startsWith("/storage/emulated/0")) {
-                allPaths.add(path.replace("/storage/emulated/0", "/sdcard"))
-            } else if (path.startsWith("/sdcard")) {
-                allPaths.add(path.replace("/sdcard", "/storage/emulated/0"))
-            }
-        }
-
-        for (apkPath in allPaths.distinct()) {
-            try {
-                val apkFile = File(apkPath)
-                val displayPath = shortenPath(apkPath)
-
-                if (!apkFile.exists()) {
-                    probeResults.add(ApkProbeResult(
-                        path = apkPath,
-                        displayPath = displayPath,
-                        exists = false,
-                        readable = false
-                    ))
-                    continue
-                }
-
-                if (!apkFile.canRead()) {
-                    probeResults.add(ApkProbeResult(
-                        path = apkPath,
-                        displayPath = displayPath,
-                        exists = true,
-                        readable = false,
-                        errorMessage = "Not readable"
-                    ))
-                    continue
-                }
-
-                val fileModifiedTime = apkFile.lastModified()
-                val timeDifference = fileModifiedTime - currentBuildTimestamp
-                val isNewer = timeDifference > MIN_UPDATE_THRESHOLD_MS
-                val isSkipped = isBuildTimestampSkipped(fileModifiedTime)
-
-                if (isNewer && !isSkipped && !updateAvailable) {
-                    updateAvailable = true
-                    updateSource = apkPath
-                }
-
-                probeResults.add(ApkProbeResult(
-                    path = apkPath,
-                    displayPath = displayPath,
-                    exists = true,
-                    readable = true,
-                    fileModifiedTime = fileModifiedTime,
-                    fileModifiedDate = formatTimestamp(fileModifiedTime),
-                    fileSize = apkFile.length(),
-                    fileSizeFormatted = formatFileSize(apkFile.length()),
-                    isNewer = isNewer,
-                    timeDifferenceMs = timeDifference,
-                    timeDifferenceFormatted = formatTimeDifference(timeDifference),
-                    errorMessage = if (isSkipped) "Skipped by user" else null
-                ))
-            } catch (e: Exception) {
-                probeResults.add(ApkProbeResult(
-                    path = apkPath,
-                    displayPath = shortenPath(apkPath),
-                    exists = false,
-                    readable = false,
-                    errorMessage = e.message
-                ))
-            }
-        }
+        // Get local APK probe details
+        val probeDetails = apkProber.getUpdateProbeDetails(
+            currentVersionCode = currentVersionCode,
+            currentVersionName = currentVersionName,
+            currentBuildTimestamp = currentBuildTimestamp,
+            installedApkPath = installedApkPath,
+            isBuildTimestampSkipped = ::isBuildTimestampSkipped
+        )
 
         // Also check GitHub Releases
         var githubReleaseChecked = false
         var githubReleaseVersion: String? = null
         var githubReleaseUrl: String? = null
         var githubReleaseError: String? = null
+        var updateAvailable = probeDetails.updateAvailable
+        var updateSource = probeDetails.updateSource
 
         try {
-            val githubUpdate = fetchFromGitHubReleases()
+            val githubUpdate = gitHubUpdateChecker.fetchFromGitHubReleases()
             githubReleaseChecked = true
             if (githubUpdate != null) {
                 githubReleaseVersion = githubUpdate.versionName
@@ -240,13 +152,7 @@ class UpdateManager @Inject constructor(
             githubReleaseError = e.message
         }
 
-        return UpdateProbeDetails(
-            currentVersionName = currentVersionName,
-            currentVersionCode = currentVersionCode,
-            currentBuildTimestamp = currentBuildTimestamp,
-            currentBuildDate = getBuildDate(),
-            installedApkPath = installedApkPath,
-            probeResults = probeResults,
+        return probeDetails.copy(
             updateAvailable = updateAvailable,
             updateSource = updateSource,
             githubReleaseChecked = githubReleaseChecked,
@@ -256,40 +162,6 @@ class UpdateManager @Inject constructor(
         )
     }
 
-    /**
-     * Shorten path for display (remove common prefixes)
-     */
-    private fun shortenPath(path: String): String {
-        return path
-            .replace("/data/data/com.termux/files/home/", "~/")
-            .replace("/storage/emulated/0/", "/sdcard/")
-    }
-
-    /**
-     * Format file size for display
-     */
-    private fun formatFileSize(bytes: Long): String {
-        return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-            else -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
-        }
-    }
-
-    /**
-     * Format time difference for display
-     */
-    private fun formatTimeDifference(diffMs: Long): String {
-        val absDiff = kotlin.math.abs(diffMs)
-        val sign = if (diffMs >= 0) "+" else "-"
-        return when {
-            absDiff < 1000 -> "${sign}${absDiff}ms"
-            absDiff < 60_000 -> "${sign}${absDiff / 1000}s"
-            absDiff < 3600_000 -> "${sign}${absDiff / 60_000}m"
-            absDiff < 86400_000 -> "${sign}${absDiff / 3600_000}h"
-            else -> "${sign}${absDiff / 86400_000}d"
-        }
-    }
 
     /**
      * Check for updates from remote URL or local APK files
@@ -306,7 +178,10 @@ class UpdateManager @Inject constructor(
             Log.d(TAG, "  Timestamp: $currentBuildTimestamp")
 
             // First, check for local APK files that are newer
-            val localUpdate = checkLocalApkUpdates(currentBuildTimestamp)
+            val localUpdate = apkProber.checkLocalApkUpdates(
+                currentBuildTimestamp = currentBuildTimestamp,
+                isBuildTimestampSkipped = ::isBuildTimestampSkipped
+            )
             if (localUpdate != null) {
                 Log.d(TAG, "  Found local APK update")
                 return@withContext localUpdate
@@ -342,123 +217,11 @@ class UpdateManager @Inject constructor(
     }
 
     /**
-     * Check for local APK files that are newer than the installed app
-     * Returns UpdateAvailable if found, null otherwise
-     *
-     * Uses file modification time compared against the embedded BUILD_TIMESTAMP.
-     * A minimum threshold ensures minor timestamp variations don't trigger false updates.
-     */
-    private fun checkLocalApkUpdates(currentBuildTimestamp: Long): UpdateCheckResult? {
-        for (apkPath in LOCAL_APK_LOCATIONS) {
-            try {
-                val apkFile = File(apkPath)
-                if (!apkFile.exists()) {
-                    Log.d(TAG, "  APK not found: $apkPath")
-                    continue
-                }
-                if (!apkFile.canRead()) {
-                    Log.w(TAG, "  APK not readable: $apkPath")
-                    continue
-                }
-
-                val fileModifiedTime = apkFile.lastModified()
-                val timeDifference = fileModifiedTime - currentBuildTimestamp
-
-                Log.d(TAG, "  Checking APK: $apkPath")
-                Log.d(TAG, "    File modified: ${formatTimestamp(fileModifiedTime)}")
-                Log.d(TAG, "    App built:     ${formatTimestamp(currentBuildTimestamp)}")
-                Log.d(TAG, "    Difference:    ${timeDifference / 1000}s (threshold: ${MIN_UPDATE_THRESHOLD_MS / 1000}s)")
-
-                // Check if the APK file is significantly newer than the installed app
-                // Using threshold to avoid false positives from minor clock variations
-                if (timeDifference > MIN_UPDATE_THRESHOLD_MS) {
-                    // Check if user skipped this specific build
-                    if (isBuildTimestampSkipped(fileModifiedTime)) {
-                        Log.d(TAG, "    User skipped this build")
-                        continue
-                    }
-
-                    // Extract version from APK's PackageInfo if possible
-                    val apkVersionInfo = extractVersionFromApk(apkFile)
-                    val versionName = apkVersionInfo?.second ?: extractVersionFromFilename(apkFile.name)
-                    val versionCode = apkVersionInfo?.first ?: (fileModifiedTime / 1000).toInt()
-
-                    val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
-                    val buildDate = dateFormat.format(Date(fileModifiedTime))
-
-                    val updateInfo = UpdateInfo(
-                        versionCode = versionCode,
-                        versionName = versionName,
-                        apkUrl = apkFile.absolutePath,
-                        releaseNotes = "Local build from $buildDate\nFile: ${apkFile.name}",
-                        fileSize = apkFile.length(),
-                        buildTimestamp = fileModifiedTime
-                    )
-
-                    Log.i(TAG, "    ✓ Update available: $versionName (built $buildDate)")
-                    return UpdateCheckResult.UpdateAvailable(updateInfo)
-                } else {
-                    Log.d(TAG, "    APK is not newer (within threshold)")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "    Error checking APK: $apkPath", e)
-            }
-        }
-        return null
-    }
-
-    /**
-     * Extract version info directly from APK file using PackageManager
-     * Returns Pair(versionCode, versionName) or null if extraction fails
-     */
-    private fun extractVersionFromApk(apkFile: File): Pair<Int, String>? {
-        return try {
-            val packageInfo = context.packageManager.getPackageArchiveInfo(
-                apkFile.absolutePath,
-                0
-            )
-            if (packageInfo != null) {
-                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    packageInfo.longVersionCode.toInt()
-                } else {
-                    @Suppress("DEPRECATION")
-                    packageInfo.versionCode
-                }
-                Pair(versionCode, packageInfo.versionName ?: "1.$versionCode")
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to extract version from APK: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Extract version from APK filename
-     */
-    private fun extractVersionFromFilename(filename: String): String {
-        return when {
-            filename.contains("debug", ignoreCase = true) -> "Debug Build"
-            filename.contains("release", ignoreCase = true) -> "Release Build"
-            else -> "Local Build"
-        }
-    }
-
-    /**
-     * Format timestamp for display
-     */
-    private fun formatTimestamp(timestamp: Long): String {
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        return sdf.format(Date(timestamp))
-    }
-
-    /**
      * Fetch update info from GitHub Releases API or fallback sources
      */
     private suspend fun fetchUpdateInfo(): UpdateInfo? {
         // Try GitHub Releases API first
-        val githubUpdate = fetchFromGitHubReleases()
+        val githubUpdate = gitHubUpdateChecker.fetchFromGitHubReleases()
         if (githubUpdate != null) {
             Log.d(TAG, "  Got update info from GitHub Releases API")
             return githubUpdate
@@ -473,115 +236,6 @@ class UpdateManager @Inject constructor(
 
         // Try local test file for development
         return tryLocalUpdateFile()
-    }
-
-    /**
-     * Fetch update info from GitHub Releases API
-     * API: https://api.github.com/repos/{owner}/{repo}/releases/latest
-     */
-    private fun fetchFromGitHubReleases(): UpdateInfo? {
-        return try {
-            val request = Request.Builder()
-                .url(GITHUB_RELEASES_API)
-                .header("Accept", "application/vnd.github.v3+json")
-                .header("User-Agent", "HyperWhisper-Android")
-                .build()
-
-            val response = okHttpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                Log.w(TAG, "  GitHub API response: ${response.code}")
-                return null
-            }
-
-            val body = response.body?.string() ?: return null
-            parseGitHubRelease(body)
-        } catch (e: Exception) {
-            Log.w(TAG, "  Failed to fetch from GitHub Releases: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Parse GitHub Releases API response
-     * Example response structure:
-     * {
-     *   "tag_name": "v1.96",
-     *   "name": "HyperWhisper v1.96",
-     *   "body": "Release notes...",
-     *   "published_at": "2024-01-08T12:00:00Z",
-     *   "assets": [
-     *     {
-     *       "name": "app-debug.apk",
-     *       "browser_download_url": "https://github.com/.../app-debug.apk"
-     *     }
-     *   ]
-     * }
-     */
-    private fun parseGitHubRelease(json: String): UpdateInfo? {
-        return try {
-            val jsonObject = org.json.JSONObject(json)
-
-            // Parse version from tag_name (e.g., "v1.96" -> "1.96")
-            val tagName = jsonObject.optString("tag_name", "")
-            val versionName = tagName.removePrefix("v").removePrefix("V")
-            if (versionName.isEmpty()) return null
-
-            // Extract version code from version name (e.g., "1.96" -> 96)
-            val versionCode = versionName.replace(".", "").removePrefix("1").toIntOrNull() ?: return null
-
-            // Get release notes from body
-            val releaseNotes = jsonObject.optString("body", "Bug fixes and improvements")
-
-            // Get published timestamp
-            val publishedAt = jsonObject.optString("published_at", "")
-            val buildTimestamp = parseIsoTimestamp(publishedAt)
-
-            // Find APK download URL from assets
-            var apkUrl: String? = null
-            val assets = jsonObject.optJSONArray("assets")
-            if (assets != null) {
-                for (i in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(i)
-                    val assetName = asset.optString("name", "")
-                    // Prefer app-debug.apk or any .apk file
-                    if (assetName == "app-debug.apk" || assetName.endsWith(".apk")) {
-                        apkUrl = asset.optString("browser_download_url")
-                        if (assetName == "app-debug.apk") break // Prefer this one
-                    }
-                }
-            }
-
-            if (apkUrl == null) {
-                Log.w(TAG, "  No APK asset found in release")
-                return null
-            }
-
-            UpdateInfo(
-                versionCode = versionCode,
-                versionName = versionName,
-                apkUrl = apkUrl,
-                releaseNotes = releaseNotes,
-                buildTimestamp = buildTimestamp
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "  Failed to parse GitHub release: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Parse ISO 8601 timestamp to milliseconds
-     */
-    private fun parseIsoTimestamp(isoString: String): Long {
-        return try {
-            if (isoString.isEmpty()) return System.currentTimeMillis()
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-            sdf.parse(isoString)?.time ?: System.currentTimeMillis()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
     }
 
     /**
