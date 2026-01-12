@@ -3,7 +3,7 @@ package com.hyperwhisper.di
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.hyperwhisper.data.SettingsRepository
+import com.hyperwhisper.data.*
 import com.hyperwhisper.network.*
 import dagger.Module
 import dagger.Provides
@@ -41,10 +41,63 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(
+    fun provideApiSettingsRepository(
         @ApplicationContext context: Context,
         gson: Gson
-    ): SettingsRepository = SettingsRepository(context, gson)
+    ): ApiSettingsRepository = ApiSettingsRepository(context, gson)
+
+    @Provides
+    @Singleton
+    fun provideVoiceModesRepository(
+        @ApplicationContext context: Context,
+        gson: Gson
+    ): VoiceModesRepository = VoiceModesRepository(context, gson)
+
+    @Provides
+    @Singleton
+    fun provideAppearanceRepository(
+        @ApplicationContext context: Context
+    ): AppearanceRepository = AppearanceRepository(context)
+
+    @Provides
+    @Singleton
+    fun provideUsageStatisticsRepository(
+        @ApplicationContext context: Context,
+        gson: Gson
+    ): UsageStatisticsRepository = UsageStatisticsRepository(context, gson)
+
+    @Provides
+    @Singleton
+    fun provideHistoryRepository(
+        @ApplicationContext context: Context,
+        gson: Gson,
+        appearanceRepository: AppearanceRepository
+    ): HistoryRepository = HistoryRepository(context, gson, appearanceRepository)
+
+    @Provides
+    @Singleton
+    fun provideLanguageTrackingRepository(
+        @ApplicationContext context: Context,
+        gson: Gson
+    ): LanguageTrackingRepository = LanguageTrackingRepository(context, gson)
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(
+        apiSettingsRepository: ApiSettingsRepository,
+        voiceModesRepository: VoiceModesRepository,
+        appearanceRepository: AppearanceRepository,
+        usageStatisticsRepository: UsageStatisticsRepository,
+        historyRepository: HistoryRepository,
+        languageTrackingRepository: LanguageTrackingRepository
+    ): SettingsRepository = SettingsRepository(
+        apiSettingsRepository,
+        voiceModesRepository,
+        appearanceRepository,
+        usageStatisticsRepository,
+        historyRepository,
+        languageTrackingRepository
+    )
 
     @Provides
     @Singleton
