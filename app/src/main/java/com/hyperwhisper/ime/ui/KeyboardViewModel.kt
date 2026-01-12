@@ -1,74 +1,63 @@
 package com.hyperwhisper.ui
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
-import com.hyperwhisper.network.VoiceRepository
-import com.hyperwhisper.utils.TraceLogger
+import com.hyperwhisper.ui.viewmodels.HistoryViewModel
+import com.hyperwhisper.ui.viewmodels.RecordingViewModel
+import com.hyperwhisper.ui.viewmodels.TranscriptionViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
+/**
+ * Coordinator ViewModel for the Keyboard screen
+ * Orchestrates recording, transcription, and history management
+ * Delegates to specialized view models for specific responsibilities
+ */
 @HiltViewModel
 class KeyboardViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val voiceRepository: VoiceRepository,
-    private val settingsRepository: SettingsRepository,
-    private val voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
+    private val recordingViewModel: RecordingViewModel,
+    private val transcriptionViewModel: TranscriptionViewModel,
+    private val historyViewModel: HistoryViewModel,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "KeyboardViewModel"
-        private const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
     }
 
-    // State flows
-    private val _recordingState = MutableStateFlow(RecordingState.IDLE)
-    val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
+    // ============================================================================
+    // Recording State - Delegated to RecordingViewModel
+    // ============================================================================
 
-    private val _transcribedText = MutableStateFlow("")
-    val transcribedText: StateFlow<String> = _transcribedText.asStateFlow()
+    val recordingState: StateFlow<RecordingState> = recordingViewModel.recordingState
+    val recordingDuration: StateFlow<Long> = recordingViewModel.recordingDuration
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    // ============================================================================
+    // Transcription State - Delegated to TranscriptionViewModel
+    // ============================================================================
 
-    private val _processingInfo = MutableStateFlow<ProcessingInfo?>(null)
-    val processingInfo: StateFlow<ProcessingInfo?> = _processingInfo.asStateFlow()
+    val transcribedText: StateFlow<String> = transcriptionViewModel.transcribedText
+    val processingInfo: StateFlow<ProcessingInfo?> = transcriptionViewModel.processingInfo
+    val transcriptionProgress: StateFlow<Float?> = transcriptionViewModel.transcriptionProgress
+    val processingStage: StateFlow<ProcessingStage?> = transcriptionViewModel.processingStage
+    val pendingCommandResult: StateFlow<VoiceCommandResult?> = transcriptionViewModel.pendingCommandResult
+    val lastAudioFileSize: StateFlow<Long> = transcriptionViewModel.lastAudioFileSize
+    val lastAudioDuration: StateFlow<Double> = transcriptionViewModel.lastAudioDuration
 
-    private val _transcriptionProgress = MutableStateFlow<Float?>(null)
-    val transcriptionProgress: StateFlow<Float?> = _transcriptionProgress.asStateFlow()
+    // ============================================================================
+    // History State - Delegated to HistoryViewModel
+    // ============================================================================
 
-    private val _processingStage = MutableStateFlow<ProcessingStage?>(null)
-    val processingStage: StateFlow<ProcessingStage?> = _processingStage.asStateFlow()
+    val transcriptionHistory: StateFlow<List<TranscriptionHistoryItem>> = historyViewModel.transcriptionHistory
 
-    // Pending configuration command for confirmation dialog
-    private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
-    val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
+    // ============================================================================
+    // Settings State - From SettingsRepository
+    // ============================================================================
 
-    // Audio file info for progress display
-    private val _lastAudioFileSize = MutableStateFlow<Long>(0L)
-    val lastAudioFileSize: StateFlow<Long> = _lastAudioFileSize.asStateFlow()
-
-    private val _lastAudioDuration = MutableStateFlow<Double>(0.0)
-    val lastAudioDuration: StateFlow<Double> = _lastAudioDuration.asStateFlow()
-
-    // Job for current transcription (to allow cancellation)
-    private var transcriptionJob: kotlinx.coroutines.Job? = null
-
-    // Recording duration from repository
-    val recordingDuration: StateFlow<Long> = voiceRepository.getRecordingDuration()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
-
-    // Transcription history
-    val transcriptionHistory: StateFlow<List<TranscriptionHistoryItem>> = settingsRepository.transcriptionHistory
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    // Settings and modes from repository
     val voiceModes: StateFlow<List<VoiceMode>> = settingsRepository.voiceModes
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -81,11 +70,9 @@ class KeyboardViewModel @Inject constructor(
     val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
 
-    // Recently used languages
     val recentlyUsedLanguages: StateFlow<List<String>> = settingsRepository.recentlyUsedLanguages
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // Usage statistics (cumulative audio duration, etc.)
     val usageStatistics: StateFlow<UsageStatistics> = settingsRepository.usageStatistics
         .stateIn(viewModelScope, SharingStarted.Eagerly, UsageStatistics())
 
@@ -97,46 +84,27 @@ class KeyboardViewModel @Inject constructor(
         modes.firstOrNull { it.id == selectedId }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // ============================================================================
+    // Combined Error State
+    // ============================================================================
+
+    val errorMessage: StateFlow<String?> = combine(
+        recordingViewModel.errorMessage,
+        transcriptionViewModel.errorMessage,
+        historyViewModel.errorMessage
+    ) { recordingError, transcriptionError, historyError ->
+        recordingError ?: transcriptionError ?: historyError
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // ============================================================================
+    // Recording Operations
+    // ============================================================================
+
     /**
-     * Start recording audio and monitor for timeout
+     * Start recording audio
      */
     fun startRecording() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting recording...")
-                TraceLogger.trace("KeyboardViewModel", "User tapped mic - starting recording")
-                _recordingState.value = RecordingState.RECORDING
-                _errorMessage.value = null
-
-                val result = voiceRepository.startRecording()
-                if (result.isFailure) {
-                    val exception = result.exceptionOrNull()
-                    val error = exception?.message ?: "Failed to start recording"
-                    Log.e(TAG, "Recording start failed: $error", exception)
-                    TraceLogger.error("KeyboardViewModel", "Recording start failed: $error", exception)
-
-                    // Make error message more user-friendly
-                    val userMessage = when {
-                        error.contains("permission", ignoreCase = true) ||
-                        error.contains("RECORD_AUDIO", ignoreCase = true) ->
-                            "Microphone permission not granted. Please enable microphone access in Android Settings."
-                        error.contains("AudioRecord", ignoreCase = true) ->
-                            "Cannot access microphone. It may be in use by another app."
-                        else -> "Failed to start recording: $error"
-                    }
-
-                    _errorMessage.value = userMessage
-                    _recordingState.value = RecordingState.ERROR
-                } else {
-                    TraceLogger.trace("KeyboardViewModel", "Recording started successfully")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error starting recording", e)
-                TraceLogger.error("KeyboardViewModel", "Exception starting recording", e)
-                _errorMessage.value = "Error: ${e.message ?: "Unknown error occurred"}"
-                _recordingState.value = RecordingState.ERROR
-            }
-        }
+        recordingViewModel.startRecording()
     }
 
     /**
@@ -144,196 +112,61 @@ class KeyboardViewModel @Inject constructor(
      */
     fun stopRecording() {
         viewModelScope.launch {
-            try {
-                Log.d(TAG, "Stopping recording...")
-                TraceLogger.trace("KeyboardViewModel", "User stopped recording - processing audio")
-                _recordingState.value = RecordingState.PROCESSING
+            // Stop recording
+            recordingViewModel.stopRecording()
 
-                // Stop recording and get file
-                val recordingResult = voiceRepository.stopRecording()
-                if (recordingResult.isFailure) {
-                    val exception = recordingResult.exceptionOrNull()
-                    val error = exception?.message ?: "Failed to stop recording"
-                    Log.e(TAG, "Recording stop failed: $error", exception)
-                    TraceLogger.error("KeyboardViewModel", "Recording stop failed", exception)
-                    _errorMessage.value = "Failed to stop recording: $error"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-                TraceLogger.trace("KeyboardViewModel", "Recording stopped successfully")
+            // Wait for audio file
+            recordingViewModel.recordedAudioFile
+                .filterNotNull()
+                .take(1)
+                .collect { audioFile ->
+                    // Set recording state to processing
+                    recordingViewModel.setProcessing()
 
-                val audioFile = recordingResult.getOrNull()
-                if (audioFile == null) {
-                    _errorMessage.value = "Audio file is null"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
+                    // Get current settings and mode
+                    val settings = apiSettings.value
+                    val mode = selectedMode.value
 
-                // Capture audio file info for progress display
-                _lastAudioFileSize.value = audioFile.length()
-                _lastAudioDuration.value = calculateAudioDuration(audioFile)
-                Log.d(TAG, "Audio file info: size=${audioFile.length()} bytes, est duration=${_lastAudioDuration.value}s")
+                    if (mode == null) {
+                        recordingViewModel.setError("No voice mode selected")
+                        return@collect
+                    }
 
-                // Get current settings and mode
-                val settings = apiSettings.value
-                val mode = selectedMode.value
+                    // Process through transcription view model
+                    val savedAudioPath = transcriptionViewModel.processAudio(audioFile, mode, settings)
 
-                // Validate settings - API key required for all providers
-                if (settings.getCurrentApiKey().isBlank()) {
-                    _errorMessage.value = "Please configure API key for ${settings.provider.displayName} in settings"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                if (mode == null) {
-                    _errorMessage.value = "No voice mode selected"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                Log.d(TAG, "Processing audio with mode: ${mode.name}")
-                TraceLogger.trace("KeyboardViewModel", "Processing audio with mode: ${mode.name}, provider: ${settings.provider}")
-
-                // Save audio file to persistent storage
-                val savedAudioPath = saveAudioFileToPersistentStorage(audioFile)
-                Log.d(TAG, "Audio file saved to: $savedAudioPath")
-
-                // Start transcription with progress tracking and cancellation support
-                transcriptionJob = viewModelScope.launch {
-                    try {
-                        // Initial stage
-                        _processingStage.value = ProcessingStage.PREPARING
-                        _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
-
-                        // Launch progress updater with realistic stage-based simulation
-                        val progressJob = launch {
-                            // Cloud processing stages: prepare -> upload -> wait for API -> finish
-                            val stages = listOf(
-                                ProcessingStage.PREPARING to 200L,
-                                ProcessingStage.UPLOADING to 800L,
-                                ProcessingStage.WAITING_API to 2000L,  // Main API call - takes longest
-                                ProcessingStage.FINISHING to 200L
-                            )
-
-                            for ((stage, duration) in stages) {
-                                _processingStage.value = stage
-                                // Smoothly animate progress within the stage
-                                val steps = (duration / 100).toInt().coerceAtLeast(1)
-                                val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
-                                for (i in 0 until steps) {
-                                    _transcriptionProgress.value = stage.progressStart + (progressIncrement * i)
-                                    kotlinx.coroutines.delay(100)
-                                }
-                            }
-                        }
-
-                        // Process audio through API
-                        val result = voiceRepository.processAudio(audioFile, mode, settings)
-
-                        // Cancel progress updater and complete
-                        progressJob.cancel()
-                        _processingStage.value = ProcessingStage.FINISHING
-                        _transcriptionProgress.value = 1.0f
-
-                        when (result) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Transcription successful: ${result.data}")
-                        TraceLogger.trace("KeyboardViewModel", "Transcription successful, length: ${result.data.length} chars")
-
-                        // Check if in configuration mode
-                        if (mode.id == "configuration") {
-                            // Process as configuration command
-                            viewModelScope.launch {
-                                try {
-                                    val commandResult = voiceCommandProcessor.executeCommand(
-                                        result.data,
-                                        viewModelScope
-                                    )
-
-                                    if (commandResult.success) {
-                                        // Show pending command for user confirmation
-                                        _pendingCommandResult.value = commandResult
-                                        Log.d(TAG, "Configuration command pending: ${commandResult.message}")
-                                        TraceLogger.trace("KeyboardViewModel", "Configuration pending: ${commandResult.message}")
-                                    } else {
-                                        // Show error directly
-                                        _errorMessage.value = commandResult.message
+                    // Handle results based on transcription state
+                    launch {
+                        // Monitor for transcription completion or error
+                        combine(
+                            transcriptionViewModel.transcribedText,
+                            transcriptionViewModel.errorMessage
+                        ) { text, error ->
+                            when {
+                                error != null -> {
+                                    // Error occurred
+                                    recordingViewModel.setError(error)
+                                    // Save audio to history even on error
+                                    if (savedAudioPath != null) {
+                                        historyViewModel.addToHistory("", savedAudioPath)
                                     }
-
-                                    // Don't commit command text to input field
-                                    _transcribedText.value = ""
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error processing configuration command", e)
-                                    TraceLogger.error("KeyboardViewModel", "Configuration command error", e)
-                                    _errorMessage.value = "Configuration error: ${e.message}"
+                                }
+                                text.isNotEmpty() -> {
+                                    // Success
+                                    recordingViewModel.setIdle()
+                                    // Save to history with audio file path
+                                    if (savedAudioPath != null) {
+                                        historyViewModel.addToHistory(text, savedAudioPath)
+                                    }
                                 }
                             }
-                        } else {
-                            // Normal transcription mode
-                            _transcribedText.value = result.data
-
-                            // Save to history with audio file path
-                            settingsRepository.addToHistory(result.data, savedAudioPath)
-                        }
-
-                        _processingInfo.value = result.processingInfo
-                        _recordingState.value = RecordingState.IDLE
-                        _transcriptionProgress.value = null
-                        _processingStage.value = null
+                        }.take(1).collect()
                     }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Transcription failed: ${result.message}")
-                        TraceLogger.error("KeyboardViewModel", "Transcription failed: ${result.message}")
 
-                        // Save audio to history even on error (with empty text) so user can retry
-                        if (savedAudioPath != null) {
-                            settingsRepository.addToHistory("", savedAudioPath)
-                            Log.d(TAG, "Audio saved to history for retry: $savedAudioPath")
-                        }
-
-                        _errorMessage.value = "API Error: ${result.message}"
-                        _recordingState.value = RecordingState.ERROR
-                        _transcriptionProgress.value = null
-                        _processingStage.value = null
-                    }
-                    is ApiResult.Loading -> {
-                        // Should not happen in this flow
-                    }
-                        }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        Log.d(TAG, "Transcription cancelled by user")
-                        TraceLogger.trace("KeyboardViewModel", "Transcription cancelled")
-
-                        _recordingState.value = RecordingState.IDLE
-                        _transcriptionProgress.value = null
-                        _processingStage.value = null
-                        throw e // Re-throw to properly cancel the coroutine
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error during transcription", e)
-                        TraceLogger.error("KeyboardViewModel", "Transcription error", e)
-
-                        // Save audio to history even on error (with empty text) so user can retry
-                        if (savedAudioPath != null) {
-                            settingsRepository.addToHistory("", savedAudioPath)
-                            Log.d(TAG, "Audio saved to history for retry after exception: $savedAudioPath")
-                        }
-
-                        _errorMessage.value = e.message
-                        _recordingState.value = RecordingState.ERROR
-                        _transcriptionProgress.value = null
-                        _processingStage.value = null
-                    } finally {
-                        // Cleanup audio file
-                        audioFile.delete()
-                        transcriptionJob = null
-                    }
+                    // Cleanup audio file
+                    audioFile.delete()
+                    recordingViewModel.clearRecordedAudioFile()
                 }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping recording", e)
-                _errorMessage.value = e.message
-                _recordingState.value = RecordingState.ERROR
-            }
         }
     }
 
@@ -341,44 +174,20 @@ class KeyboardViewModel @Inject constructor(
      * Cancel recording
      */
     fun cancelRecording() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Canceling recording...")
-                voiceRepository.cancelRecording()
-                _recordingState.value = RecordingState.IDLE
-                _errorMessage.value = null
-            } catch (e: Exception) {
-                Log.e(TAG, "Error canceling recording", e)
-                _errorMessage.value = e.message
-                _recordingState.value = RecordingState.ERROR
-            }
-        }
+        recordingViewModel.cancelRecording()
     }
 
     /**
      * Cancel ongoing transcription
      */
     fun cancelTranscription() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Canceling transcription...")
-                TraceLogger.trace("KeyboardViewModel", "User cancelled transcription")
-
-                transcriptionJob?.cancel()
-                transcriptionJob = null
-
-                _recordingState.value = RecordingState.IDLE
-                _transcriptionProgress.value = null
-                _processingStage.value = null
-                _errorMessage.value = null
-
-                Log.d(TAG, "Transcription cancelled successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error canceling transcription", e)
-                TraceLogger.error("KeyboardViewModel", "Error cancelling transcription", e)
-            }
-        }
+        transcriptionViewModel.cancelTranscription()
+        recordingViewModel.setIdle()
     }
+
+    // ============================================================================
+    // Settings Operations
+    // ============================================================================
 
     /**
      * Select a voice mode
@@ -390,37 +199,12 @@ class KeyboardViewModel @Inject constructor(
                 settingsRepository.setSelectedMode(modeId)
             } catch (e: Exception) {
                 Log.e(TAG, "Error selecting mode", e)
-                _errorMessage.value = e.message
             }
         }
     }
 
     /**
-     * Clear error message
-     */
-    fun clearError() {
-        _errorMessage.value = null
-        if (_recordingState.value == RecordingState.ERROR) {
-            _recordingState.value = RecordingState.IDLE
-        }
-    }
-
-    /**
-     * Clear transcribed text
-     */
-    fun clearTranscribedText() {
-        _transcribedText.value = ""
-    }
-
-    /**
-     * Clear processing info
-     */
-    fun clearProcessingInfo() {
-        _processingInfo.value = null
-    }
-
-    /**
-     * Set input language hint for quick switching from keyboard
+     * Set input language
      */
     fun setInputLanguage(languageCode: String) {
         viewModelScope.launch {
@@ -429,12 +213,12 @@ class KeyboardViewModel @Inject constructor(
             settingsRepository.saveApiSettings(updatedSettings)
             // Track language usage
             settingsRepository.trackLanguageUsage(languageCode)
-            Log.d(TAG, "Input language hint changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
+            Log.d(TAG, "Input language changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
         }
     }
 
     /**
-     * Set output language for quick switching from keyboard
+     * Set output language
      */
     fun setOutputLanguage(languageCode: String) {
         viewModelScope.launch {
@@ -447,13 +231,15 @@ class KeyboardViewModel @Inject constructor(
         }
     }
 
+    // ============================================================================
+    // History Operations
+    // ============================================================================
+
     /**
      * Clear transcription history
      */
     fun clearHistory() {
-        viewModelScope.launch {
-            settingsRepository.clearHistory()
-        }
+        historyViewModel.clearHistory()
     }
 
     /**
@@ -461,227 +247,96 @@ class KeyboardViewModel @Inject constructor(
      */
     fun reprocessWithCurrentSettings(item: TranscriptionHistoryItem) {
         viewModelScope.launch {
-            try {
-                val audioFilePath = item.audioFilePath
-                if (audioFilePath == null) {
-                    _errorMessage.value = "No audio file available for reprocessing"
-                    return@launch
+            recordingViewModel.setProcessing()
+            val settings = apiSettings.value
+            val mode = selectedMode.value
+            historyViewModel.reprocessWithCurrentSettings(item, settings, mode)
+
+            // Monitor reprocessing result
+            historyViewModel.reprocessedText
+                .filterNotNull()
+                .take(1)
+                .collect { text ->
+                    // Update transcribed text for UI
+                    // Note: The history is already updated by HistoryViewModel
+                    recordingViewModel.setIdle()
+                    historyViewModel.clearReprocessedText()
                 }
-
-                val audioFile = File(audioFilePath)
-                if (!audioFile.exists()) {
-                    _errorMessage.value = "Audio file no longer exists"
-                    return@launch
-                }
-
-                Log.d(TAG, "Reprocessing audio with current settings: ${audioFile.name}")
-                TraceLogger.trace("KeyboardViewModel", "Reprocessing audio: ${audioFile.name}")
-                _recordingState.value = RecordingState.PROCESSING
-
-                // Get current settings and mode
-                val settings = apiSettings.value
-                val mode = selectedMode.value
-
-                // Validate settings - API key required for all providers
-                if (settings.getCurrentApiKey().isBlank()) {
-                    _errorMessage.value = "Please configure API key for ${settings.provider.displayName} in settings"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                if (mode == null) {
-                    _errorMessage.value = "No voice mode selected"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                // Process audio through API
-                when (val result = voiceRepository.processAudio(audioFile, mode, settings)) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Reprocessing successful: ${result.data}")
-                        TraceLogger.trace("KeyboardViewModel", "Reprocessing successful, length: ${result.data.length} chars")
-
-                        _transcribedText.value = result.data
-                        _processingInfo.value = result.processingInfo
-                        _recordingState.value = RecordingState.IDLE
-
-                        // Update existing history item instead of creating a new one
-                        settingsRepository.updateHistoryItem(item.id, result.data)
-                    }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Reprocessing failed: ${result.message}")
-                        TraceLogger.error("KeyboardViewModel", "Reprocessing failed: ${result.message}")
-                        _errorMessage.value = "API Error: ${result.message}"
-                        _recordingState.value = RecordingState.ERROR
-                    }
-                    is ApiResult.Loading -> {
-                        // Should not happen in this flow
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reprocessing audio", e)
-                TraceLogger.error("KeyboardViewModel", "Error reprocessing audio", e)
-                _errorMessage.value = e.message
-                _recordingState.value = RecordingState.ERROR
-            }
         }
     }
 
     /**
      * Reprocess audio from history with new settings
      */
-    fun reprocessWithNewSettings(item: TranscriptionHistoryItem, newSettings: ApiSettings, newMode: VoiceMode) {
+    fun reprocessWithNewSettings(
+        item: TranscriptionHistoryItem,
+        newSettings: ApiSettings,
+        newMode: VoiceMode
+    ) {
         viewModelScope.launch {
-            try {
-                val audioFilePath = item.audioFilePath
-                if (audioFilePath == null) {
-                    _errorMessage.value = "No audio file available for reprocessing"
-                    return@launch
+            recordingViewModel.setProcessing()
+            historyViewModel.reprocessWithNewSettings(item, newSettings, newMode)
+
+            // Monitor reprocessing result
+            historyViewModel.reprocessedText
+                .filterNotNull()
+                .take(1)
+                .collect { text ->
+                    // Update transcribed text for UI
+                    // Note: The history is already updated by HistoryViewModel
+                    recordingViewModel.setIdle()
+                    historyViewModel.clearReprocessedText()
                 }
-
-                val audioFile = File(audioFilePath)
-                if (!audioFile.exists()) {
-                    _errorMessage.value = "Audio file no longer exists"
-                    return@launch
-                }
-
-                Log.d(TAG, "Reprocessing audio with new settings: ${audioFile.name}, mode: ${newMode.name}")
-                TraceLogger.trace("KeyboardViewModel", "Reprocessing with new settings: ${newMode.name}, provider: ${newSettings.provider}")
-                _recordingState.value = RecordingState.PROCESSING
-
-                // Validate settings - API key required for all providers
-                if (newSettings.getCurrentApiKey().isBlank()) {
-                    _errorMessage.value = "Please configure API key for ${newSettings.provider.displayName}"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                // Process audio through API
-                when (val result = voiceRepository.processAudio(audioFile, newMode, newSettings)) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Reprocessing with new settings successful: ${result.data}")
-                        TraceLogger.trace("KeyboardViewModel", "Reprocessing successful, length: ${result.data.length} chars")
-
-                        _transcribedText.value = result.data
-                        _processingInfo.value = result.processingInfo
-                        _recordingState.value = RecordingState.IDLE
-
-                        // Update existing history item instead of creating a new one
-                        settingsRepository.updateHistoryItem(item.id, result.data)
-                    }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Reprocessing failed: ${result.message}")
-                        TraceLogger.error("KeyboardViewModel", "Reprocessing failed: ${result.message}")
-                        _errorMessage.value = "API Error: ${result.message}"
-                        _recordingState.value = RecordingState.ERROR
-                    }
-                    is ApiResult.Loading -> {
-                        // Should not happen in this flow
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reprocessing audio with new settings", e)
-                TraceLogger.error("KeyboardViewModel", "Error reprocessing with new settings", e)
-                _errorMessage.value = e.message
-                _recordingState.value = RecordingState.ERROR
-            }
         }
+    }
+
+    // ============================================================================
+    // Utility Operations
+    // ============================================================================
+
+    /**
+     * Clear error message
+     */
+    fun clearError() {
+        recordingViewModel.clearError()
+        transcriptionViewModel.clearError()
+        historyViewModel.clearError()
     }
 
     /**
-     * Save audio file to persistent storage for reprocessing
-     * Returns the absolute path to the saved file, or null on error
+     * Clear transcribed text
      */
-    private fun saveAudioFileToPersistentStorage(audioFile: File): String? {
-        return try {
-            // Create audio history directory
-            val audioDir = File(context.filesDir, "audio_history")
-            if (!audioDir.exists()) {
-                audioDir.mkdirs()
-                Log.d(TAG, "Created audio history directory: ${audioDir.absolutePath}")
-            }
-
-            // Generate unique filename with timestamp
-            val filename = "audio_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.wav"
-            val destFile = File(audioDir, filename)
-
-            // Copy file to persistent storage
-            audioFile.copyTo(destFile, overwrite = true)
-
-            Log.d(TAG, "Audio saved to persistent storage: ${destFile.absolutePath}")
-            TraceLogger.trace("KeyboardViewModel", "Audio file saved: ${destFile.name}, size: ${destFile.length()} bytes")
-
-            destFile.absolutePath
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save audio file to persistent storage", e)
-            TraceLogger.error("KeyboardViewModel", "Failed to save audio file", e)
-            null
-        }
+    fun clearTranscribedText() {
+        transcriptionViewModel.clearTranscribedText()
     }
 
     /**
-     * Calculate audio duration from file
-     * For WAV files, estimates duration based on file size and format assumptions
+     * Clear processing info
      */
-    private fun calculateAudioDuration(audioFile: File): Double {
-        return try {
-            // Standard WAV format assumptions for our recorder:
-            // 16-bit PCM, mono, 16kHz sample rate
-            // Bytes per second = 16000 samples/sec * 2 bytes/sample = 32000 bytes/sec
-            val WAV_HEADER_SIZE = 44
-            val BYTES_PER_SECOND = 32000.0 // 16kHz * mono * 16-bit (2 bytes)
-
-            val dataSize = audioFile.length() - WAV_HEADER_SIZE
-            val duration = dataSize / BYTES_PER_SECOND
-            duration.coerceAtLeast(0.0)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error calculating audio duration", e)
-            0.0
-        }
-    }
-
-    init {
-        // Monitor recording duration for timeout
-        viewModelScope.launch {
-            recordingDuration.collect { duration ->
-                if (duration >= MAX_RECORDING_DURATION_MS && recordingState.value == RecordingState.RECORDING) {
-                    Log.d(TAG, "Max recording duration reached, auto-stopping")
-                    stopRecording()
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset state
-     */
-    fun reset() {
-        _recordingState.value = RecordingState.IDLE
-        _transcribedText.value = ""
-        _errorMessage.value = null
+    fun clearProcessingInfo() {
+        transcriptionViewModel.clearProcessingInfo()
     }
 
     /**
      * Confirm and apply pending configuration command
      */
     fun confirmPendingCommand() {
-        viewModelScope.launch {
-            val pending = _pendingCommandResult.value
-            if (pending != null && pending.success) {
-                // Show notification
-                voiceCommandProcessor.showNotification(pending)
-                Log.d(TAG, "Configuration command confirmed: ${pending.message}")
-            }
-            // Clear pending command
-            _pendingCommandResult.value = null
-        }
+        transcriptionViewModel.confirmPendingCommand()
     }
 
     /**
      * Reject pending configuration command
      */
     fun rejectPendingCommand() {
-        Log.d(TAG, "Configuration command rejected")
-        _pendingCommandResult.value = null
+        transcriptionViewModel.rejectPendingCommand()
+    }
+
+    /**
+     * Reset state
+     */
+    fun reset() {
+        recordingViewModel.clearError()
+        transcriptionViewModel.clearTranscribedText()
+        transcriptionViewModel.clearError()
     }
 }
