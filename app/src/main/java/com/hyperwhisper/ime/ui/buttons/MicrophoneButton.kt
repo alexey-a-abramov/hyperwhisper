@@ -17,6 +17,8 @@ fun MicrophoneButton(
     onCancelTranscription: () -> Unit = {},
     onEnableWalkieTalkieMode: () -> Unit = {},
     onDisableWalkieTalkieMode: () -> Unit = {},
+    onPressStartRecording: () -> Unit = {},
+    onPressReleaseRecording: () -> Unit = {},
     walkieTalkieMode: Boolean = false,
     recordingDuration: Long = 0L,
     transcriptionProgress: Float? = null,
@@ -35,6 +37,8 @@ fun MicrophoneButton(
                     onClick = onStartRecording,
                     onLongPress = onEnableWalkieTalkieMode,
                     onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else {},
+                    onPressStart = onPressStartRecording,
+                    onPressRelease = onPressReleaseRecording,
                     walkieTalkieMode = walkieTalkieMode
                 )
             }
@@ -60,6 +64,8 @@ fun MicrophoneButton(
                     onClick = onStartRecording,
                     onLongPress = onEnableWalkieTalkieMode,
                     onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else {},
+                    onPressStart = onPressStartRecording,
+                    onPressRelease = onPressReleaseRecording,
                     walkieTalkieMode = walkieTalkieMode
                 )
             }

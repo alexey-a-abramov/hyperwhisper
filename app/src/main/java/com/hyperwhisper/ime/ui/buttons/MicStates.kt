@@ -34,6 +34,8 @@ fun IdleMicButton(
     onClick: () -> Unit,
     onLongPress: () -> Unit = {},
     onDoubleTap: () -> Unit = {},
+    onPressStart: () -> Unit = {},
+    onPressRelease: () -> Unit = {},
     walkieTalkieMode: Boolean = false
 ) {
     FloatingActionButton(
@@ -41,9 +43,11 @@ fun IdleMicButton(
         modifier = Modifier
             .size(72.dp)
             .micGestureDetector(
-                onSingleTap = onClick,
+                onSingleTap = if (walkieTalkieMode) {} else onClick,
                 onDoubleTap = onDoubleTap,
-                onLongPress = onLongPress
+                onLongPress = onLongPress,
+                onPressStart = if (walkieTalkieMode) onPressStart else {},
+                onPressRelease = if (walkieTalkieMode) onPressRelease else {}
             ),
         shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.primary,

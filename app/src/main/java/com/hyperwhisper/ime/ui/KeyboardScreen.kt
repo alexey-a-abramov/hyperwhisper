@@ -227,6 +227,8 @@ fun KeyboardScreen(
                 onCancelTranscription = { viewModel.cancelTranscription() },
                 onEnableWalkieTalkieMode = { viewModel.enableWalkieTalkieMode() },
                 onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
+                onPressStartRecording = { viewModel.startRecording() },
+                onPressReleaseRecording = { viewModel.stopRecording() },
                 onToggleTimer = { showTimerText = !showTimerText },
                 onDelete = onDelete,
                 onDeleteAll = onDeleteAll,
