@@ -1,0 +1,120 @@
+name: CI/CD - Test, Build, and Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  test-build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Read current VERSION_CODE
+      id: read_version
+      run: |
+        VERSION_CODE=$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2)
+        echo "Current VERSION_CODE: $VERSION_CODE"
+        # Convert VERSION_CODE to version name (e.g., 125 -> 1.25)
+        VERSION_NAME="1.${VERSION_CODE}"
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+    - name: Run Tests
+      run: ./gradlew test --no-daemon
+      continue-on-error: true
+
+    - name: Run Lint
+      run: ./gradlew lint --no-daemon
+      continue-on-error: true
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: Build Release APK
+      run: ./gradlew assembleRelease --no-daemon
+      continue-on-error: true
+
+    - name: Prepare Release Artifacts
+      run: |
+        mkdir -p release-artifacts
+        cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/hyperwhisper-v${{ steps.read_version.outputs.version_name }}-debug.apk
+        cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/app-debug.apk
+        if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+          cp app/build/outputs/apk/release/app-release.apk release-artifacts/hyperwhisper-v${{ steps.read_version.outputs.version_name }}-release.apk
+        fi
+
+    - name: Generate Release Notes from Commits
+      id: release_notes
+      run: |
+        # Get commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          COMMITS=$(git log --pretty=format:"- %s" -10)
+        else
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s")
+        fi
+
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        echo "## What's New" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "$COMMITS" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "---" >> $GITHUB_OUTPUT
+        echo "**Version:** ${{ steps.read_version.outputs.version_name }}" >> $GITHUB_OUTPUT
+        echo "**Version Code:** ${{ steps.read_version.outputs.version_code }}" >> $GITHUB_OUTPUT
+        echo "**Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        echo "**Commit:** ${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create or Update Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.read_version.outputs.version_name }}
+        name: HyperWhisper v${{ steps.read_version.outputs.version_name }}
+        body: ${{ steps.release_notes.outputs.notes }}
+        draft: false
+        prerelease: false
+        files: |
+          release-artifacts/hyperwhisper-v${{ steps.read_version.outputs.version_name }}-debug.apk
+          release-artifacts/app-debug.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create latest-version.json
+      run: |
+        cat > latest-version.json << EOF
+        {
+          "versionCode": ${{ steps.read_version.outputs.version_code }},
+          "versionName": "${{ steps.read_version.outputs.version_name }}",
+          "apkUrl": "https://github.com/alexey-a-abramov/hyperwhisper/releases/download/v${{ steps.read_version.outputs.version_name }}/app-debug.apk",
+          "releaseNotes": "See release notes at https://github.com/alexey-a-abramov/hyperwhisper/releases/tag/v${{ steps.read_version.outputs.version_name }}",
+          "buildTimestamp": $(date +%s)000
+        }
+        EOF
+        cat latest-version.json
+
+    - name: Commit latest-version.json to repository
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add latest-version.json
+        git diff --staged --quiet || git commit -m "chore: Update latest-version.json for v${{ steps.read_version.outputs.version_name }}"
+        git push
+      continue-on-error: true
