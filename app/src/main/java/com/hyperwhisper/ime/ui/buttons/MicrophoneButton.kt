@@ -36,7 +36,7 @@ fun MicrophoneButton(
                 IdleMicButton(
                     onClick = onStartRecording,
                     onLongPress = onEnableWalkieTalkieMode,
-                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else { },
+                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else ({}),
                     onPressStart = onPressStartRecording,
                     onPressRelease = onPressReleaseRecording,
                     walkieTalkieMode = walkieTalkieMode
@@ -45,7 +45,7 @@ fun MicrophoneButton(
             RecordingState.RECORDING -> {
                 RecordingMicButton(
                     onClick = onStopRecording,
-                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else { },
+                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else ({}),
                     recordingDuration = recordingDuration,
                     walkieTalkieMode = walkieTalkieMode
                 )
@@ -63,7 +63,7 @@ fun MicrophoneButton(
                 IdleMicButton(
                     onClick = onStartRecording,
                     onLongPress = onEnableWalkieTalkieMode,
-                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else { },
+                    onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else ({}),
                     onPressStart = onPressStartRecording,
                     onPressRelease = onPressReleaseRecording,
                     walkieTalkieMode = walkieTalkieMode

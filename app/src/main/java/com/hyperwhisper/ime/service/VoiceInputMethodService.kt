@@ -70,6 +70,9 @@ class VoiceInputMethodService : InputMethodService(),
     @Inject
     lateinit var chatCompletionStrategy: ChatCompletionStrategy
 
+    @Inject
+    lateinit var viewModelFactory: androidx.lifecycle.ViewModelProvider.Factory
+
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
@@ -108,27 +111,8 @@ class VoiceInputMethodService : InputMethodService(),
             lifecycleRegistry.currentState = Lifecycle.State.CREATED
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
-            // Initialize specialized ViewModels first
-            val recordingViewModel = com.hyperwhisper.ui.viewmodels.RecordingViewModel(
-                voiceRepository
-            )
-            val transcriptionViewModel = com.hyperwhisper.ui.viewmodels.TranscriptionViewModel(
-                this,
-                voiceRepository,
-                voiceCommandProcessor
-            )
-            val historyViewModel = com.hyperwhisper.ui.viewmodels.HistoryViewModel(
-                voiceRepository,
-                settingsRepository
-            )
-
-            // Initialize KeyboardViewModel with specialized ViewModels
-            viewModel = KeyboardViewModel(
-                recordingViewModel,
-                transcriptionViewModel,
-                historyViewModel,
-                settingsRepository
-            )
+            // Initialize ViewModel using Hilt's ViewModelProvider
+            viewModel = ViewModelProvider(this, viewModelFactory)[KeyboardViewModel::class.java]
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)

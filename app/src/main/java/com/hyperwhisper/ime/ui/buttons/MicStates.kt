@@ -43,11 +43,11 @@ fun IdleMicButton(
         modifier = Modifier
             .size(72.dp)
             .micGestureDetector(
-                onSingleTap = if (walkieTalkieMode) { } else onClick,
+                onSingleTap = if (walkieTalkieMode) ({}) else onClick,
                 onDoubleTap = onDoubleTap,
                 onLongPress = onLongPress,
-                onPressStart = if (walkieTalkieMode) onPressStart else { },
-                onPressRelease = if (walkieTalkieMode) onPressRelease else { }
+                onPressStart = if (walkieTalkieMode) onPressStart else ({}),
+                onPressRelease = if (walkieTalkieMode) onPressRelease else ({})
             ),
         shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.primary,
