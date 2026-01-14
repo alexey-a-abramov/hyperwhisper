@@ -339,7 +339,6 @@ class KeyboardViewModel @Inject constructor(
      */
     fun enableWalkieTalkieMode() {
         viewModelScope.launch {
-            val strings = settingsRepository.appearanceSettings.value
             // Use localized string - need to get from string resources
             recordingViewModel.enableWalkieTalkieMode(
                 "Walkie-Talkie mode enabled. To exit, double-tap the button."

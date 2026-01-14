@@ -108,12 +108,26 @@ class VoiceInputMethodService : InputMethodService(),
             lifecycleRegistry.currentState = Lifecycle.State.CREATED
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
-            // Initialize ViewModel using ViewModelProvider
-            viewModel = KeyboardViewModel(
+            // Initialize specialized ViewModels first
+            val recordingViewModel = com.hyperwhisper.ui.viewmodels.RecordingViewModel(
+                voiceRepository
+            )
+            val transcriptionViewModel = com.hyperwhisper.ui.viewmodels.TranscriptionViewModel(
                 this,
                 voiceRepository,
-                settingsRepository,
                 voiceCommandProcessor
+            )
+            val historyViewModel = com.hyperwhisper.ui.viewmodels.HistoryViewModel(
+                voiceRepository,
+                settingsRepository
+            )
+
+            // Initialize KeyboardViewModel with specialized ViewModels
+            viewModel = KeyboardViewModel(
+                recordingViewModel,
+                transcriptionViewModel,
+                historyViewModel,
+                settingsRepository
             )
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
