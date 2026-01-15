@@ -1,13 +1,16 @@
 package com.hyperwhisper.ui
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
+import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.ui.viewmodels.HistoryViewModel
 import com.hyperwhisper.ui.viewmodels.RecordingViewModel
 import com.hyperwhisper.ui.viewmodels.TranscriptionViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,11 +22,23 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class KeyboardViewModel @Inject constructor(
-    private val recordingViewModel: RecordingViewModel,
-    private val transcriptionViewModel: TranscriptionViewModel,
-    private val historyViewModel: HistoryViewModel,
+    @ApplicationContext private val context: Context,
+    private val voiceRepository: VoiceRepository,
+    private val voiceCommandProcessor: VoiceCommandProcessor,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    // Create specialized ViewModels internally
+    private val recordingViewModel: RecordingViewModel = RecordingViewModel(voiceRepository)
+    private val transcriptionViewModel: TranscriptionViewModel = TranscriptionViewModel(
+        context,
+        voiceRepository,
+        voiceCommandProcessor
+    )
+    private val historyViewModel: HistoryViewModel = HistoryViewModel(
+        voiceRepository,
+        settingsRepository
+    )
 
     companion object {
         private const val TAG = "KeyboardViewModel"

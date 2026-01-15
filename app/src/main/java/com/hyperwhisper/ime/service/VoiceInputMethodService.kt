@@ -70,9 +70,6 @@ class VoiceInputMethodService : InputMethodService(),
     @Inject
     lateinit var chatCompletionStrategy: ChatCompletionStrategy
 
-    @Inject
-    lateinit var viewModelFactory: androidx.lifecycle.ViewModelProvider.Factory
-
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
@@ -111,8 +108,9 @@ class VoiceInputMethodService : InputMethodService(),
             lifecycleRegistry.currentState = Lifecycle.State.CREATED
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
-            // Initialize ViewModel using Hilt's ViewModelProvider
-            viewModel = ViewModelProvider(this, viewModelFactory)[KeyboardViewModel::class.java]
+            // Initialize ViewModel using ViewModelProvider with Hilt
+            // Hilt automatically provides the factory through @AndroidEntryPoint
+            viewModel = ViewModelProvider(this)[KeyboardViewModel::class.java]
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)

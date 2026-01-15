@@ -6,18 +6,17 @@ import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.utils.TraceLogger
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 /**
  * ViewModel for managing audio recording state
  * Handles recording lifecycle and timeout monitoring
+ *
+ * Note: Not a @HiltViewModel - created internally by KeyboardViewModel
  */
-@HiltViewModel
-class RecordingViewModel @Inject constructor(
+class RecordingViewModel(
     private val voiceRepository: VoiceRepository
 ) : ViewModel() {
 

@@ -6,18 +6,17 @@ import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.utils.TraceLogger
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 /**
  * ViewModel for managing transcription history
  * Handles history display, clearing, and reprocessing
+ *
+ * Note: Not a @HiltViewModel - created internally by KeyboardViewModel
  */
-@HiltViewModel
-class HistoryViewModel @Inject constructor(
+class HistoryViewModel(
     private val voiceRepository: VoiceRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {

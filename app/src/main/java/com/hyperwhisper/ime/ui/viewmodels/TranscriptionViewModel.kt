@@ -7,20 +7,18 @@ import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.utils.TraceLogger
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 /**
  * ViewModel for managing transcription processing
  * Handles API calls, progress tracking, and result processing
+ *
+ * Note: Not a @HiltViewModel - created internally by KeyboardViewModel
  */
-@HiltViewModel
-class TranscriptionViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TranscriptionViewModel(
+    private val context: Context,
     private val voiceRepository: VoiceRepository,
     private val voiceCommandProcessor: VoiceCommandProcessor
 ) : ViewModel() {
