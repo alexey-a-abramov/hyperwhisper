@@ -28,6 +28,7 @@
             android:name=".service.VoiceInputMethodService"
             android:label="@string/ime_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />

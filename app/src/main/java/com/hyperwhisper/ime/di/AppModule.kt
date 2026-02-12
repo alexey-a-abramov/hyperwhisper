@@ -1,7 +1,12 @@
 package com.hyperwhisper.di
 
 import android.content.Context
+import androidx.lifecycle.ViewModelProvider
 import com.hyperwhisper.audio.AudioRecorderManager
+import com.hyperwhisper.data.SettingsRepository
+import com.hyperwhisper.data.VoiceCommandProcessor
+import com.hyperwhisper.network.VoiceRepository
+import com.hyperwhisper.ui.KeyboardViewModel
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,5 +30,28 @@ object AppModule {
         @ApplicationContext context: Context
     ): AudioRecorderManager {
         return AudioRecorderManager(context)
+    }
+
+    @Provides
+    fun provideViewModelFactory(
+        @ApplicationContext context: Context,
+        voiceRepository: VoiceRepository,
+        voiceCommandProcessor: VoiceCommandProcessor,
+        settingsRepository: SettingsRepository
+    ): ViewModelProvider.Factory {
+        return object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                if (modelClass.isAssignableFrom(KeyboardViewModel::class.java)) {
+                    return KeyboardViewModel(
+                        context,
+                        voiceRepository,
+                        voiceCommandProcessor,
+                        settingsRepository
+                    ) as T
+                }
+                throw IllegalArgumentException("Unknown ViewModel class")
+            }
+        }
     }
 }

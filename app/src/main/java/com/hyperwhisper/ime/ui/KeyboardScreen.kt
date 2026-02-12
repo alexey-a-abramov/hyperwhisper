@@ -56,6 +56,7 @@ import com.hyperwhisper.ui.sections.BottomActionsRow
 import com.hyperwhisper.ui.sections.LanguageModelRow
 import com.hyperwhisper.ui.sections.RecordingSection
 import com.hyperwhisper.ui.sections.TopControlsRow
+import com.hyperwhisper.ui.dialogs.ModeSelectionDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
 
@@ -99,6 +100,7 @@ fun KeyboardScreen(
     var showOutputLanguageDialog by remember { mutableStateOf(false) }
     var showHistoryPanel by remember { mutableStateOf(false) }
     var showTimerText by remember { mutableStateOf(true) }
+    var showModeDialog by remember { mutableStateOf(false) }
 
     // Track last transcribed text for paste button
     // Initialize from history if available
@@ -183,28 +185,30 @@ fun KeyboardScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-            // Top Row: Switch Keyboard + Mode Selector + Help + Settings Button
+            // Add space at the top to push content down
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Top Row: Keyboard Switcher + Settings + View Logs (techie) + Help
             TopControlsRow(
                 context = context,
-                voiceModes = voiceModes,
-                selectedModeId = selectedModeId,
-                recordingState = recordingState,
                 showKeyboardSwitcher = appearanceSettings.showKeyboardSwitcher,
                 techieModeEnabled = appearanceSettings.techieModeEnabled,
-                onSwitchKeyboard = onSwitchKeyboard,
-                onModeSelected = { viewModel.selectMode(it) }
+                onSwitchKeyboard = onSwitchKeyboard
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Language & Model Info Row: Input | Model | Output
+            // Language & Model Info Row: Input | Combined Mode/Model Button | Output
             LanguageModelRow(
                 apiSettings = apiSettings,
                 recordingState = recordingState,
                 techieModeEnabled = appearanceSettings.techieModeEnabled,
+                voiceModes = voiceModes,
+                selectedModeId = selectedModeId,
                 onShowInputLanguageDialog = { showInputLanguageDialog = true },
                 onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
-                onShowConfigInfo = { showConfigInfo = true }
+                onShowConfigInfo = { showConfigInfo = true },
+                onShowModeDialog = { showModeDialog = true }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -239,13 +243,15 @@ fun KeyboardScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Bottom row: Paste (left) + Space button (center/right)
+            // Double-tap space for period + space
             BottomActionsRow(
                 lastTranscribedText = lastTranscribedText,
                 transcriptionHistory = transcriptionHistory,
                 enableHistoryPanel = appearanceSettings.enableHistoryPanel,
                 onPasteText = onTextCommit,
                 onShowHistory = { showHistoryPanel = true },
-                onSpace = onSpace
+                onSpace = onSpace,
+                onDelete = onDelete
             )
         }
         }
@@ -276,6 +282,19 @@ fun KeyboardScreen(
                 apiSettings = apiSettings,
                 usageStatistics = usageStatistics,
                 onDismiss = { showConfigInfo = false }
+            )
+        }
+
+        // Show Mode Selection Dialog
+        if (showModeDialog) {
+            ModeSelectionDialog(
+                currentMode = voiceModes.firstOrNull { it.id == selectedModeId },
+                allModes = voiceModes,
+                onModeSelected = { modeId ->
+                    viewModel.selectMode(modeId)
+                    showModeDialog = false
+                },
+                onDismiss = { showModeDialog = false }
             )
         }
 
@@ -493,26 +512,51 @@ fun ProcessingIndicator(
             modifier = Modifier.size(72.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Progress indicator
+            // Progress indicator with percentage
             if (progress != null && progress > 0f) {
+                // Background circle (full)
+                CircularProgressIndicator(
+                    progress = 1f,
+                    modifier = Modifier.size(64.dp),
+                    strokeWidth = 6.dp,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                )
+                // Actual progress
                 CircularProgressIndicator(
                     progress = progress,
-                    modifier = Modifier.size(60.dp),
-                    strokeWidth = 5.dp,
+                    modifier = Modifier.size(64.dp),
+                    strokeWidth = 6.dp,
                     color = MaterialTheme.colorScheme.primary
                 )
-                // Show percentage text
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                // Show percentage text (large and prominent)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "${(progress * 100).toInt()}",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                }
             } else {
                 // Indeterminate progress
                 CircularProgressIndicator(
-                    modifier = Modifier.size(60.dp),
-                    strokeWidth = 5.dp,
+                    modifier = Modifier.size(64.dp),
+                    strokeWidth = 6.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                // Show "Processing..." text
+                Text(
+                    text = "...",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -565,15 +609,21 @@ fun ProcessingIndicator(
             }
         }
 
-        // Show processing stage text below file info
+        // Show processing stage text below file info (prominent)
         processingStage?.let { stage ->
-            Text(
-                text = stage.displayName,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    text = stage.displayName,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
         }
     }
 }

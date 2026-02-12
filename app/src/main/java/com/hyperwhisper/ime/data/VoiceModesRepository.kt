@@ -136,36 +136,52 @@ class VoiceModesRepository @Inject constructor(
         VoiceMode(
             id = "verbatim",
             name = "Verbatim",
+            description = "Transcribe your speech exactly as spoken without any modifications. Perfect for dictation and capturing your exact words.",
             systemPrompt = "Transcribe the audio exactly as spoken.",
+            model = "whisper-1",
+            processingMode = "direct",
             isBuiltIn = false
         ),
         VoiceMode(
             id = "fix_grammar",
             name = "Fix Grammar",
+            description = "Automatically correct grammar, spelling, and punctuation errors while preserving your original meaning and tone.",
             systemPrompt = "Transcribe this audio and fix any grammar, spelling, and punctuation errors while preserving the original meaning and tone.",
+            model = "gpt-4o-mini",
+            processingMode = "two-step",
             isBuiltIn = false
         ),
         VoiceMode(
             id = "polite",
             name = "Polite",
+            description = "Transform your casual speech into polite, professional communication. Great for work emails and formal messages.",
             systemPrompt = "Transcribe this audio and reformulate it to be socially acceptable, polite, and conversational. Make it slightly better than neutral tone - professional yet friendly. Remove any harsh language or potential insults while preserving the core message and intent.",
+            model = "gpt-4o-mini",
+            processingMode = "two-step",
             isBuiltIn = false
         ),
         VoiceMode(
             id = "prompt_formatter",
             name = "Prompt Formatter",
+            description = "Convert your voice input into clear, effective prompts optimized for AI assistants. Makes your requests more precise and actionable.",
             systemPrompt = "Reformulate the user's input into a clear, effective prompt suitable for LLM processing. Enhance clarity, add necessary context, and structure it for optimal AI understanding. Maintain the user's intent while making it more precise and actionable.",
+            model = "gpt-4o-mini",
+            processingMode = "two-step",
             isBuiltIn = false
         ),
         VoiceMode(
             id = "llm_response",
             name = "LLM Response",
+            description = "Ask questions and get direct answers. Your speech is interpreted as a question and you receive a concise answer.",
             systemPrompt = "The user is asking a question. Provide a direct, concise answer to the question without any additional explanation or context. Return ONLY the answer itself.",
+            model = "gpt-4o-mini",
+            processingMode = "two-step",
             isBuiltIn = false
         ),
         VoiceMode(
             id = "configuration",
             name = "Configuration",
+            description = "Control keyboard settings with your voice. Say commands like 'change language to Spanish' or 'enable dark mode'.",
             systemPrompt = """You are a voice command interpreter for HyperWhisper keyboard settings. Parse the user's spoken command and output ONLY a valid JSON object.
 
 ## Output Format
@@ -260,6 +276,8 @@ User: "Set UI language to Arabic"
 3. For languages, accept both codes and full names
 4. For boolean settings, normalize to "true" or "false"
 5. Match user intent even if phrasing varies (e.g., "dark theme" = "dark mode")""",
+            model = "gpt-4o-mini",
+            processingMode = "two-step",
             isBuiltIn = false
         )
     )

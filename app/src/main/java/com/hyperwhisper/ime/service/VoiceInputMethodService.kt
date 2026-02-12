@@ -40,7 +40,20 @@ import com.hyperwhisper.ui.KeyboardViewModel
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import com.hyperwhisper.utils.TraceLogger
 import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
+
+/**
+ * EntryPoint for accessing ViewModelFactory in Service context
+ */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ViewModelFactoryProvider {
+    fun viewModelFactory(): ViewModelProvider.Factory
+}
 
 /**
  * Custom Input Method Service for Voice-to-Text
@@ -108,14 +121,26 @@ class VoiceInputMethodService : InputMethodService(),
             lifecycleRegistry.currentState = Lifecycle.State.CREATED
             TraceLogger.trace("IME", "Lifecycle state set to CREATED")
 
-            // Initialize ViewModel using ViewModelProvider with Hilt
-            // Hilt automatically provides the factory through @AndroidEntryPoint
-            viewModel = ViewModelProvider(this)[KeyboardViewModel::class.java]
+            // Initialize ViewModel using ViewModelProvider with Hilt factory
+            // Get the factory from Hilt EntryPoint since Services don't get it automatically
+            val factory = EntryPointAccessors.fromApplication(
+                applicationContext,
+                ViewModelFactoryProvider::class.java
+            ).viewModelFactory()
+            viewModel = ViewModelProvider(this, factory)[KeyboardViewModel::class.java]
             TraceLogger.trace("IME", "ViewModel initialized")
         } catch (e: Exception) {
             TraceLogger.error("IME", "Error in onCreate", e)
             throw e
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Log.d(TAG, "onConfigurationChanged - orientation: ${newConfig.orientation}")
+        TraceLogger.lifecycle("IME", "onConfigurationChanged", "orientation=${newConfig.orientation}")
+        // Configuration changes like rotation are handled gracefully
+        // The service doesn't restart, and recording/transcription continues
     }
 
     override fun onCreateInputView(): View {

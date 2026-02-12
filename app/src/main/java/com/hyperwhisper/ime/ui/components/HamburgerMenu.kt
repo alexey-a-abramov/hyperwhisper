@@ -18,13 +18,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.PopupProperties
 import com.hyperwhisper.localization.LocalStrings
 
 /**
  * Hamburger menu component
- * Provides dropdown access to Settings, Logs (in techie mode), and Help/About
+ * Provides dropdown access to Logs (in techie mode) and Help/About
+ * Optimized to prevent blinking/flickering when opening/closing
  */
 @Composable
 fun HamburgerMenu(
@@ -34,6 +37,9 @@ fun HamburgerMenu(
 ) {
     val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
+
+    // Stabilize context to prevent recomposition
+    val currentContext by rememberUpdatedState(context)
 
     Box(modifier = modifier) {
         // Hamburger icon button
@@ -45,66 +51,56 @@ fun HamburgerMenu(
             )
         }
 
-        // Dropdown menu
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            // Settings
-            DropdownMenuItem(
-                text = { Text(strings.settings) },
-                onClick = {
-                    expanded = false
-                    val intent = Intent(context, com.hyperwhisper.ui.settings.SettingsActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = strings.settingsDesc,
-                        tint = MaterialTheme.colorScheme.primary
+        // Dropdown menu - only compose when expanded to prevent blinking
+        if (expanded) {
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = { expanded = false },
+                properties = PopupProperties(
+                    focusable = true,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true,
+                    clippingEnabled = false
+                )
+            ) {
+                // Logs (only shown in techie mode)
+                if (techieModeEnabled) {
+                    DropdownMenuItem(
+                        text = { Text(strings.viewLogs) },
+                        onClick = {
+                            expanded = false
+                            val intent = Intent(currentContext, com.hyperwhisper.ui.logs.LogsActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            currentContext.startActivity(intent)
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Assignment,
+                                contentDescription = strings.viewLogsDesc,
+                                tint = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                     )
                 }
-            )
 
-            // Logs (only shown in techie mode)
-            if (techieModeEnabled) {
+                // Help & About
                 DropdownMenuItem(
-                    text = { Text(strings.viewLogs) },
+                    text = { Text(strings.helpAndAbout) },
                     onClick = {
                         expanded = false
-                        val intent = Intent(context, com.hyperwhisper.ui.logs.LogsActivity::class.java)
+                        val intent = Intent(currentContext, com.hyperwhisper.ui.about.AboutActivity::class.java)
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
+                        currentContext.startActivity(intent)
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Assignment,
-                            contentDescription = strings.viewLogsDesc,
-                            tint = MaterialTheme.colorScheme.tertiary
+                            imageVector = Icons.Default.Help,
+                            contentDescription = strings.helpAndAboutDesc,
+                            tint = MaterialTheme.colorScheme.secondary
                         )
                     }
                 )
             }
-
-            // Help & About
-            DropdownMenuItem(
-                text = { Text(strings.helpAndAbout) },
-                onClick = {
-                    expanded = false
-                    val intent = Intent(context, com.hyperwhisper.ui.about.AboutActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Help,
-                        contentDescription = strings.helpAndAboutDesc,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            )
         }
     }
 }

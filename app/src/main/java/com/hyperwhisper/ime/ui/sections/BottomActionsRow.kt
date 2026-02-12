@@ -22,6 +22,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -34,6 +38,7 @@ import com.hyperwhisper.localization.LocalStrings
 /**
  * Bottom actions row of the keyboard
  * Contains paste last transcription button (with long press for history) and space button
+ * Double-tapping space will insert a period followed by a space
  */
 @Composable
 fun BottomActionsRow(
@@ -43,9 +48,29 @@ fun BottomActionsRow(
     onPasteText: (String) -> Unit,
     onShowHistory: () -> Unit,
     onSpace: () -> Unit,
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
+
+    // Track last space press time for double-space to period (500ms threshold)
+    var lastSpacePressTime by remember { mutableStateOf(0L) }
+
+    val handleSpacePress = {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastSpace = currentTime - lastSpacePressTime
+
+        if (timeSinceLastSpace < 500L && lastSpacePressTime > 0L) {
+            // Double-space detected: delete the previous space and insert period + space
+            onDelete() // Remove the previous space
+            onPasteText(". ") // Insert period and space
+            lastSpacePressTime = 0L // Reset to prevent triple-space issues
+        } else {
+            // Normal space press
+            onSpace()
+            lastSpacePressTime = currentTime
+        }
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -112,8 +137,9 @@ fun BottomActionsRow(
         }
 
         // Space button (minimal elongated bar like a space bar)
+        // Double-tap to insert period and space
         Button(
-            onClick = onSpace,
+            onClick = handleSpacePress,
             modifier = Modifier
                 .weight(if (lastTranscribedText.isEmpty() && transcriptionHistory.isEmpty()) 1f else 0.6f)
                 .height(56.dp),

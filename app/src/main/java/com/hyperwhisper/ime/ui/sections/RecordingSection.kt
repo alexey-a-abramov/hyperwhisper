@@ -85,11 +85,11 @@ fun RecordingSection(
                     // Show cancel button during recording
                     OutlinedButton(
                         onClick = onCancelRecording,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         ),
-                        contentPadding = PaddingValues(4.dp)
+                        contentPadding = PaddingValues(2.dp)
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -97,11 +97,11 @@ fun RecordingSection(
                             Icon(
                                 imageVector = Icons.Default.Cancel,
                                 contentDescription = strings.cancelDesc,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 strings.cancel.uppercase(),
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -162,7 +162,7 @@ fun RecordingSection(
 
         // Right side: Delete and Enter buttons stacked
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.End,
             modifier = Modifier.width(80.dp)
         ) {
@@ -170,13 +170,13 @@ fun RecordingSection(
             RepeatableDeleteButton(
                 onDelete = onDelete,
                 onDeleteAll = onDeleteAll,
-                modifier = Modifier.fillMaxWidth().height(50.dp)
+                modifier = Modifier.fillMaxWidth().height(36.dp)
             )
 
             // Enter button (minimal with just icon)
             Surface(
                 onClick = onEnter,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier.fillMaxWidth().height(36.dp),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                 tonalElevation = 2.dp
@@ -189,7 +189,7 @@ fun RecordingSection(
                         imageVector = Icons.Default.KeyboardReturn,
                         contentDescription = strings.enterDesc,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
