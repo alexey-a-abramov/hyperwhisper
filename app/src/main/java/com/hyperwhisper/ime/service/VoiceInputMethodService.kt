@@ -257,7 +257,11 @@ class VoiceInputMethodService : InputMethodService(),
     private fun deleteText() {
         val ic = currentInputConnection ?: return
         try {
-            ic.deleteSurroundingText(1, 0)
+            // Use sendKeyEvent instead of deleteSurroundingText for better reliability
+            // during rapid repeat operations. sendKeyEvent simulates actual key presses
+            // and doesn't suffer from the batching issues that deleteSurroundingText has.
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DEL))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DEL))
             Log.d(TAG, "Deleted character")
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting text", e)
