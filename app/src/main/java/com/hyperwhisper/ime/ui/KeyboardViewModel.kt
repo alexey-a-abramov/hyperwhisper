@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hyperwhisper.audio.AudioRecorderManager
+import com.hyperwhisper.audio.SoundManager
 import com.hyperwhisper.data.*
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.ui.viewmodels.HistoryViewModel
@@ -25,7 +27,9 @@ class KeyboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val voiceRepository: VoiceRepository,
     private val voiceCommandProcessor: VoiceCommandProcessor,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val soundManager: SoundManager,
+    private val audioRecorderManager: AudioRecorderManager
 ) : ViewModel() {
 
     // Create specialized ViewModels internally
@@ -52,6 +56,9 @@ class KeyboardViewModel @Inject constructor(
     val recordingDuration: StateFlow<Long> = recordingViewModel.recordingDuration
     val walkieTalkieMode: StateFlow<Boolean> = recordingViewModel.walkieTalkieMode
     val modeChangeMessage: StateFlow<String?> = recordingViewModel.modeChangeMessage
+    val needsConfirmation: StateFlow<Boolean> = recordingViewModel.needsConfirmation
+    val finalRecordingDuration: StateFlow<Long> = recordingViewModel.finalRecordingDuration
+    val recordingWasCut: StateFlow<Boolean> = recordingViewModel.recordingWasCut
 
     // ============================================================================
     // Transcription State - Delegated to TranscriptionViewModel
@@ -61,6 +68,7 @@ class KeyboardViewModel @Inject constructor(
     val processingInfo: StateFlow<ProcessingInfo?> = transcriptionViewModel.processingInfo
     val transcriptionProgress: StateFlow<Float?> = transcriptionViewModel.transcriptionProgress
     val processingStage: StateFlow<ProcessingStage?> = transcriptionViewModel.processingStage
+    val processingPhase: StateFlow<ProcessingPhase> = transcriptionViewModel.processingPhase
     val pendingCommandResult: StateFlow<VoiceCommandResult?> = transcriptionViewModel.pendingCommandResult
     val lastAudioFileSize: StateFlow<Long> = transcriptionViewModel.lastAudioFileSize
     val lastAudioDuration: StateFlow<Double> = transcriptionViewModel.lastAudioDuration
@@ -125,67 +133,138 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
-     * Stop recording and process audio
+     * Stop recording
+     * If duration > 30s, will require confirmation before processing
      */
     fun stopRecording() {
         viewModelScope.launch {
-            // Stop recording
-            recordingViewModel.stopRecording()
+            // Check if recording was cut due to timeout
+            if (audioRecorderManager.wasRecordingCutDueToTimeout()) {
+                Log.d(TAG, "Recording was cut due to timeout - playing sound notification")
+                soundManager.playRecordingCutSound()
+                recordingViewModel.setRecordingWasCut()
+                audioRecorderManager.clearRecordingCutFlag()
+            }
 
-            // Wait for audio file
+            // Stop recording
+            val stopResult = recordingViewModel.stopRecording() ?: return@launch
+
+            if (stopResult.needsConfirmation) {
+                Log.d(TAG, "Confirmation needed - waiting for user input")
+                // Wait for user confirmation - processing will happen in confirmRecording()
+            } else {
+                // Short recording - process immediately
+                Log.d(TAG, "Short recording - processing immediately")
+                processAudioFile(stopResult.audioFile)
+            }
+        }
+    }
+
+    /**
+     * User confirmed the recording - proceed with processing
+     */
+    fun confirmRecording() {
+        viewModelScope.launch {
+            recordingViewModel.confirmRecording()
+            recordingViewModel.clearRecordingWasCutFlag()
+
+            // Now process the audio
             recordingViewModel.recordedAudioFile
                 .filterNotNull()
                 .take(1)
                 .collect { audioFile ->
-                    // Set recording state to processing
-                    recordingViewModel.setProcessing()
-
-                    // Get current settings and mode
-                    val settings = apiSettings.value
-                    val mode = selectedMode.value
-
-                    if (mode == null) {
-                        recordingViewModel.setError("No voice mode selected")
-                        return@collect
-                    }
-
-                    // Process through transcription view model
-                    val savedAudioPath = transcriptionViewModel.processAudio(audioFile, mode, settings)
-
-                    // Handle results based on transcription state
-                    launch {
-                        // Monitor for transcription completion or error
-                        val inWalkieTalkieMode = walkieTalkieMode.value
-                        combine(
-                            transcriptionViewModel.transcribedText,
-                            transcriptionViewModel.errorMessage
-                        ) { text, error ->
-                            when {
-                                error != null -> {
-                                    // Error occurred
-                                    recordingViewModel.setError(error)
-                                    // Save audio to history even on error (but not in walkie-talkie mode)
-                                    if (!inWalkieTalkieMode && savedAudioPath != null) {
-                                        historyViewModel.addToHistory("", savedAudioPath)
-                                    }
-                                }
-                                text.isNotEmpty() -> {
-                                    // Success
-                                    recordingViewModel.setIdle()
-                                    // Save to history with audio file path (but not in walkie-talkie mode)
-                                    if (!inWalkieTalkieMode && savedAudioPath != null) {
-                                        historyViewModel.addToHistory(text, savedAudioPath)
-                                    }
-                                }
-                            }
-                        }.take(1).collect()
-                    }
-
-                    // Cleanup audio file
-                    audioFile.delete()
-                    recordingViewModel.clearRecordedAudioFile()
+                    processAudioFile(audioFile)
                 }
         }
+    }
+
+    /**
+     * User rejected the recording - discard it
+     */
+    fun rejectRecording() {
+        recordingViewModel.rejectRecording()
+        recordingViewModel.clearRecordingWasCutFlag()
+    }
+
+    /**
+     * Process audio file through transcription API
+     */
+    private suspend fun processAudioFile(audioFile: java.io.File) {
+        Log.d(
+            TAG,
+            "processAudioFile: start file=${audioFile.name}, bytes=${audioFile.length()}, mode=${selectedMode.value?.id}, provider=${apiSettings.value.provider}"
+        )
+
+        // Reset transient transcription state so stale values don't affect result handling
+        transcriptionViewModel.clearError()
+        transcriptionViewModel.clearTranscribedText()
+        transcriptionViewModel.clearProcessingInfo()
+
+        // Set recording state to processing
+        recordingViewModel.setProcessing()
+
+        // Get current settings and mode
+        val settings = apiSettings.value
+        val mode = selectedMode.value
+
+        if (mode == null) {
+            recordingViewModel.setError("No voice mode selected")
+            return
+        }
+
+        // Process through transcription view model
+        val savedAudioPath = transcriptionViewModel.processAudio(audioFile, mode, settings)
+        Log.d(
+            TAG,
+            "processAudioFile: completed savedAudioPath=$savedAudioPath, textLength=${transcriptionViewModel.transcribedText.value.length}, error=${transcriptionViewModel.errorMessage.value}"
+        )
+
+        // Handle results deterministically so every recording has an explicit outcome
+        val inWalkieTalkieMode = walkieTalkieMode.value
+        val error = transcriptionViewModel.errorMessage.value
+        val text = transcriptionViewModel.transcribedText.value
+        val hasPendingCommand = transcriptionViewModel.pendingCommandResult.value != null
+
+        when (determineProcessingOutcome(error, text, hasPendingCommand)) {
+            ProcessingOutcome.ERROR -> {
+                soundManager.playErrorSound()
+                recordingViewModel.setError(error ?: "Unknown transcription error")
+                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                    historyViewModel.addToHistory("", savedAudioPath)
+                }
+                Log.d(TAG, "processAudioFile: finished with error")
+            }
+            ProcessingOutcome.PENDING_COMMAND -> {
+                // Configuration mode may intentionally not emit transcribed text
+                soundManager.playSuccessSound()
+                recordingViewModel.setIdle()
+                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                    historyViewModel.addToHistory("", savedAudioPath)
+                }
+                Log.d(TAG, "processAudioFile: finished with pending configuration command")
+            }
+            ProcessingOutcome.SUCCESS -> {
+                soundManager.playSuccessSound()
+                recordingViewModel.setIdle()
+                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                    historyViewModel.addToHistory(text, savedAudioPath)
+                }
+                Log.d(TAG, "processAudioFile: finished successfully with text")
+            }
+            ProcessingOutcome.EMPTY_TRANSCRIPTION -> {
+                val noResultMessage = "Recording processed, but no speech was detected. Try speaking louder or recording a bit longer."
+                soundManager.playErrorSound()
+                recordingViewModel.setError(noResultMessage)
+                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                    historyViewModel.addToHistory("", savedAudioPath)
+                }
+                Log.d(TAG, "processAudioFile: finished with empty transcription")
+            }
+        }
+
+        // Cleanup audio file
+        audioFile.delete()
+        recordingViewModel.clearRecordedAudioFile()
     }
 
     /**
@@ -386,5 +465,20 @@ class KeyboardViewModel @Inject constructor(
         recordingViewModel.clearError()
         transcriptionViewModel.clearTranscribedText()
         transcriptionViewModel.clearError()
+    }
+
+    init {
+        // Set up callback for when max recording duration is reached
+        audioRecorderManager.onMaxDurationReached = {
+            Log.d(TAG, "Max recording duration reached - auto-stopping recording")
+            viewModelScope.launch {
+                stopRecording()
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        soundManager.release()
     }
 }

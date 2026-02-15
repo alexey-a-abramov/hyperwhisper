@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.KeyboardReturn
@@ -28,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.ProcessingPhase
 import com.hyperwhisper.data.ProcessingStage
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.localization.LocalStrings
@@ -40,7 +44,7 @@ import com.hyperwhisper.ui.indicators.RecordingTimer
  * Recording section - the main interactive area
  * Left: Cancel button (during recording) or InputFieldInfo (techie mode)
  * Center: Microphone button + Timer
- * Right: Delete and Enter buttons
+ * Right: Enter button
  */
 @Composable
 fun RecordingSection(
@@ -48,6 +52,7 @@ fun RecordingSection(
     recordingDuration: Long,
     transcriptionProgress: Float?,
     processingStage: ProcessingStage?,
+    processingPhase: ProcessingPhase,
     lastAudioFileSize: Long,
     lastAudioDuration: Double,
     editorInfo: EditorInfo?,
@@ -62,22 +67,22 @@ fun RecordingSection(
     onDisableWalkieTalkieMode: () -> Unit = {},
     onPressStartRecording: () -> Unit = {},
     onPressReleaseRecording: () -> Unit = {},
+    onConfirmRecording: () -> Unit = {},
     onToggleTimer: () -> Unit,
-    onDelete: () -> Unit,
-    onDeleteAll: () -> Unit,
     onEnter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
 
+    // Main Row: Cancel/Info (left) + Mic + Timer (center) + Enter (right)
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().fillMaxHeight(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Far left: Input field info OR Cancel button
+        // Far left: Cancel button during recording
         Box(
-            modifier = Modifier.width(80.dp),
+            modifier = Modifier.width(70.dp).fillMaxHeight(),
             contentAlignment = Alignment.CenterStart
         ) {
             when (recordingState) {
@@ -85,7 +90,7 @@ fun RecordingSection(
                     // Show cancel button during recording
                     OutlinedButton(
                         onClick = onCancelRecording,
-                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         ),
@@ -97,37 +102,31 @@ fun RecordingSection(
                             Icon(
                                 imageVector = Icons.Default.Cancel,
                                 contentDescription = strings.cancelDesc,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                             Text(
                                 strings.cancel.uppercase(),
-                                fontSize = 8.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
                 else -> {
-                    // Show input field info when not recording (only in techie mode)
-                    if (techieModeEnabled) {
-                        InputFieldInfo(
-                            editorInfo = editorInfo,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                    // Empty space when not recording
                 }
             }
         }
 
         // Center: Microphone Button + Timer
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
                 MicrophoneButton(
                     recordingState = recordingState,
@@ -138,18 +137,20 @@ fun RecordingSection(
                     onDisableWalkieTalkieMode = onDisableWalkieTalkieMode,
                     onPressStartRecording = onPressStartRecording,
                     onPressReleaseRecording = onPressReleaseRecording,
+                    onConfirmRecording = onConfirmRecording,
                     walkieTalkieMode = walkieTalkieMode,
                     recordingDuration = recordingDuration,
                     transcriptionProgress = transcriptionProgress,
                     processingStage = processingStage,
+                    processingPhase = processingPhase,
                     audioFileSize = lastAudioFileSize,
                     audioDurationSeconds = lastAudioDuration,
                     modifier = Modifier
                 )
 
-                // Timer display (right of mic) - clickable to toggle
+                // Timer display below mic - clickable to toggle
                 if (recordingState == RecordingState.RECORDING) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     RecordingTimer(
                         durationMs = recordingDuration,
                         maxDurationMs = 180000L,
@@ -160,38 +161,24 @@ fun RecordingSection(
             }
         }
 
-        // Right side: Delete and Enter buttons stacked
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            horizontalAlignment = Alignment.End,
-            modifier = Modifier.width(80.dp)
+        // Right side: Enter button (square, tall as the section)
+        Surface(
+            onClick = onEnter,
+            modifier = Modifier.width(90.dp).fillMaxHeight().padding(vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+            tonalElevation = 2.dp
         ) {
-            // Delete button with repeat functionality
-            RepeatableDeleteButton(
-                onDelete = onDelete,
-                onDeleteAll = onDeleteAll,
-                modifier = Modifier.fillMaxWidth().height(36.dp)
-            )
-
-            // Enter button (minimal with just icon)
-            Surface(
-                onClick = onEnter,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                tonalElevation = 2.dp
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardReturn,
-                        contentDescription = strings.enterDesc,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.KeyboardReturn,
+                    contentDescription = strings.enterDesc,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(40.dp)
+                )
             }
         }
     }

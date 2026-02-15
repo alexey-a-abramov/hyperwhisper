@@ -20,9 +20,15 @@ class RecordingViewModel(
     private val voiceRepository: VoiceRepository
 ) : ViewModel() {
 
+    data class StopRecordingResult(
+        val audioFile: File,
+        val needsConfirmation: Boolean
+    )
+
     companion object {
         private const val TAG = "RecordingViewModel"
         private const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
+        private const val CONFIRMATION_THRESHOLD_MS = 30000L // 30 seconds
     }
 
     // Recording state
@@ -49,6 +55,18 @@ class RecordingViewModel(
     private val _modeChangeMessage = MutableStateFlow<String?>(null)
     val modeChangeMessage: StateFlow<String?> = _modeChangeMessage.asStateFlow()
 
+    // Flag for when recording was cut due to timeout
+    private val _recordingWasCut = MutableStateFlow(false)
+    val recordingWasCut: StateFlow<Boolean> = _recordingWasCut.asStateFlow()
+
+    // Flag for when confirmation is needed (recording > 30 seconds)
+    private val _needsConfirmation = MutableStateFlow(false)
+    val needsConfirmation: StateFlow<Boolean> = _needsConfirmation.asStateFlow()
+
+    // Final recording duration when stopped
+    private val _finalRecordingDuration = MutableStateFlow(0L)
+    val finalRecordingDuration: StateFlow<Long> = _finalRecordingDuration.asStateFlow()
+
     /**
      * Start recording audio
      */
@@ -60,6 +78,8 @@ class RecordingViewModel(
                 _recordingState.value = RecordingState.RECORDING
                 _errorMessage.value = null
                 _recordedAudioFile.value = null
+                _needsConfirmation.value = false
+                _finalRecordingDuration.value = 0L
 
                 val result = voiceRepository.startRecording()
                 if (result.isFailure) {
@@ -94,42 +114,80 @@ class RecordingViewModel(
 
     /**
      * Stop recording and return audio file
+     * If recording is > 30 seconds, will set state to await confirmation
      */
-    fun stopRecording() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Stopping recording...")
-                TraceLogger.trace("RecordingViewModel", "User stopped recording")
+    suspend fun stopRecording(): StopRecordingResult? {
+        return try {
+            Log.d(TAG, "Stopping recording...")
+            TraceLogger.trace("RecordingViewModel", "User stopped recording")
 
-                // Stop recording and get file
-                val recordingResult = voiceRepository.stopRecording()
-                if (recordingResult.isFailure) {
-                    val exception = recordingResult.exceptionOrNull()
-                    val error = exception?.message ?: "Failed to stop recording"
-                    Log.e(TAG, "Recording stop failed: $error", exception)
-                    TraceLogger.error("RecordingViewModel", "Recording stop failed", exception)
-                    _errorMessage.value = "Failed to stop recording: $error"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-                TraceLogger.trace("RecordingViewModel", "Recording stopped successfully")
+            // Capture final duration before repository resets timer
+            _finalRecordingDuration.value = recordingDuration.value
 
-                val audioFile = recordingResult.getOrNull()
-                if (audioFile == null) {
-                    _errorMessage.value = "Audio file is null"
-                    _recordingState.value = RecordingState.ERROR
-                    return@launch
-                }
-
-                Log.d(TAG, "Audio file ready: ${audioFile.name}, size=${audioFile.length()} bytes")
-                _recordedAudioFile.value = audioFile
-                _recordingState.value = RecordingState.IDLE
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping recording", e)
-                _errorMessage.value = e.message
+            // Stop recording and get file
+            val recordingResult = voiceRepository.stopRecording()
+            if (recordingResult.isFailure) {
+                val exception = recordingResult.exceptionOrNull()
+                val error = exception?.message ?: "Failed to stop recording"
+                Log.e(TAG, "Recording stop failed: $error", exception)
+                TraceLogger.error("RecordingViewModel", "Recording stop failed", exception)
+                _errorMessage.value = "Failed to stop recording: $error"
                 _recordingState.value = RecordingState.ERROR
+                return null
             }
+            TraceLogger.trace("RecordingViewModel", "Recording stopped successfully")
+
+            val audioFile = recordingResult.getOrNull()
+            if (audioFile == null) {
+                _errorMessage.value = "Audio file is null"
+                _recordingState.value = RecordingState.ERROR
+                return null
+            }
+
+            val needsConfirmation = _finalRecordingDuration.value >= CONFIRMATION_THRESHOLD_MS
+            _needsConfirmation.value = needsConfirmation
+            _recordingState.value = if (needsConfirmation) {
+                Log.d(TAG, "Recording duration (${_finalRecordingDuration.value}ms) exceeds threshold - requiring confirmation")
+                RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION
+            } else {
+                RecordingState.IDLE
+            }
+
+            Log.d(TAG, "Audio file ready: ${audioFile.name}, size=${audioFile.length()} bytes, duration=${_finalRecordingDuration.value}ms")
+            _recordedAudioFile.value = audioFile
+
+            StopRecordingResult(
+                audioFile = audioFile,
+                needsConfirmation = needsConfirmation
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping recording", e)
+            _errorMessage.value = e.message
+            _recordingState.value = RecordingState.ERROR
+            null
+        }
+    }
+
+    /**
+     * User confirmed processing the recording
+     */
+    fun confirmRecording() {
+        Log.d(TAG, "Recording confirmed by user")
+        _needsConfirmation.value = false
+        _recordingState.value = RecordingState.IDLE
+    }
+
+    /**
+     * User rejected the recording - discard it
+     */
+    fun rejectRecording() {
+        viewModelScope.launch {
+            Log.d(TAG, "Recording rejected by user - discarding audio")
+            _needsConfirmation.value = false
+            _recordedAudioFile.value?.delete()
+            _recordedAudioFile.value = null
+            _recordingState.value = RecordingState.IDLE
+            _finalRecordingDuration.value = 0L
         }
     }
 
@@ -219,12 +277,27 @@ class RecordingViewModel(
         _modeChangeMessage.value = null
     }
 
+    /**
+     * Set flag that recording was cut due to timeout
+     */
+    fun setRecordingWasCut() {
+        _recordingWasCut.value = true
+    }
+
+    /**
+     * Clear the recording was cut flag
+     */
+    fun clearRecordingWasCutFlag() {
+        _recordingWasCut.value = false
+    }
+
     init {
         // Monitor recording duration for timeout
         viewModelScope.launch {
             recordingDuration.collect { duration ->
                 if (duration >= MAX_RECORDING_DURATION_MS && recordingState.value == RecordingState.RECORDING) {
                     Log.d(TAG, "Max recording duration reached, auto-stopping")
+                    _recordingWasCut.value = true
                     stopRecording()
                 }
             }
