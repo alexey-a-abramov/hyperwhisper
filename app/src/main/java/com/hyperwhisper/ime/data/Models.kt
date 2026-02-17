@@ -192,7 +192,21 @@ enum class ApiProvider(
 enum class RecordingState {
     IDLE,
     RECORDING,
+    RECORDING_COMPLETE_AWAITING_CONFIRMATION, // Recording finished, waiting for user confirmation (30+ sec)
     PROCESSING,
+    ERROR
+}
+
+/**
+ * More granular processing phases for better visual feedback
+ */
+enum class ProcessingPhase {
+    IDLE,
+    PREPARING_AUDIO,     // Converting and preparing audio file
+    SENDING_TO_SERVER,   // Uploading audio to API
+    WAITING_FOR_RESPONSE, // Waiting for transcription response
+    RECEIVING_DATA,      // Receiving and parsing response
+    COMPLETE,
     ERROR
 }
 

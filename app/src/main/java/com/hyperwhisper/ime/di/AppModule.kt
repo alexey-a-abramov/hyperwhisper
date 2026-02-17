@@ -3,6 +3,7 @@ package com.hyperwhisper.di
 import android.content.Context
 import androidx.lifecycle.ViewModelProvider
 import com.hyperwhisper.audio.AudioRecorderManager
+import com.hyperwhisper.audio.SoundManager
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.data.VoiceCommandProcessor
 import com.hyperwhisper.network.VoiceRepository
@@ -33,11 +34,21 @@ object AppModule {
     }
 
     @Provides
+    @Singleton
+    fun provideSoundManager(
+        @ApplicationContext context: Context
+    ): SoundManager {
+        return SoundManager(context)
+    }
+
+    @Provides
     fun provideViewModelFactory(
         @ApplicationContext context: Context,
         voiceRepository: VoiceRepository,
         voiceCommandProcessor: VoiceCommandProcessor,
-        settingsRepository: SettingsRepository
+        settingsRepository: SettingsRepository,
+        soundManager: SoundManager,
+        audioRecorderManager: AudioRecorderManager
     ): ViewModelProvider.Factory {
         return object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -47,7 +58,9 @@ object AppModule {
                         context,
                         voiceRepository,
                         voiceCommandProcessor,
-                        settingsRepository
+                        settingsRepository,
+                        soundManager,
+                        audioRecorderManager
                     ) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class")

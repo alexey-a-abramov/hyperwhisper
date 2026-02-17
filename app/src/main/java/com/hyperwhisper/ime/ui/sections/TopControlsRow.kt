@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
@@ -20,10 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.buttons.RepeatableDeleteButton
 
 /**
  * Top controls row of the keyboard
- * Layout: Keyboard Switcher | Settings | View Logs (techie mode) | Help
+ * Layout: Backspace | [Spacer] | Keyboard Switcher | Settings | View Logs (techie mode) | Help
  */
 @Composable
 fun TopControlsRow(
@@ -31,15 +33,29 @@ fun TopControlsRow(
     showKeyboardSwitcher: Boolean,
     techieModeEnabled: Boolean,
     onSwitchKeyboard: () -> Unit,
+    onDelete: () -> Unit = {},
+    onDeleteAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
 
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Backspace button (left side)
+        RepeatableDeleteButton(
+            onDelete = onDelete,
+            onDeleteAll = onDeleteAll,
+            modifier = Modifier.width(60.dp).height(32.dp)
+        )
+
+        // Right-side controls group
+        Row(
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         // Keyboard Switcher button (only shown if enabled in settings)
         if (showKeyboardSwitcher) {
             IconButton(onClick = onSwitchKeyboard) {
@@ -97,5 +113,6 @@ fun TopControlsRow(
                 tint = MaterialTheme.colorScheme.primary
             )
         }
+        } // end right-side Row
     }
 }
