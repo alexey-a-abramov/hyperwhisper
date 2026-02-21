@@ -66,15 +66,24 @@ fun SettingsScreen(
 
     // Local form state for API settings
     var provider by remember { mutableStateOf(apiSettings.provider) }
-    var baseUrl by remember { mutableStateOf(apiSettings.baseUrl) }
+    var baseUrl by remember { mutableStateOf(apiSettings.getCurrentBaseUrl()) }
     var apiKey by remember { mutableStateOf(apiSettings.getCurrentApiKey()) }
+    var requiresAuth by remember { mutableStateOf(apiSettings.getCurrentRequiresAuth()) }
     var modelId by remember { mutableStateOf(apiSettings.modelId) }
     var inputLanguage by remember { mutableStateOf(apiSettings.inputLanguage) }
     var outputLanguage by remember { mutableStateOf(apiSettings.outputLanguage) }
 
+    // Local form state for LLM settings
+    var llmProvider by remember { mutableStateOf(apiSettings.llmConfig.provider) }
+    var llmBaseUrl by remember { mutableStateOf(apiSettings.llmConfig.customBaseUrl) }
+    var llmApiKey by remember { mutableStateOf(apiSettings.llmConfig.apiKey) }
+    var llmRequiresAuth by remember { mutableStateOf(apiSettings.llmConfig.requiresAuth) }
+    var llmModelId by remember { mutableStateOf(apiSettings.llmConfig.modelId) }
+
     // Dialog visibility state
     var showInputLanguageInfo by remember { mutableStateOf(false) }
     var showModelInfo by remember { mutableStateOf(false) }
+    var showLlmInfo by remember { mutableStateOf(false) }
     var showAddModeDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showLogsDialog by remember { mutableStateOf(false) }
@@ -86,22 +95,47 @@ fun SettingsScreen(
     // Synchronize local state when settings change externally
     LaunchedEffect(apiSettings) {
         provider = apiSettings.provider
-        baseUrl = apiSettings.baseUrl
+        baseUrl = apiSettings.getCurrentBaseUrl()
         apiKey = apiSettings.getCurrentApiKey()
+        requiresAuth = apiSettings.getCurrentRequiresAuth()
         modelId = apiSettings.modelId
         inputLanguage = apiSettings.inputLanguage
         outputLanguage = apiSettings.outputLanguage
+
+        // LLM settings
+        llmProvider = apiSettings.llmConfig.provider
+        llmBaseUrl = apiSettings.llmConfig.customBaseUrl
+        llmApiKey = apiSettings.llmConfig.apiKey
+        llmRequiresAuth = apiSettings.llmConfig.requiresAuth
+        llmModelId = apiSettings.llmConfig.modelId
     }
 
     // Update API key and defaults when provider changes
     LaunchedEffect(provider) {
         apiKey = apiSettings.apiKeys[provider] ?: ""
-        if (baseUrl.isEmpty() || baseUrl == apiSettings.provider.defaultEndpoint) {
-            baseUrl = provider.defaultEndpoint
-        }
+
+        // Get provider-specific config or use defaults
+        val providerConfig = apiSettings.providerConfigs[provider]
+        baseUrl = providerConfig?.customBaseUrl?.ifEmpty { provider.defaultEndpoint }
+            ?: provider.defaultEndpoint
+        requiresAuth = providerConfig?.requiresAuth ?: provider.requiresAuth
+
         // Auto-select first model for provider
         if (modelId.isEmpty() || !provider.defaultModels.contains(modelId)) {
             modelId = provider.defaultModels.firstOrNull() ?: modelId
+        }
+    }
+
+    // Update LLM defaults when LLM provider changes
+    LaunchedEffect(llmProvider) {
+        if (llmBaseUrl.isEmpty() || llmBaseUrl == apiSettings.llmConfig.provider.defaultEndpoint) {
+            llmBaseUrl = llmProvider.defaultEndpoint
+        }
+        llmRequiresAuth = llmProvider.requiresAuth
+
+        // Auto-select first model for LLM provider
+        if (llmModelId.isEmpty() || !llmProvider.defaultModels.contains(llmModelId)) {
+            llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
         }
     }
 
@@ -113,9 +147,20 @@ fun SettingsScreen(
                     // Save and close button
                     IconButton(onClick = {
                         coroutineScope.launch {
+                            // Save transcription provider settings
                             viewModel.saveApiSettingsAndWait(
-                                provider, baseUrl, apiKey, modelId,
+                                provider, baseUrl, apiKey, requiresAuth, modelId,
                                 inputLanguage, outputLanguage
+                            )
+                            // Save LLM configuration
+                            viewModel.updateLlmConfig(
+                                com.hyperwhisper.data.LlmConfig(
+                                    provider = llmProvider,
+                                    customBaseUrl = llmBaseUrl,
+                                    apiKey = llmApiKey,
+                                    requiresAuth = llmRequiresAuth,
+                                    modelId = llmModelId
+                                )
                             )
                             (context as? Activity)?.finish()
                         }
@@ -189,6 +234,7 @@ fun SettingsScreen(
                     provider = provider,
                     baseUrl = baseUrl,
                     apiKey = apiKey,
+                    requiresAuth = requiresAuth,
                     modelId = modelId,
                     inputLanguage = inputLanguage,
                     outputLanguage = outputLanguage,
@@ -196,6 +242,7 @@ fun SettingsScreen(
                     onProviderChange = { provider = it },
                     onBaseUrlChange = { baseUrl = it },
                     onApiKeyChange = { apiKey = it },
+                    onRequiresAuthChange = { requiresAuth = it },
                     onModelIdChange = { modelId = it },
                     onInputLanguageChange = { inputLanguage = it },
                     onOutputLanguageChange = { outputLanguage = it },
@@ -204,12 +251,48 @@ fun SettingsScreen(
                     },
                     onResetDefaults = {
                         baseUrl = provider.defaultEndpoint
+                        requiresAuth = provider.requiresAuth
                         modelId = provider.defaultModels.firstOrNull() ?: modelId
                     },
                     onShowModelInfo = { showModelInfo = true },
                     onShowInputLanguageInfo = { showInputLanguageInfo = true },
                     onShowLogsDialog = { showLogsDialog = true },
                     onResetConnectionTestState = { viewModel.resetConnectionTestState() }
+                )
+            }
+
+            // LLM Configuration Section
+            item { Divider() }
+
+            item {
+                Text(
+                    text = "Post-Processing LLM",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item { Divider() }
+
+            item {
+                com.hyperwhisper.ui.settings.sections.LlmConfigSection(
+                    llmProvider = llmProvider,
+                    llmBaseUrl = llmBaseUrl,
+                    llmApiKey = llmApiKey,
+                    llmRequiresAuth = llmRequiresAuth,
+                    llmModelId = llmModelId,
+                    onLlmProviderChange = { llmProvider = it },
+                    onLlmBaseUrlChange = { llmBaseUrl = it },
+                    onLlmApiKeyChange = { llmApiKey = it },
+                    onLlmRequiresAuthChange = { llmRequiresAuth = it },
+                    onLlmModelIdChange = { llmModelId = it },
+                    onResetLlmDefaults = {
+                        llmBaseUrl = llmProvider.defaultEndpoint
+                        llmRequiresAuth = llmProvider.requiresAuth
+                        llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
+                    },
+                    onShowLlmInfo = { showLlmInfo = true }
                 )
             }
 
@@ -279,6 +362,33 @@ fun SettingsScreen(
     if (showLogsDialog) {
         LogsInfoDialog(
             onDismiss = { showLogsDialog = false }
+        )
+    }
+
+    if (showLlmInfo) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showLlmInfo = false },
+            title = { androidx.compose.material3.Text("LLM Post-Processing Info") },
+            text = {
+                androidx.compose.material3.Text(
+                    """
+                    Provider: ${llmProvider.displayName}
+                    Model: $llmModelId
+
+                    This LLM is used for:
+                    • Transforming transcriptions (polite, casual, etc.)
+                    • Translating to output language
+                    • Applying custom voice mode prompts
+
+                    Not used in verbatim mode.
+                    """.trimIndent()
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { showLlmInfo = false }) {
+                    androidx.compose.material3.Text("OK")
+                }
+            }
         )
     }
 

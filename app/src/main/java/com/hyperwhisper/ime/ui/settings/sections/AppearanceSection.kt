@@ -336,6 +336,35 @@ fun AppearanceSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Save original audio files toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Save Original Audio Files",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = "Store recordings for playback and reprocessing from history",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = localSettings.saveOriginalAudioFiles,
+                onCheckedChange = { enabled ->
+                    val newSettings = localSettings.copy(saveOriginalAudioFiles = enabled)
+                    localSettings = newSettings
+                    onSettingsChange(newSettings)
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         // Techie mode toggle
         Row(
             modifier = Modifier.fillMaxWidth(),

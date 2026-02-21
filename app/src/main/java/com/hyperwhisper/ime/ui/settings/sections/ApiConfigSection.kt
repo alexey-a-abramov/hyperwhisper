@@ -1,6 +1,7 @@
 package com.hyperwhisper.ui.settings.sections
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +39,7 @@ fun ApiConfigSection(
     provider: ApiProvider,
     baseUrl: String,
     apiKey: String,
+    requiresAuth: Boolean,
     modelId: String,
     inputLanguage: String,
     outputLanguage: String,
@@ -44,6 +47,7 @@ fun ApiConfigSection(
     onProviderChange: (ApiProvider) -> Unit,
     onBaseUrlChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
+    onRequiresAuthChange: (Boolean) -> Unit,
     onModelIdChange: (String) -> Unit,
     onInputLanguageChange: (String) -> Unit,
     onOutputLanguageChange: (String) -> Unit,
@@ -89,18 +93,39 @@ fun ApiConfigSection(
 
     Spacer(Modifier.padding(vertical = 8.dp))
 
-    // API Key
-    OutlinedTextField(
-        value = apiKey,
-        onValueChange = onApiKeyChange,
-        label = { Text(strings.apiKey) },
-        placeholder = { Text(strings.apiKeyPlaceholder) },
-        visualTransformation = PasswordVisualTransformation(),
+    // No API Key checkbox
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        singleLine = true
-    )
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = !requiresAuth,
+            onCheckedChange = { onRequiresAuthChange(!it) }
+        )
+        Text(
+            text = "No API key required",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
 
     Spacer(Modifier.padding(vertical = 8.dp))
+
+    // API Key (only shown if auth is required)
+    if (requiresAuth) {
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = onApiKeyChange,
+            label = { Text(strings.apiKey) },
+            placeholder = { Text(strings.apiKeyPlaceholder) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(Modifier.padding(vertical = 8.dp))
+    }
+
 
     // Model selector with info button
     Row(
@@ -167,7 +192,7 @@ fun ApiConfigSection(
         OutlinedButton(
             onClick = onTestConnection,
             modifier = Modifier.weight(1f),
-            enabled = apiKey.isNotBlank() && baseUrl.isNotBlank()
+            enabled = (!requiresAuth || apiKey.isNotBlank()) && baseUrl.isNotBlank()
         ) {
             Text(strings.testConnection)
         }

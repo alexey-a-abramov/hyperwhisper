@@ -115,77 +115,187 @@ data class VoiceMode(
     val inputLanguageHint: String = "" // Hint for input language if model supports it
 )
 
+data class ProviderConfig(
+    val customBaseUrl: String = "", // Empty means use default
+    val requiresAuth: Boolean = true // Can be toggled per provider
+)
+
 data class ApiSettings(
     val provider: ApiProvider = ApiProvider.OPENAI,
-    val baseUrl: String = "",
+    val baseUrl: String = "", // Deprecated - kept for migration, use providerConfigs instead
     val apiKeys: Map<ApiProvider, String> = emptyMap(), // Per-provider API keys
+    val providerConfigs: Map<ApiProvider, ProviderConfig> = emptyMap(), // Per-provider configuration
     val modelId: String = "whisper-1",
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
-    val outputLanguage: String = "" // ISO-639-1 code for output - empty to keep original
+    val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
+    val llmConfig: LlmConfig = LlmConfig() // LLM configuration for post-processing
 ) {
     // Helper to get API key for current provider
     fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
+
+    // Helper to get base URL for current provider
+    fun getCurrentBaseUrl(): String {
+        val config = providerConfigs[provider]
+        return config?.customBaseUrl?.ifEmpty { provider.defaultEndpoint }
+            ?: baseUrl.ifEmpty { provider.defaultEndpoint }
+    }
+
+    // Helper to check if current provider requires auth
+    fun getCurrentRequiresAuth(): Boolean {
+        val config = providerConfigs[provider]
+        return config?.requiresAuth ?: provider.requiresAuth
+    }
+}
+
+/**
+ * LLM providers for post-processing/transformation
+ */
+enum class LlmProvider(
+    val displayName: String,
+    val defaultEndpoint: String,
+    val defaultModels: List<String>,
+    val requiresAuth: Boolean = true
+) {
+    NONE(
+        displayName = "None (Verbatim Only)",
+        defaultEndpoint = "",
+        defaultModels = listOf("none"),
+        requiresAuth = false
+    ),
+    OPENAI(
+        displayName = "OpenAI",
+        defaultEndpoint = "https://api.openai.com/v1/",
+        defaultModels = listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"),
+        requiresAuth = true
+    ),
+    DEEPSEEK(
+        displayName = "DeepSeek",
+        defaultEndpoint = "https://api.deepseek.com/v1/",
+        defaultModels = listOf("deepseek-chat", "deepseek-reasoner"),
+        requiresAuth = true
+    ),
+    GEMINI(
+        displayName = "Google Gemini",
+        defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
+        defaultModels = listOf("gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"),
+        requiresAuth = true
+    ),
+    ANTHROPIC(
+        displayName = "Anthropic Claude",
+        defaultEndpoint = "https://api.anthropic.com/v1/",
+        defaultModels = listOf("claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"),
+        requiresAuth = true
+    ),
+    GROQ(
+        displayName = "Groq",
+        defaultEndpoint = "https://api.groq.com/openai/v1/",
+        defaultModels = listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"),
+        requiresAuth = true
+    ),
+    OPENROUTER(
+        displayName = "OpenRouter",
+        defaultEndpoint = "https://openrouter.ai/api/v1/",
+        defaultModels = listOf("google/gemini-2.0-flash-exp:free", "meta-llama/llama-3.1-8b-instruct:free", "qwen/qwen-2-7b-instruct:free"),
+        requiresAuth = true
+    ),
+    OPENAI_COMPATIBLE(
+        displayName = "OpenAI-Compatible",
+        defaultEndpoint = "http://localhost:8080/v1/",
+        defaultModels = listOf("gpt-3.5-turbo", "gpt-4"),
+        requiresAuth = false
+    )
+}
+
+/**
+ * LLM configuration for post-processing
+ */
+data class LlmConfig(
+    val provider: LlmProvider = LlmProvider.OPENAI,
+    val customBaseUrl: String = "", // Empty means use default
+    val apiKey: String = "",
+    val modelId: String = "gpt-4o-mini",
+    val requiresAuth: Boolean = true
+) {
+    fun getBaseUrl(): String = customBaseUrl.ifEmpty { provider.defaultEndpoint }
 }
 
 enum class ApiProvider(
     val displayName: String,
     val defaultEndpoint: String,
-    val defaultModels: List<String>
+    val defaultModels: List<String>,
+    val requiresAuth: Boolean = true
 ) {
     OPENAI(
         displayName = "OpenAI Whisper",
         defaultEndpoint = "https://api.openai.com/v1/",
-        defaultModels = listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "base", "small", "medium", "large", "large-v2", "large-v3")
+        defaultModels = listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "base", "small", "medium", "large", "large-v2", "large-v3"),
+        requiresAuth = true
     ),
     DEEPGRAM(
         displayName = "Deepgram",
         defaultEndpoint = "https://api.deepgram.com/v1/",
-        defaultModels = listOf("nova-2", "nova-3", "nova", "whisper", "base", "enhanced")
+        defaultModels = listOf("nova-2", "nova-3", "nova", "whisper", "base", "enhanced"),
+        requiresAuth = true
     ),
     ASSEMBLYAI(
         displayName = "AssemblyAI",
         defaultEndpoint = "https://api.assemblyai.com/v2/",
-        defaultModels = listOf("best", "nano")
+        defaultModels = listOf("best", "nano"),
+        requiresAuth = true
     ),
     GOOGLE_CLOUD(
         displayName = "Google Cloud Speech",
         defaultEndpoint = "https://speech.googleapis.com/v1/",
-        defaultModels = listOf("chirp", "long", "phone_call", "video", "command_and_search", "default")
+        defaultModels = listOf("chirp", "long", "phone_call", "video", "command_and_search", "default"),
+        requiresAuth = true
     ),
     AWS_TRANSCRIBE(
         displayName = "AWS Transcribe",
         defaultEndpoint = "https://transcribe.us-east-1.amazonaws.com/",
-        defaultModels = listOf("standard", "medical", "call-analytics")
+        defaultModels = listOf("standard", "medical", "call-analytics"),
+        requiresAuth = true
     ),
     AZURE_SPEECH(
         displayName = "Azure AI Speech",
         defaultEndpoint = "https://eastus.stt.speech.microsoft.com/",
-        defaultModels = listOf("default", "conversation", "dictation", "interactive")
+        defaultModels = listOf("default", "conversation", "dictation", "interactive"),
+        requiresAuth = true
     ),
     REVAI(
         displayName = "Rev.ai",
         defaultEndpoint = "https://api.rev.ai/speechtotext/v1/",
-        defaultModels = listOf("rev", "rev_human_fallback")
+        defaultModels = listOf("rev", "rev_human_fallback"),
+        requiresAuth = true
     ),
     GROQ(
         displayName = "Groq Whisper",
         defaultEndpoint = "https://api.groq.com/openai/v1/",
-        defaultModels = listOf("whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en")
+        defaultModels = listOf("whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en"),
+        requiresAuth = true
     ),
     OPENROUTER(
         displayName = "OpenRouter",
         defaultEndpoint = "https://openrouter.ai/api/v1/",
-        defaultModels = listOf("whisper-1", "whisper-large-v3")
+        defaultModels = listOf("whisper-1", "whisper-large-v3"),
+        requiresAuth = true
     ),
     GEMINI(
         displayName = "Google Gemini",
         defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
-        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp")
+        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"),
+        requiresAuth = true
     ),
     HUGGINGFACE(
         displayName = "Hugging Face",
         defaultEndpoint = "https://api-inai.endpoints.huggingface.cloud/v1/",
-        defaultModels = listOf("meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3", "google/gemma-2-9b-it")
+        defaultModels = listOf("meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3", "google/gemma-2-9b-it"),
+        requiresAuth = true
+    ),
+    SELFHOSTED_WHISPER(
+        displayName = "Self-hosted Whisper",
+        defaultEndpoint = "http://64.227.114.236:8000/v1/",
+        defaultModels = listOf("whisper-tiny", "whisper-small"),
+        requiresAuth = false
     )
 }
 
@@ -308,7 +418,12 @@ data class ProcessingInfo(
     val systemPrompt: String, // System prompt that was used
     val audioDurationSeconds: Double = 0.0, // Audio duration in seconds
     val transcriptionTokens: TokenUsage? = null, // Tokens used for transcription
-    val postProcessingTokens: TokenUsage? = null // Tokens used for post-processing (if applicable)
+    val postProcessingTokens: TokenUsage? = null, // Tokens used for post-processing (if applicable)
+    val processingTimeMs: Long = 0L, // Total processing time in milliseconds
+    val transcriptionTimeMs: Long? = null, // Time for transcription step in milliseconds
+    val postProcessingTimeMs: Long? = null, // Time for post-processing step in milliseconds
+    val audioFileSizeBytes: Long = 0L, // Audio file size in bytes
+    val timestamp: Long = System.currentTimeMillis() // When processing started
 )
 
 /**
@@ -396,6 +511,7 @@ data class AppearanceSettings(
     val enableHistoryPanel: Boolean = true,
     val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
     val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
+    val saveOriginalAudioFiles: Boolean = false, // Save audio files for playback/reprocessing from history
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
     val unlimitedHistory: Boolean = false // If true, maxHistoryItems is ignored
 )
@@ -493,11 +609,18 @@ fun getModelPricing(modelId: String): ModelPricing {
 
         // Whisper model sizes (self-hosted, free)
         modelId == "base" || modelId == "small" || modelId == "medium" ||
-        modelId == "large" || modelId == "large-v2" || modelId == "large-v3" ->
+        modelId == "large" || modelId == "large-v2" || modelId == "large-v3" ||
+        modelId.contains("whisper-tiny", ignoreCase = true) ||
+        modelId.contains("whisper-small", ignoreCase = true) ->
             ModelPricing(audioPerMinute = 0.0)
 
-        // OpenAI Whisper - $0.006 per minute
-        modelId.contains("whisper", ignoreCase = true) && !modelId.contains("groq", ignoreCase = true) ->
+        // OpenAI Whisper - $0.006 per minute (exclude self-hosted and groq models)
+        modelId.contains("whisper", ignoreCase = true) &&
+            !modelId.contains("groq", ignoreCase = true) &&
+            !modelId.contains("tiny", ignoreCase = true) &&
+            !modelId.contains("small", ignoreCase = true) &&
+            modelId != "base" && modelId != "medium" &&
+            modelId != "large" && modelId != "large-v2" && modelId != "large-v3" ->
             ModelPricing(audioPerMinute = 0.006)
 
         // Groq Whisper - Free tier, very low cost
@@ -527,10 +650,22 @@ fun getModelPricing(modelId: String): ModelPricing {
         // Claude models
         modelId.contains("claude-3-opus", ignoreCase = true) ->
             ModelPricing(inputPricePer1M = 15.0, outputPricePer1M = 75.0)
-        modelId.contains("claude-3-sonnet", ignoreCase = true) || modelId.contains("claude-3.5-sonnet", ignoreCase = true) ->
+        modelId.contains("claude-3-sonnet", ignoreCase = true) || modelId.contains("claude-3.5-sonnet", ignoreCase = true) || modelId.contains("claude-3-5-sonnet", ignoreCase = true) ->
             ModelPricing(inputPricePer1M = 3.0, outputPricePer1M = 15.0)
-        modelId.contains("claude-3-haiku", ignoreCase = true) ->
+        modelId.contains("claude-3-haiku", ignoreCase = true) || modelId.contains("claude-3.5-haiku", ignoreCase = true) || modelId.contains("claude-3-5-haiku", ignoreCase = true) ->
             ModelPricing(inputPricePer1M = 0.25, outputPricePer1M = 1.25)
+
+        // DeepSeek models
+        modelId.contains("deepseek-chat", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.14, outputPricePer1M = 0.28)
+        modelId.contains("deepseek-reasoner", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.55, outputPricePer1M = 2.19)
+
+        // Groq models (very cheap/free tier)
+        modelId.contains("llama-3.3-70b", ignoreCase = true) || modelId.contains("llama-3.1", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.05, outputPricePer1M = 0.08)
+        modelId.contains("mixtral", ignoreCase = true) ->
+            ModelPricing(inputPricePer1M = 0.24, outputPricePer1M = 0.24)
 
         // Deepgram - $0.0043 per minute
         modelId.contains("nova", ignoreCase = true) || modelId.contains("deepgram", ignoreCase = true) ->

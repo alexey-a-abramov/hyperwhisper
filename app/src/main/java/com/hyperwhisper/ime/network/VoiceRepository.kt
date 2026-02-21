@@ -3,7 +3,13 @@ package com.hyperwhisper.network
 import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
+import okhttp3.OkHttpClient
+import okhttp3.Interceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import com.google.gson.Gson
 import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -13,10 +19,59 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val gson: Gson
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
+    }
+
+    /**
+     * Create a dynamic LLM API client based on LLM configuration
+     */
+    private fun createLlmApiService(llmConfig: LlmConfig): ChatCompletionApiService {
+        // Create auth interceptor for LLM
+        val authInterceptor = Interceptor { chain ->
+            val requestBuilder = chain.request().newBuilder()
+
+            // Add authorization header if required
+            if (llmConfig.requiresAuth && llmConfig.apiKey.isNotEmpty()) {
+                when (llmConfig.provider) {
+                    com.hyperwhisper.data.LlmProvider.ANTHROPIC -> {
+                        // Anthropic uses x-api-key header
+                        requestBuilder.addHeader("x-api-key", llmConfig.apiKey)
+                        requestBuilder.addHeader("anthropic-version", "2023-06-01")
+                    }
+                    else -> {
+                        // OpenAI-compatible providers use Bearer token
+                        requestBuilder.addHeader("Authorization", "Bearer ${llmConfig.apiKey}")
+                    }
+                }
+            }
+
+            requestBuilder.addHeader("Content-Type", "application/json")
+            val request = requestBuilder.build()
+            chain.proceed(request)
+        }
+
+        // Create OkHttp client for LLM
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(300, TimeUnit.SECONDS)
+            .build()
+
+        // Create Retrofit instance
+        val baseUrl = llmConfig.getBaseUrl()
+        val retrofit = Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+
+        return retrofit.create(ChatCompletionApiService::class.java)
     }
 
     /**
@@ -34,12 +89,21 @@ class VoiceRepository @Inject constructor(
         apiSettings: ApiSettings
     ): ApiResult<String> {
         return try {
-            Log.d(TAG, "Processing audio with mode: ${voiceMode.name}, provider: ${apiSettings.provider}")
+            val processingStartTime = System.currentTimeMillis()
+            val audioFileSizeBytes = audioFile.length()
+
+            Log.d(TAG, "=== PROCESSING STARTED ===")
+            Log.d(TAG, "File: ${audioFile.name}")
+            Log.d(TAG, "File size: ${audioFileSizeBytes / 1024} KB")
+            Log.d(TAG, "Provider: ${apiSettings.provider.displayName}")
+            Log.d(TAG, "Model: ${apiSettings.modelId}")
+            Log.d(TAG, "Voice mode: ${voiceMode.name}")
+            Log.d(TAG, "Requires auth: ${apiSettings.getCurrentRequiresAuth()}")
 
             // Calculate audio duration in seconds (approximate based on file size and format)
             // For m4a at 128kbps: ~16KB per second
             val audioDurationSeconds = calculateAudioDuration(audioFile)
-            Log.d(TAG, "Audio duration: $audioDurationSeconds seconds")
+            Log.d(TAG, "Audio duration: $audioDurationSeconds seconds (${String.format("%.1f", audioDurationSeconds / 60.0)} minutes)")
 
             // Convert audio to base64
             val base64Result = audioRecorderManager.audioFileToBase64(audioFile)
@@ -54,12 +118,15 @@ class VoiceRepository @Inject constructor(
             if (needsTwoStepProcessing) {
                 // Step 1: Transcribe audio
                 Log.d(TAG, "Using two-step processing: transcribe + post-process")
+                val transcriptionStartTime = System.currentTimeMillis()
                 val transcriptionResult = transcriptionStrategy.processAudio(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode.copy(systemPrompt = "Transcribe the audio exactly as spoken."),
                     modelId = apiSettings.modelId
                 )
+                val transcriptionTimeMs = System.currentTimeMillis() - transcriptionStartTime
+                Log.d(TAG, "Transcription completed in ${transcriptionTimeMs}ms")
 
                 when (transcriptionResult) {
                     is ApiResult.Success -> {
@@ -72,7 +139,10 @@ class VoiceRepository @Inject constructor(
                             apiSettings = apiSettings,
                             transcriptionModel = apiSettings.modelId,
                             audioDurationSeconds = audioDurationSeconds,
-                            transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens
+                            transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens,
+                            transcriptionTimeMs = transcriptionTimeMs,
+                            audioFileSizeBytes = audioFileSizeBytes,
+                            processingStartTime = processingStartTime
                         )
                     }
                     is ApiResult.Error -> {
@@ -88,16 +158,21 @@ class VoiceRepository @Inject constructor(
                 val strategyName = if (strategy is TranscriptionStrategy) "transcription" else "chat-completion"
                 val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
 
+                Log.d(TAG, "Using single-step processing with strategy: $strategyName")
+                val apiCallStartTime = System.currentTimeMillis()
                 val result = strategy.processAudio(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode,
                     modelId = apiSettings.modelId
                 )
+                val apiCallTimeMs = System.currentTimeMillis() - apiCallStartTime
 
                 // Add processing info for single-step
                 when (result) {
                     is ApiResult.Success -> {
+                        val totalProcessingTimeMs = System.currentTimeMillis() - processingStartTime
+
                         val processingInfo = ProcessingInfo(
                             processingMode = "single-step",
                             strategy = strategyName,
@@ -110,8 +185,23 @@ class VoiceRepository @Inject constructor(
                             systemPrompt = systemPrompt,
                             audioDurationSeconds = audioDurationSeconds,
                             transcriptionTokens = result.processingInfo?.transcriptionTokens,
-                            postProcessingTokens = null
+                            postProcessingTokens = null,
+                            processingTimeMs = totalProcessingTimeMs,
+                            transcriptionTimeMs = apiCallTimeMs,
+                            postProcessingTimeMs = null,
+                            audioFileSizeBytes = audioFileSizeBytes,
+                            timestamp = processingStartTime
                         )
+
+                        // Log comprehensive metrics
+                        Log.d(TAG, "=== PROCESSING COMPLETE ===")
+                        Log.d(TAG, "Total time: ${totalProcessingTimeMs}ms (${String.format("%.2f", totalProcessingTimeMs / 1000.0)}s)")
+                        Log.d(TAG, "API call time: ${apiCallTimeMs}ms")
+                        Log.d(TAG, "Processing speed: ${String.format("%.2fx", audioDurationSeconds / (totalProcessingTimeMs / 1000.0))} realtime")
+                        result.processingInfo?.transcriptionTokens?.let { tokens ->
+                            Log.d(TAG, "Tokens - Input: ${tokens.promptTokens}, Output: ${tokens.completionTokens}, Total: ${tokens.totalTokens}")
+                        }
+                        Log.d(TAG, "============================")
 
                         // Record usage statistics
                         result.processingInfo?.transcriptionTokens?.let { tokens ->
@@ -143,6 +233,11 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): Boolean {
+        // If LLM is disabled (NONE), no post-processing
+        if (apiSettings.llmConfig.provider == com.hyperwhisper.data.LlmProvider.NONE) {
+            return false
+        }
+
         // Translation is only needed if output language is set AND different from input
         // If both are the same (e.g., both "en"), no translation is needed
         val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
@@ -194,18 +289,28 @@ class VoiceRepository @Inject constructor(
         apiSettings: ApiSettings,
         transcriptionModel: String,
         audioDurationSeconds: Double,
-        transcriptionTokens: TokenUsage?
+        transcriptionTokens: TokenUsage?,
+        transcriptionTimeMs: Long,
+        audioFileSizeBytes: Long,
+        processingStartTime: Long
     ): ApiResult<String> {
         return try {
+            // Check if LLM processing is disabled
+            if (apiSettings.llmConfig.provider == com.hyperwhisper.data.LlmProvider.NONE) {
+                Log.d(TAG, "LLM post-processing disabled (NONE selected), returning original transcription")
+                return ApiResult.Success(transcribedText)
+            }
+
             // Build system prompt with translation if needed
             val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
-            Log.d(TAG, "Post-processing text with system prompt: $systemPrompt")
+            Log.d(TAG, "Starting post-processing with system prompt: $systemPrompt")
 
-            // Determine which chat model to use for post-processing
-            val postProcessProvider = apiSettings.provider
-            val postProcessModel = "gpt-4o-mini"
+            // Use configured LLM settings
+            val llmConfig = apiSettings.llmConfig
+            val postProcessModel = llmConfig.modelId
 
-            Log.d(TAG, "Using provider for post-processing: ${postProcessProvider.displayName}, model: $postProcessModel")
+            Log.d(TAG, "Using LLM for post-processing: ${llmConfig.provider.displayName}, model: $postProcessModel")
+            Log.d(TAG, "LLM endpoint: ${llmConfig.getBaseUrl()}")
             if (apiSettings.outputLanguage.isNotEmpty()) {
                 Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
             }
@@ -230,8 +335,11 @@ class VoiceRepository @Inject constructor(
                 modalities = listOf("text") // Text-only output
             )
 
-            // Make API call
-            val response = chatCompletionStrategy.chatCompletionApiService.chatCompletion(request)
+            // Create dynamic LLM API client and make API call
+            val postProcessStartTime = System.currentTimeMillis()
+            val llmApiService = createLlmApiService(llmConfig)
+            val response = llmApiService.chatCompletion(request)
+            val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
 
             if (response.isSuccessful) {
                 val result = response.body()
@@ -239,14 +347,28 @@ class VoiceRepository @Inject constructor(
                 val postProcessingTokens = result?.usage
 
                 if (processedText != null) {
-                    Log.d(TAG, "Post-processing successful")
+                    val totalProcessingTimeMs = System.currentTimeMillis() - processingStartTime
+
+                    Log.d(TAG, "Post-processing completed in ${postProcessTimeMs}ms")
+                    Log.d(TAG, "=== TWO-STEP PROCESSING COMPLETE ===")
+                    Log.d(TAG, "Total time: ${totalProcessingTimeMs}ms (${String.format("%.2f", totalProcessingTimeMs / 1000.0)}s)")
+                    Log.d(TAG, "  - Transcription: ${transcriptionTimeMs}ms")
+                    Log.d(TAG, "  - Post-processing: ${postProcessTimeMs}ms")
+                    Log.d(TAG, "Processing speed: ${String.format("%.2fx", audioDurationSeconds / (totalProcessingTimeMs / 1000.0))} realtime")
+                    transcriptionTokens?.let { tokens ->
+                        Log.d(TAG, "Transcription tokens - Input: ${tokens.promptTokens}, Output: ${tokens.completionTokens}, Total: ${tokens.totalTokens}")
+                    }
+                    postProcessingTokens?.let { tokens ->
+                        Log.d(TAG, "Post-processing tokens - Input: ${tokens.promptTokens}, Output: ${tokens.completionTokens}, Total: ${tokens.totalTokens}")
+                    }
+                    Log.d(TAG, "==================================")
 
                     // Create processing info
                     val processingInfo = ProcessingInfo(
                         processingMode = "two-step",
-                        strategy = "transcription + chat-completion",
+                        strategy = "transcription + ${llmConfig.provider.displayName}",
                         transcriptionModel = transcriptionModel,
-                        postProcessingModel = postProcessModel,
+                        postProcessingModel = "${llmConfig.provider.displayName}:$postProcessModel",
                         translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
                         translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
                         originalTranscription = transcribedText,
@@ -254,7 +376,12 @@ class VoiceRepository @Inject constructor(
                         systemPrompt = systemPrompt,
                         audioDurationSeconds = audioDurationSeconds,
                         transcriptionTokens = transcriptionTokens,
-                        postProcessingTokens = postProcessingTokens
+                        postProcessingTokens = postProcessingTokens,
+                        processingTimeMs = totalProcessingTimeMs,
+                        transcriptionTimeMs = transcriptionTimeMs,
+                        postProcessingTimeMs = postProcessTimeMs,
+                        audioFileSizeBytes = audioFileSizeBytes,
+                        timestamp = processingStartTime
                     )
 
                     // Record usage statistics for both models
@@ -327,8 +454,8 @@ class VoiceRepository @Inject constructor(
                 Log.d(TAG, "Selected ChatCompletionStrategy (HuggingFace - text-only)")
                 chatCompletionStrategy
             }
-            // Verbatim mode with OpenAI/Groq uses transcription
-            voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ) -> {
+            // Verbatim mode with OpenAI/Groq/Self-hosted Whisper uses transcription
+            voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ || provider == ApiProvider.SELFHOSTED_WHISPER) -> {
                 Log.d(TAG, "Selected TranscriptionStrategy (Verbatim)")
                 transcriptionStrategy
             }

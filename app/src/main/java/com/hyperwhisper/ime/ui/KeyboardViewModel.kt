@@ -57,6 +57,7 @@ class KeyboardViewModel @Inject constructor(
     val walkieTalkieMode: StateFlow<Boolean> = recordingViewModel.walkieTalkieMode
     val modeChangeMessage: StateFlow<String?> = recordingViewModel.modeChangeMessage
     val needsConfirmation: StateFlow<Boolean> = recordingViewModel.needsConfirmation
+    val showCancelConfirmation: StateFlow<Boolean> = recordingViewModel.showCancelConfirmation
     val finalRecordingDuration: StateFlow<Long> = recordingViewModel.finalRecordingDuration
     val recordingWasCut: StateFlow<Boolean> = recordingViewModel.recordingWasCut
 
@@ -129,6 +130,15 @@ class KeyboardViewModel @Inject constructor(
      * Start recording audio
      */
     fun startRecording() {
+        // Sync state with repository first to catch any desync issues
+        syncRecordingState()
+
+        val state = recordingState.value
+        if (state == RecordingState.RECORDING || state == RecordingState.PROCESSING) {
+            Log.d(TAG, "Ignoring startRecording request while state=$state")
+            return
+        }
+
         recordingViewModel.startRecording()
     }
 
@@ -149,39 +159,29 @@ class KeyboardViewModel @Inject constructor(
             // Stop recording
             val stopResult = recordingViewModel.stopRecording() ?: return@launch
 
-            if (stopResult.needsConfirmation) {
-                Log.d(TAG, "Confirmation needed - waiting for user input")
-                // Wait for user confirmation - processing will happen in confirmRecording()
-            } else {
-                // Short recording - process immediately
-                Log.d(TAG, "Short recording - processing immediately")
-                processAudioFile(stopResult.audioFile)
-            }
+            Log.d(TAG, "Recording stopped - processing automatically")
+            processAudioFile(stopResult.audioFile)
         }
     }
 
     /**
-     * User confirmed the recording - proceed with processing
+     * User confirmed the recording - dismiss dialog (processing already started)
      */
     fun confirmRecording() {
         viewModelScope.launch {
+            Log.d(TAG, "User confirmed - dismissing dialog (processing already in progress)")
             recordingViewModel.confirmRecording()
             recordingViewModel.clearRecordingWasCutFlag()
-
-            // Now process the audio
-            recordingViewModel.recordedAudioFile
-                .filterNotNull()
-                .take(1)
-                .collect { audioFile ->
-                    processAudioFile(audioFile)
-                }
+            // Processing already started in stopRecording(), just dismiss the dialog
         }
     }
 
     /**
-     * User rejected the recording - discard it
+     * User rejected the recording - cancel ongoing processing and discard
      */
     fun rejectRecording() {
+        Log.d(TAG, "User rejected - canceling transcription and discarding recording")
+        cancelTranscription() // Cancel any ongoing processing
         recordingViewModel.rejectRecording()
         recordingViewModel.clearRecordingWasCutFlag()
     }
@@ -206,6 +206,8 @@ class KeyboardViewModel @Inject constructor(
         // Get current settings and mode
         val settings = apiSettings.value
         val mode = selectedMode.value
+        val appearance = appearanceSettings.value
+        val shouldSaveAudio = appearance.saveOriginalAudioFiles
 
         if (mode == null) {
             recordingViewModel.setError("No voice mode selected")
@@ -213,7 +215,7 @@ class KeyboardViewModel @Inject constructor(
         }
 
         // Process through transcription view model
-        val savedAudioPath = transcriptionViewModel.processAudio(audioFile, mode, settings)
+        val savedAudioPath = transcriptionViewModel.processAudio(audioFile, mode, settings, shouldSaveAudio)
         Log.d(
             TAG,
             "processAudioFile: completed savedAudioPath=$savedAudioPath, textLength=${transcriptionViewModel.transcribedText.value.length}, error=${transcriptionViewModel.errorMessage.value}"
@@ -229,7 +231,7 @@ class KeyboardViewModel @Inject constructor(
             ProcessingOutcome.ERROR -> {
                 soundManager.playErrorSound()
                 recordingViewModel.setError(error ?: "Unknown transcription error")
-                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                if (!inWalkieTalkieMode) {
                     historyViewModel.addToHistory("", savedAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with error")
@@ -238,7 +240,7 @@ class KeyboardViewModel @Inject constructor(
                 // Configuration mode may intentionally not emit transcribed text
                 soundManager.playSuccessSound()
                 recordingViewModel.setIdle()
-                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                if (!inWalkieTalkieMode) {
                     historyViewModel.addToHistory("", savedAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with pending configuration command")
@@ -246,7 +248,7 @@ class KeyboardViewModel @Inject constructor(
             ProcessingOutcome.SUCCESS -> {
                 soundManager.playSuccessSound()
                 recordingViewModel.setIdle()
-                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                if (!inWalkieTalkieMode) {
                     historyViewModel.addToHistory(text, savedAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished successfully with text")
@@ -255,7 +257,7 @@ class KeyboardViewModel @Inject constructor(
                 val noResultMessage = "Recording processed, but no speech was detected. Try speaking louder or recording a bit longer."
                 soundManager.playErrorSound()
                 recordingViewModel.setError(noResultMessage)
-                if (!inWalkieTalkieMode && savedAudioPath != null) {
+                if (!inWalkieTalkieMode) {
                     historyViewModel.addToHistory("", savedAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with empty transcription")
@@ -272,6 +274,20 @@ class KeyboardViewModel @Inject constructor(
      */
     fun cancelRecording() {
         recordingViewModel.cancelRecording()
+    }
+
+    /**
+     * User confirmed they want to cancel the recording
+     */
+    fun confirmCancelRecording() {
+        recordingViewModel.confirmCancelRecording()
+    }
+
+    /**
+     * User dismissed the cancel confirmation dialog
+     */
+    fun dismissCancelConfirmation() {
+        recordingViewModel.dismissCancelConfirmation()
     }
 
     /**
@@ -456,6 +472,13 @@ class KeyboardViewModel @Inject constructor(
      */
     fun clearModeChangeMessage() {
         recordingViewModel.clearModeChangeMessage()
+    }
+
+    /**
+     * Sync recording state from repository when IME view starts again.
+     */
+    fun syncRecordingState() {
+        recordingViewModel.syncRecordingState()
     }
 
     /**

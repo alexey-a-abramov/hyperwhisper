@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -47,6 +48,7 @@ fun TranscriptionHistoryPanel(
     onSelect: (String) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit,
+    onPlayAudio: ((TranscriptionHistoryItem) -> Unit)? = null,
     onReprocessWithCurrentSettings: ((TranscriptionHistoryItem) -> Unit)? = null,
     onReprocessWithNewSettings: ((TranscriptionHistoryItem) -> Unit)? = null
 ) {
@@ -216,8 +218,21 @@ fun TranscriptionHistoryPanel(
                                     }
 
                                     // Right: compact reprocess buttons (icons only)
-                                    if (hasAudio && (onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
+                                    if (hasAudio && (onPlayAudio != null || onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            if (onPlayAudio != null) {
+                                                IconButton(
+                                                    onClick = { onPlayAudio(item) },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.PlayArrow,
+                                                        contentDescription = "Play original audio",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
                                             if (onReprocessWithCurrentSettings != null) {
                                                 IconButton(
                                                     onClick = { onReprocessWithCurrentSettings(item) },

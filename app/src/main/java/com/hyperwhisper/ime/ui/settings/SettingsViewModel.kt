@@ -57,12 +57,13 @@ class SettingsViewModel @Inject constructor(
         provider: ApiProvider,
         baseUrl: String,
         apiKey: String,
+        requiresAuth: Boolean,
         modelId: String,
         inputLanguage: String = "",
         outputLanguage: String = ""
     ) {
         viewModelScope.launch {
-            saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
+            saveApiSettingsInternal(provider, baseUrl, apiKey, requiresAuth, modelId, inputLanguage, outputLanguage)
         }
     }
 
@@ -74,37 +75,47 @@ class SettingsViewModel @Inject constructor(
         provider: ApiProvider,
         baseUrl: String,
         apiKey: String,
+        requiresAuth: Boolean,
         modelId: String,
         inputLanguage: String = "",
         outputLanguage: String = ""
     ) {
-        saveApiSettingsInternal(provider, baseUrl, apiKey, modelId, inputLanguage, outputLanguage)
+        saveApiSettingsInternal(provider, baseUrl, apiKey, requiresAuth, modelId, inputLanguage, outputLanguage)
     }
 
     private suspend fun saveApiSettingsInternal(
         provider: ApiProvider,
         baseUrl: String,
         apiKey: String,
+        requiresAuth: Boolean,
         modelId: String,
         inputLanguage: String,
         outputLanguage: String
     ) {
         try {
-            // Get current settings to preserve other provider API keys
+            // Get current settings to preserve other provider data and LLM config
             val currentSettings = apiSettings.value
             val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
             updatedApiKeys[provider] = apiKey.trim()
+
+            val updatedConfigs = currentSettings.providerConfigs.toMutableMap()
+            updatedConfigs[provider] = com.hyperwhisper.data.ProviderConfig(
+                customBaseUrl = baseUrl.trim(),
+                requiresAuth = requiresAuth
+            )
 
             val settings = ApiSettings(
                 provider = provider,
                 baseUrl = baseUrl.trim(),
                 apiKeys = updatedApiKeys,
+                providerConfigs = updatedConfigs,
                 modelId = modelId.trim(),
                 inputLanguage = inputLanguage.trim(),
-                outputLanguage = outputLanguage.trim()
+                outputLanguage = outputLanguage.trim(),
+                llmConfig = currentSettings.llmConfig // Preserve LLM config
             )
             settingsRepository.saveApiSettings(settings)
-            Log.d(TAG, "API settings saved: $provider, $baseUrl, model: $modelId")
+            Log.d(TAG, "API settings saved: $provider, $baseUrl, requiresAuth: $requiresAuth, model: $modelId")
         } catch (e: Exception) {
             Log.e(TAG, "Error saving API settings", e)
         }
@@ -117,6 +128,28 @@ class SettingsViewModel @Inject constructor(
                 Log.d(TAG, "API key updated for provider: ${provider.displayName}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating provider API key", e)
+            }
+        }
+    }
+
+    fun updateProviderConfig(provider: ApiProvider, customBaseUrl: String, requiresAuth: Boolean) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.updateProviderConfig(provider, customBaseUrl.trim(), requiresAuth)
+                Log.d(TAG, "Provider config updated for: ${provider.displayName}, requiresAuth: $requiresAuth")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating provider config", e)
+            }
+        }
+    }
+
+    fun updateLlmConfig(llmConfig: com.hyperwhisper.data.LlmConfig) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.updateLlmConfig(llmConfig)
+                Log.d(TAG, "LLM config updated: ${llmConfig.provider.displayName}, model: ${llmConfig.modelId}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating LLM config", e)
             }
         }
     }

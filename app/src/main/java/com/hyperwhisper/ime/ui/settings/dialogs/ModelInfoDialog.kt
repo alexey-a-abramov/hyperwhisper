@@ -158,6 +158,14 @@ fun ModelInfoDialog(
                         Text("• Free inference API", fontSize = 14.sp)
                         Text("• Community-driven", fontSize = 14.sp)
                     }
+                    ApiProvider.SELFHOSTED_WHISPER -> {
+                        Text("Self-hosted Whisper", fontWeight = FontWeight.Medium)
+                        Text("• Your own infrastructure (free)", fontSize = 14.sp)
+                        Text("• OpenAI-compatible API", fontSize = 14.sp)
+                        Text("• Privacy-focused (local deployment)", fontSize = 14.sp)
+                        Text("• Customizable base URL", fontSize = 14.sp)
+                        Text("• Optional authentication", fontSize = 14.sp)
+                    }
                 }
 
                 Divider()

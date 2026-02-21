@@ -148,37 +148,32 @@ fun RecordingSection(
                     modifier = Modifier
                 )
 
-                // Timer display below mic - clickable to toggle
-                if (recordingState == RecordingState.RECORDING) {
-                    Spacer(Modifier.height(4.dp))
-                    RecordingTimer(
-                        durationMs = recordingDuration,
-                        maxDurationMs = 180000L,
-                        isVisible = showTimerText,
-                        onToggle = onToggleTimer
-                    )
-                }
             }
         }
 
-        // Right side: Enter button (square, tall as the section)
-        Surface(
-            onClick = onEnter,
-            modifier = Modifier.width(90.dp).fillMaxHeight().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-            tonalElevation = 2.dp
+        // Right side: Enter button (same size as REC button)
+        Box(
+            modifier = Modifier.width(90.dp).fillMaxHeight(),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
+            Surface(
+                onClick = onEnter,
+                modifier = Modifier.size(72.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                tonalElevation = 2.dp
             ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardReturn,
-                    contentDescription = strings.enterDesc,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(40.dp)
-                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardReturn,
+                        contentDescription = strings.enterDesc,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
             }
         }
     }

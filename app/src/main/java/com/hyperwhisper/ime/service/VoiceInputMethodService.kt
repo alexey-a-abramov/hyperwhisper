@@ -6,6 +6,7 @@ import android.inputmethodservice.InputMethodService
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.collectAsState
@@ -44,6 +45,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject
 
 /**
@@ -87,6 +89,7 @@ class VoiceInputMethodService : InputMethodService(),
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
     private var currentEditorInfo: EditorInfo? = null
+    private val currentEditorInfoFlow = MutableStateFlow<EditorInfo?>(null)
 
     // Lifecycle for Compose integration
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -206,11 +209,12 @@ class VoiceInputMethodService : InputMethodService(),
         val appearanceSettings by settingsRepository.appearanceSettings.collectAsState(
             initial = AppearanceSettings()
         )
+        val editorInfo by currentEditorInfoFlow.collectAsState(initial = null)
 
         HyperWhisperTheme(appearanceSettings = appearanceSettings) {
             KeyboardScreen(
                 viewModel = viewModel,
-                editorInfo = currentEditorInfo,
+                editorInfo = editorInfo,
                 onTextCommit = { text ->
                     commitText(text)
                 },
@@ -230,7 +234,7 @@ class VoiceInputMethodService : InputMethodService(),
                     insertClipboard()
                 },
                 onSwitchKeyboard = {
-                    switchToPreviousKeyboard()
+                    switchToTextKeyboard()
                 }
             )
         }
@@ -240,6 +244,16 @@ class VoiceInputMethodService : InputMethodService(),
      * Commit text to the current input field
      */
     private fun commitText(text: String) {
+        if (!isInputViewShown) {
+            Toast.makeText(
+                this,
+                "Transcription completed and saved to history. Open keyboard to insert manually.",
+                Toast.LENGTH_SHORT
+            ).show()
+            Log.d(TAG, "Skipped commitText because input view is hidden")
+            return
+        }
+
         val ic = currentInputConnection ?: return
         try {
             ic.beginBatchEdit()
@@ -331,15 +345,26 @@ class VoiceInputMethodService : InputMethodService(),
     }
 
     /**
-     * Show input method picker to switch keyboard
+     * Switch to the previously used keyboard (usually the user's QWERTY keyboard).
+     * Falls back to input method picker if direct switch is unavailable.
      */
-    private fun switchToPreviousKeyboard() {
+    private fun switchToTextKeyboard() {
         try {
+            val switched = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                switchToPreviousInputMethod()
+            } else {
+                false
+            }
+            if (switched) {
+                Log.d(TAG, "Switched to previous keyboard")
+                return
+            }
+
             val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             imm.showInputMethodPicker()
-            Log.d(TAG, "Showing input method picker")
+            Log.d(TAG, "Previous keyboard unavailable, showing input method picker")
         } catch (e: Exception) {
-            Log.e(TAG, "Error showing input method picker", e)
+            Log.e(TAG, "Error switching keyboard", e)
         }
     }
 
@@ -376,15 +401,19 @@ class VoiceInputMethodService : InputMethodService(),
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         this.currentEditorInfo = attribute
+        this.currentEditorInfoFlow.value = attribute
         Log.d(TAG, "onStartInput - inputType: ${attribute?.inputType}, restarting: $restarting")
         TraceLogger.lifecycle("IME", "onStartInput", "inputType=${attribute?.inputType}, restarting=$restarting")
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        this.currentEditorInfo = info
+        this.currentEditorInfoFlow.value = info
         Log.d(TAG, "onStartInputView - restarting: $restarting")
         TraceLogger.lifecycle("IME", "onStartInputView", "restarting=$restarting")
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
+        viewModel.syncRecordingState()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

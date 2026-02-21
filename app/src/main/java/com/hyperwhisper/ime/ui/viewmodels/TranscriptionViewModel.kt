@@ -72,7 +72,8 @@ class TranscriptionViewModel(
     suspend fun processAudio(
         audioFile: File,
         mode: VoiceMode,
-        settings: ApiSettings
+        settings: ApiSettings,
+        saveAudioFile: Boolean
     ): String? {
         return try {
             // Capture audio file info for progress display
@@ -89,9 +90,14 @@ class TranscriptionViewModel(
             Log.d(TAG, "Processing audio with mode: ${mode.name}")
             TraceLogger.trace("TranscriptionViewModel", "Processing audio with mode: ${mode.name}, provider: ${settings.provider}")
 
-            // Save audio file to persistent storage
-            val savedAudioPath = saveAudioFileToPersistentStorage(audioFile)
-            Log.d(TAG, "Audio file saved to: $savedAudioPath")
+            // Optionally save audio file to persistent storage for history playback/reprocessing
+            val savedAudioPath = if (saveAudioFile) {
+                val path = saveAudioFileToPersistentStorage(audioFile)
+                Log.d(TAG, "Audio file saved to: $path")
+                path
+            } else {
+                null
+            }
 
             // Start transcription with progress tracking and cancellation support
             transcriptionJob = viewModelScope.launch {

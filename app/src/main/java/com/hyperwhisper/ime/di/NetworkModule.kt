@@ -114,10 +114,16 @@ object NetworkModule {
     ): Interceptor {
         return Interceptor { chain ->
             val apiSettings = runBlocking { settingsRepository.apiSettings.first() }
-            val request = chain.request().newBuilder()
-                .addHeader("Authorization", "Bearer ${apiSettings.getCurrentApiKey()}")
-                .addHeader("Content-Type", "application/json")
-                .build()
+            val requestBuilder = chain.request().newBuilder()
+
+            // Only add Authorization header if provider requires authentication
+            // Uses per-provider auth setting if configured, otherwise uses provider default
+            if (apiSettings.getCurrentRequiresAuth()) {
+                requestBuilder.addHeader("Authorization", "Bearer ${apiSettings.getCurrentApiKey()}")
+            }
+
+            requestBuilder.addHeader("Content-Type", "application/json")
+            val request = requestBuilder.build()
             chain.proceed(request)
         }
     }
@@ -131,9 +137,10 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)    // Connection establishment
+            .readTimeout(180, TimeUnit.SECONDS)      // Increased for longer audio processing (3 min)
+            .writeTimeout(60, TimeUnit.SECONDS)      // Upload time
+            .callTimeout(300, TimeUnit.SECONDS)      // Total call timeout (5 min)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -164,7 +171,7 @@ object NetworkModule {
     ): Retrofit {
         val baseUrl = runBlocking {
             val settings = settingsRepository.apiSettings.first()
-            settings.baseUrl.ifEmpty { "https://api.openai.com/v1/" }
+            settings.getCurrentBaseUrl()
         }
         return createRetrofit(okHttpClient, gson, baseUrl)
     }
@@ -179,7 +186,7 @@ object NetworkModule {
     ): Retrofit {
         val baseUrl = runBlocking {
             val settings = settingsRepository.apiSettings.first()
-            settings.baseUrl.ifEmpty { "https://api.openai.com/v1/" }
+            settings.getCurrentBaseUrl()
         }
         return createRetrofit(okHttpClient, gson, baseUrl)
     }

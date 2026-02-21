@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.media.MediaPlayer
 import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.EditorInfo
@@ -57,9 +58,30 @@ import com.hyperwhisper.ui.sections.LanguageModelRow
 import com.hyperwhisper.ui.sections.RecordingSection
 import com.hyperwhisper.ui.sections.TopControlsRow
 import com.hyperwhisper.ui.dialogs.ModeSelectionDialog
-import com.hyperwhisper.ui.dialogs.RecordingConfirmationDialog
+import com.hyperwhisper.ui.dialogs.CancelRecordingConfirmationDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
+
+private enum class KeyboardInputMode {
+    DICTATION,
+    QWERTY,
+    SPECIAL_CHARS
+}
+
+private enum class KeyboardActionStyle {
+    NORMAL,
+    SPACE,
+    BACKSPACE,
+    ENTER
+}
+
+private val KeyboardSurfaceColor = Color(0xFF000000)
+private val KeyboardKeyColor = Color(0xFFFFFFFF)
+private val KeyboardKeyTextColor = Color(0xFF000000)
+private val KeyboardSpaceColor = Color(0xFFFFEB3B)
+private val KeyboardBackspaceColor = Color(0xFFD32F2F)
+private val KeyboardEnterColor = Color(0xFF00C853)
+private val KeyboardSpecialTextColor = Color(0xFF000000)
 
 @Composable
 fun KeyboardScreen(
@@ -95,9 +117,7 @@ fun KeyboardScreen(
     val lastAudioDuration by viewModel.lastAudioDuration.collectAsState()
     val walkieTalkieMode by viewModel.walkieTalkieMode.collectAsState()
     val modeChangeMessage by viewModel.modeChangeMessage.collectAsState()
-    val needsConfirmation by viewModel.needsConfirmation.collectAsState()
-    val finalRecordingDuration by viewModel.finalRecordingDuration.collectAsState()
-    val recordingWasCut by viewModel.recordingWasCut.collectAsState()
+    val showCancelConfirmation by viewModel.showCancelConfirmation.collectAsState()
     val processingPhase by viewModel.processingPhase.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
@@ -106,6 +126,8 @@ fun KeyboardScreen(
     var showHistoryPanel by remember { mutableStateOf(false) }
     var showTimerText by remember { mutableStateOf(true) }
     var showModeDialog by remember { mutableStateOf(false) }
+    var keyboardInputMode by remember { mutableStateOf(KeyboardInputMode.DICTATION) }
+    var lastSpacePressTime by remember { mutableStateOf(0L) }
 
     // Track last transcribed text for paste button
     // Initialize from history if available
@@ -120,6 +142,20 @@ fun KeyboardScreen(
 
     // Get clipboard manager
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+
+    val handleSpacePress = {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastSpace = currentTime - lastSpacePressTime
+
+        if (timeSinceLastSpace < 500L && lastSpacePressTime > 0L) {
+            onDelete()
+            onTextCommit(". ")
+            lastSpacePressTime = 0L
+        } else {
+            onSpace()
+            lastSpacePressTime = currentTime
+        }
+    }
 
     // Auto-commit transcribed text
     LaunchedEffect(transcribedText) {
@@ -187,78 +223,96 @@ fun KeyboardScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(
+                        if (keyboardInputMode == KeyboardInputMode.DICTATION) 16.dp else 0.dp
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
-            // Top Row: Backspace (left) | Keyboard Switcher + Settings + View Logs (techie) + Help (right)
-            TopControlsRow(
-                context = context,
-                showKeyboardSwitcher = appearanceSettings.showKeyboardSwitcher,
-                techieModeEnabled = appearanceSettings.techieModeEnabled,
-                onSwitchKeyboard = onSwitchKeyboard,
-                onDelete = onDelete,
-                onDeleteAll = onDeleteAll
-            )
+            if (keyboardInputMode == KeyboardInputMode.DICTATION) {
+                // Top Row: Backspace (left) | Settings + View Logs (techie) + Help (right)
+                TopControlsRow(
+                    context = context,
+                    showKeyboardSwitcher = false,
+                    techieModeEnabled = appearanceSettings.techieModeEnabled,
+                    onSwitchKeyboard = onSwitchKeyboard,
+                    onDelete = onDelete,
+                    onDeleteAll = onDeleteAll
+                )
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
-            // Language & Model Info Row (full width)
-            LanguageModelRow(
-                apiSettings = apiSettings,
-                recordingState = recordingState,
-                techieModeEnabled = appearanceSettings.techieModeEnabled,
-                voiceModes = voiceModes,
-                selectedModeId = selectedModeId,
-                onShowInputLanguageDialog = { showInputLanguageDialog = true },
-                onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
-                onShowConfigInfo = { showConfigInfo = true },
-                onShowModeDialog = { showModeDialog = true },
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (keyboardInputMode == KeyboardInputMode.DICTATION) {
+                // Language & Model Info Row (only in dictation mode)
+                LanguageModelRow(
+                    apiSettings = apiSettings,
+                    recordingState = recordingState,
+                    techieModeEnabled = appearanceSettings.techieModeEnabled,
+                    voiceModes = voiceModes,
+                    selectedModeId = selectedModeId,
+                    onShowInputLanguageDialog = { showInputLanguageDialog = true },
+                    onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
+                    onShowConfigInfo = { showConfigInfo = true },
+                    onShowModeDialog = { showModeDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
-            // Middle section: Cancel (far left) + Mic (center) + Enter (right)
-            RecordingSection(
-                recordingState = recordingState,
-                recordingDuration = recordingDuration,
-                transcriptionProgress = transcriptionProgress,
-                processingStage = processingStage,
-                processingPhase = processingPhase,
-                lastAudioFileSize = lastAudioFileSize,
-                lastAudioDuration = lastAudioDuration,
-                editorInfo = editorInfo,
-                techieModeEnabled = appearanceSettings.techieModeEnabled,
-                showTimerText = showTimerText,
-                walkieTalkieMode = walkieTalkieMode,
-                onCancelRecording = { viewModel.cancelRecording() },
-                onStartRecording = { viewModel.startRecording() },
-                onStopRecording = { viewModel.stopRecording() },
-                onCancelTranscription = { viewModel.cancelTranscription() },
-                onEnableWalkieTalkieMode = { viewModel.enableWalkieTalkieMode() },
-                onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
-                onPressStartRecording = { viewModel.startRecording() },
-                onPressReleaseRecording = { viewModel.stopRecording() },
-                onConfirmRecording = { viewModel.confirmRecording() },
-                onToggleTimer = { showTimerText = !showTimerText },
-                onEnter = onEnter,
-                modifier = Modifier.weight(1f)
-            )
+            if (keyboardInputMode == KeyboardInputMode.DICTATION) {
+                // Middle section: Cancel (far left) + Mic (center) + Enter (right)
+                RecordingSection(
+                    recordingState = recordingState,
+                    recordingDuration = recordingDuration,
+                    transcriptionProgress = transcriptionProgress,
+                    processingStage = processingStage,
+                    processingPhase = processingPhase,
+                    lastAudioFileSize = lastAudioFileSize,
+                    lastAudioDuration = lastAudioDuration,
+                    editorInfo = editorInfo,
+                    techieModeEnabled = appearanceSettings.techieModeEnabled,
+                    showTimerText = showTimerText,
+                    walkieTalkieMode = walkieTalkieMode,
+                    onCancelRecording = { viewModel.cancelRecording() },
+                    onStartRecording = { viewModel.startRecording() },
+                    onStopRecording = { viewModel.stopRecording() },
+                    onCancelTranscription = { viewModel.cancelTranscription() },
+                    onEnableWalkieTalkieMode = { viewModel.enableWalkieTalkieMode() },
+                    onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
+                    onPressStartRecording = { viewModel.startRecording() },
+                    onPressReleaseRecording = { viewModel.stopRecording() },
+                    onConfirmRecording = { viewModel.confirmRecording() },
+                    onToggleTimer = { showTimerText = !showTimerText },
+                    onEnter = onEnter,
+                    modifier = Modifier.weight(1f)
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom row: Paste (left) + Space button (center/right)
-            // Double-tap space for period + space
-            BottomActionsRow(
-                lastTranscribedText = lastTranscribedText,
-                transcriptionHistory = transcriptionHistory,
-                enableHistoryPanel = appearanceSettings.enableHistoryPanel,
-                onPasteText = onTextCommit,
-                onShowHistory = { showHistoryPanel = true },
-                onSpace = onSpace,
-                onDelete = onDelete
-            )
+                BottomActionsRow(
+                    lastTranscribedText = lastTranscribedText,
+                    transcriptionHistory = transcriptionHistory,
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPasteText = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true },
+                    onSpace = handleSpacePress,
+                    showKeyboardButton = true,
+                    onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY }
+                )
+            } else {
+                TextKeyboardSection(
+                    mode = keyboardInputMode,
+                    onModeChange = { keyboardInputMode = it },
+                    onKeyPress = onTextCommit,
+                    onSpacePress = handleSpacePress,
+                    onDelete = onDelete,
+                    onEnter = onEnter,
+                    onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         }
 
@@ -282,12 +336,15 @@ fun KeyboardScreen(
             )
         }
 
-        // Show Recording Confirmation Dialog (for recordings > 30 seconds)
-        if (needsConfirmation) {
-            RecordingConfirmationDialog(
-                durationSeconds = finalRecordingDuration / 1000,
-                onConfirm = { viewModel.confirmRecording() },
-                onDiscard = { viewModel.rejectRecording() }
+        // Confirmation dialog removed - all recordings now process automatically
+        // Confirmation only shown when CANCELING a long recording (see below)
+
+        // Show Cancel Confirmation Dialog (when canceling long recordings)
+        if (showCancelConfirmation) {
+            CancelRecordingConfirmationDialog(
+                durationSeconds = recordingDuration / 1000,
+                onConfirm = { viewModel.confirmCancelRecording() },
+                onDismiss = { viewModel.dismissCancelConfirmation() }
             )
         }
 
@@ -353,6 +410,32 @@ fun KeyboardScreen(
                 },
                 onClearAll = { viewModel.clearHistory() },
                 onDismiss = { showHistoryPanel = false },
+                onPlayAudio = { item ->
+                    val audioPath = item.audioFilePath
+                    if (audioPath.isNullOrBlank()) {
+                        Toast.makeText(context, "No saved audio for this entry", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val audioFile = java.io.File(audioPath)
+                        if (!audioFile.exists()) {
+                            Toast.makeText(context, "Saved audio file not found", Toast.LENGTH_SHORT).show()
+                        } else {
+                            try {
+                                val mediaPlayer = MediaPlayer().apply {
+                                    setDataSource(audioPath)
+                                    setOnPreparedListener { it.start() }
+                                    setOnCompletionListener { it.release() }
+                                    setOnErrorListener { mp, _, _ ->
+                                        mp.release()
+                                        true
+                                    }
+                                    prepareAsync()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Unable to play audio", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
                 onReprocessWithCurrentSettings = { item ->
                     viewModel.reprocessWithCurrentSettings(item)
                     showHistoryPanel = false
@@ -377,6 +460,195 @@ fun KeyboardScreen(
                     onDismiss = {
                         selectedItemForReprocess = null
                     }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TextKeyboardSection(
+    mode: KeyboardInputMode,
+    onModeChange: (KeyboardInputMode) -> Unit,
+    onKeyPress: (String) -> Unit,
+    onSpacePress: () -> Unit,
+    onDelete: () -> Unit,
+    onEnter: () -> Unit,
+    onReturnToDictation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isSpecialChars = mode == KeyboardInputMode.SPECIAL_CHARS
+    val rows = if (isSpecialChars) {
+        listOf(
+            listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+            listOf("[", "]", "{", "}", "(", ")", "<", ">", "/", "\\"),
+            listOf("+", "-", "*", "=", "==", "!=", "&", "|", "&&", "||"),
+            listOf("%", "^", "~", "`", ":", ";", "\"", "'", "?", "."),
+            listOf(",", "_", "@", "#", "$", "€", "£", "¥", "§", "°"),
+            listOf("=>", "->", "::", "++", "--", "??", "/*", "*/", "|>", "⌫")
+        )
+    } else {
+        listOf(
+            listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+            listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+            listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+            listOf("z", "x", "c", "v", "b", "n", "m", "⌫")
+        )
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth().fillMaxHeight(),
+        color = KeyboardSurfaceColor,
+        shape = RoundedCornerShape(10.dp)
+    ) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val horizontalGap = 1.dp
+        val verticalGap = 2.dp
+        val actionRowHeight = (maxHeight * 0.14f).coerceIn(30.dp, 38.dp)
+        val keyRowCount = rows.size
+        val totalVerticalGaps = verticalGap * keyRowCount
+        val availableKeyHeight = (maxHeight - actionRowHeight - totalVerticalGaps).coerceAtLeast(110.dp)
+        val keyHeight = (availableKeyHeight / keyRowCount).coerceIn(20.dp, 40.dp)
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(verticalGap)
+        ) {
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    row.forEach { key ->
+                        KeyboardKeyButton(
+                            label = key,
+                            onClick = {
+                                if (key == "⌫") onDelete() else onKeyPress(key)
+                            },
+                            modifier = Modifier.weight(1f),
+                            height = keyHeight
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(actionRowHeight),
+                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                KeyboardActionButton(
+                    icon = Icons.Default.Mic,
+                    onClick = onReturnToDictation,
+                    modifier = Modifier.weight(0.9f),
+                    style = KeyboardActionStyle.NORMAL
+                )
+
+                KeyboardActionButton(
+                    label = if (isSpecialChars) "ABC" else "?123",
+                    onClick = {
+                        onModeChange(
+                            if (isSpecialChars) KeyboardInputMode.QWERTY else KeyboardInputMode.SPECIAL_CHARS
+                        )
+                    },
+                    modifier = Modifier.weight(0.9f),
+                    style = KeyboardActionStyle.NORMAL
+                )
+
+                KeyboardActionButton(
+                    label = "space",
+                    onClick = onSpacePress,
+                    modifier = Modifier.weight(2f),
+                    style = KeyboardActionStyle.SPACE
+                )
+
+                KeyboardActionButton(
+                    icon = Icons.Default.KeyboardReturn,
+                    onClick = onEnter,
+                    modifier = Modifier.weight(1.8f),
+                    style = KeyboardActionStyle.ENTER
+                )
+            }
+        }
+    }
+    }
+}
+
+@Composable
+private fun KeyboardKeyButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 36.dp
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(height),
+        shape = RoundedCornerShape(8.dp),
+        color = KeyboardKeyColor,
+        tonalElevation = 1.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = KeyboardKeyTextColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun KeyboardActionButton(
+    label: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    style: KeyboardActionStyle = KeyboardActionStyle.NORMAL
+) {
+    val backgroundColor = when (style) {
+        KeyboardActionStyle.NORMAL -> KeyboardKeyColor
+        KeyboardActionStyle.SPACE -> KeyboardSpaceColor
+        KeyboardActionStyle.BACKSPACE -> KeyboardBackspaceColor
+        KeyboardActionStyle.ENTER -> KeyboardEnterColor
+    }
+    val contentColor = when (style) {
+        KeyboardActionStyle.NORMAL -> KeyboardKeyTextColor
+        else -> KeyboardSpecialTextColor
+    }
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(42.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label ?: "action",
+                    tint = contentColor
+                )
+            } else if (label != null) {
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = contentColor
                 )
             }
         }
@@ -649,4 +921,3 @@ fun ProcessingIndicator(
         }
     }
 }
-
