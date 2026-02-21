@@ -135,7 +135,7 @@ enum class ApiProvider(
     OPENAI(
         displayName = "OpenAI Whisper",
         defaultEndpoint = "https://api.openai.com/v1/",
-        defaultModels = listOf("whisper-1")
+        defaultModels = listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "base", "small", "medium", "large", "large-v2", "large-v3")
     ),
     DEEPGRAM(
         displayName = "Deepgram",
@@ -485,6 +485,17 @@ fun calculateCost(
  */
 fun getModelPricing(modelId: String): ModelPricing {
     return when {
+        // OpenAI hosted transcription models
+        modelId == "gpt-4o-transcribe" ->
+            ModelPricing(audioPerMinute = 0.006)
+        modelId == "gpt-4o-mini-transcribe" ->
+            ModelPricing(audioPerMinute = 0.003)
+
+        // Whisper model sizes (self-hosted, free)
+        modelId == "base" || modelId == "small" || modelId == "medium" ||
+        modelId == "large" || modelId == "large-v2" || modelId == "large-v3" ->
+            ModelPricing(audioPerMinute = 0.0)
+
         // OpenAI Whisper - $0.006 per minute
         modelId.contains("whisper", ignoreCase = true) && !modelId.contains("groq", ignoreCase = true) ->
             ModelPricing(audioPerMinute = 0.006)
