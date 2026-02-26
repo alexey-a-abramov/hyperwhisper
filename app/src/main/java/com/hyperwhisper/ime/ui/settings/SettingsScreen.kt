@@ -1,7 +1,11 @@
 package com.hyperwhisper.ui.settings
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -45,6 +50,7 @@ import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
 import com.hyperwhisper.ui.settings.dialogs.InputLanguageInfoDialog
 import com.hyperwhisper.ui.settings.dialogs.LogsInfoDialog
 import com.hyperwhisper.ui.settings.dialogs.ModelInfoDialog
+import com.hyperwhisper.ui.settings.dialogs.ProviderKeyInstructionsDialog
 import com.hyperwhisper.ui.settings.sections.ApiConfigSection
 import com.hyperwhisper.ui.settings.sections.AppUpdateSection
 import com.hyperwhisper.ui.settings.sections.AppearanceSection
@@ -87,8 +93,12 @@ fun SettingsScreen(
     var showAddModeDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showLogsDialog by remember { mutableStateOf(false) }
+    var showProviderKeyHelp by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val clipboardManager = remember {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
     val strings = LocalStrings.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -144,6 +154,25 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text(strings.settingsTitle) },
                 actions = {
+                    if (appearanceSettings.techieModeEnabled) {
+                        IconButton(onClick = {
+                            val exportJson = viewModel.buildSecretsExportJson()
+                            val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
+                            clipboardManager.setPrimaryClip(clip)
+                            Toast.makeText(
+                                context,
+                                "Secrets exported. Save clipboard as local .env in project root.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Export Secrets",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+
                     // Save and close button
                     IconButton(onClick = {
                         coroutineScope.launch {
@@ -255,6 +284,7 @@ fun SettingsScreen(
                         modelId = provider.defaultModels.firstOrNull() ?: modelId
                     },
                     onShowModelInfo = { showModelInfo = true },
+                    onShowProviderKeyHelp = { showProviderKeyHelp = true },
                     onShowInputLanguageInfo = { showInputLanguageInfo = true },
                     onShowLogsDialog = { showLogsDialog = true },
                     onResetConnectionTestState = { viewModel.resetConnectionTestState() }
@@ -356,6 +386,13 @@ fun SettingsScreen(
     if (showInputLanguageInfo) {
         InputLanguageInfoDialog(
             onDismiss = { showInputLanguageInfo = false }
+        )
+    }
+
+    if (showProviderKeyHelp) {
+        ProviderKeyInstructionsDialog(
+            provider = provider,
+            onDismiss = { showProviderKeyHelp = false }
         )
     }
 

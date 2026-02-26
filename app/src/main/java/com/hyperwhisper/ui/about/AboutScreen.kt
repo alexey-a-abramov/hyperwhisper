@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,8 +50,12 @@ fun AboutScreen(
     versionCode: Int,
     buildDate: String = "",
     usageStatistics: com.hyperwhisper.data.UsageStatistics,
+    techieModeEnabled: Boolean = false,
+    integrationResults: List<ProviderIntegrationResult> = emptyList(),
+    integrationRunning: Boolean = false,
     updateProbeDetails: UpdateProbeDetails? = null,
     onClearStatistics: () -> Unit,
+    onRunIntegrationTests: () -> Unit = {},
     onRefreshUpdateProbe: (() -> Unit)? = null
 ) {
     val strings = LocalStrings.current
@@ -365,6 +371,15 @@ ${strings.languageSelectionDesc}""",
                     onRefresh = onRefreshUpdateProbe
                 )
             }
+
+            if (techieModeEnabled) {
+                Spacer(modifier = Modifier.height(16.dp))
+                IntegrationTestSection(
+                    running = integrationRunning,
+                    results = integrationResults,
+                    onRun = onRunIntegrationTests
+                )
+            }
         }
     }
 }
@@ -677,6 +692,83 @@ private fun ProbeResultItem(result: com.hyperwhisper.ime.update.ApkProbeResult) 
                     fontSize = 8.sp,
                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntegrationTestSection(
+    running: Boolean,
+    results: List<ProviderIntegrationResult>,
+    onRun: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Provider Integration Tests (Techie)",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Button(
+                onClick = onRun,
+                enabled = !running,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (running) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Running...")
+                } else {
+                    Text("Run Integration Tests")
+                }
+            }
+
+            if (results.isNotEmpty()) {
+                Divider()
+                results.forEach { result ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = result.provider.displayName,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = if (result.success) "OK" else "FAIL",
+                            fontSize = 11.sp,
+                            color = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = " ${result.durationMs}ms",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = result.message + (result.statusCode?.let { " (HTTP $it)" } ?: ""),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

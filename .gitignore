@@ -61,3 +61,4 @@ builds/
 gradle.properties.bak
 /models
 /models/
+.env

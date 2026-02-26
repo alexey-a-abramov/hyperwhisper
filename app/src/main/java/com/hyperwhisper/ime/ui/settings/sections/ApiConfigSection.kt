@@ -54,6 +54,7 @@ fun ApiConfigSection(
     onTestConnection: () -> Unit,
     onResetDefaults: () -> Unit,
     onShowModelInfo: () -> Unit,
+    onShowProviderKeyHelp: () -> Unit,
     onShowInputLanguageInfo: () -> Unit,
     onShowLogsDialog: () -> Unit,
     onResetConnectionTestState: () -> Unit,
@@ -122,6 +123,14 @@ fun ApiConfigSection(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
+
+        Spacer(Modifier.padding(vertical = 4.dp))
+        OutlinedButton(
+            onClick = onShowProviderKeyHelp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("How to get API key")
+        }
 
         Spacer(Modifier.padding(vertical = 8.dp))
     }

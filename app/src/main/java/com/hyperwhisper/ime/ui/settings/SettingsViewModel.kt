@@ -3,6 +3,7 @@ package com.hyperwhisper.ui.settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.GsonBuilder
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.AppearanceSettings
@@ -267,5 +268,29 @@ class SettingsViewModel @Inject constructor(
 
     fun resetConnectionTestState() {
         _connectionTestState.value = ConnectionTestState.Idle
+    }
+
+    /**
+     * Export all provider secrets/config as pretty JSON for external integration tests.
+     */
+    fun buildSecretsExportJson(): String {
+        val settings = apiSettings.value
+        val providers = ApiProvider.entries.associate { provider ->
+            val providerConfig = settings.providerConfigs[provider]
+            provider.name to mapOf(
+                "displayName" to provider.displayName,
+                "baseUrl" to (providerConfig?.customBaseUrl?.ifBlank { provider.defaultEndpoint } ?: provider.defaultEndpoint),
+                "requiresAuth" to (providerConfig?.requiresAuth ?: provider.requiresAuth),
+                "apiKey" to (settings.apiKeys[provider] ?: ""),
+                "modelId" to if (settings.provider == provider) settings.modelId else (provider.defaultModels.firstOrNull() ?: "")
+            )
+        }
+
+        val payload = mapOf(
+            "format" to "hyperwhisper-secrets-v1",
+            "currentProvider" to settings.provider.name,
+            "providers" to providers
+        )
+        return GsonBuilder().setPrettyPrinting().create().toJson(payload)
     }
 }

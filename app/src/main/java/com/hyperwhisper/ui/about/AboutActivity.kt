@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,9 +24,11 @@ import com.hyperwhisper.ime.update.UpdateProbeDetails
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.google.gson.Gson
 
 @AndroidEntryPoint
 class AboutActivity : ComponentActivity() {
@@ -35,6 +38,9 @@ class AboutActivity : ComponentActivity() {
 
     @Inject
     lateinit var updateManager: UpdateManager
+
+    @Inject
+    lateinit var gson: Gson
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,9 +58,11 @@ class AboutActivity : ComponentActivity() {
 
             // Update probe details state
             var updateProbeDetails by remember { mutableStateOf<UpdateProbeDetails?>(null) }
+            var integrationResults by remember { mutableStateOf<List<ProviderIntegrationResult>>(emptyList()) }
+            var runningIntegration by remember { mutableStateOf(false) }
 
             // Load probe details on first composition
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            LaunchedEffect(Unit) {
                 withContext(Dispatchers.IO) {
                     updateProbeDetails = updateManager.getUpdateProbeDetails()
                 }
@@ -70,10 +78,25 @@ class AboutActivity : ComponentActivity() {
                         versionCode = versionCode,
                         buildDate = BuildConfig.BUILD_DATE,
                         usageStatistics = usageStatistics,
+                        techieModeEnabled = appearanceSettings.techieModeEnabled,
+                        integrationResults = integrationResults,
+                        integrationRunning = runningIntegration,
                         updateProbeDetails = updateProbeDetails,
                         onClearStatistics = {
                             lifecycleScope.launch {
                                 settingsRepository.clearStatistics()
+                            }
+                        },
+                        onRunIntegrationTests = {
+                            lifecycleScope.launch {
+                                runningIntegration = true
+                                try {
+                                    val settings = settingsRepository.apiSettings.first()
+                                    val runner = ProviderIntegrationTestRunner(gson)
+                                    integrationResults = runner.runAll(settings)
+                                } finally {
+                                    runningIntegration = false
+                                }
                             }
                         },
                         onRefreshUpdateProbe = {

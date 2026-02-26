@@ -230,6 +230,12 @@ class VoiceInputMethodService : InputMethodService(),
                 onEnter = {
                     handleEnter()
                 },
+                onMoveCursorLeft = {
+                    moveCursorLeft()
+                },
+                onMoveCursorRight = {
+                    moveCursorRight()
+                },
                 onInsertClipboard = {
                     insertClipboard()
                 },
@@ -395,6 +401,32 @@ class VoiceInputMethodService : InputMethodService(),
                 commitText("\n")
                 Log.d(TAG, "handleEnter: newline default")
             }
+        }
+    }
+
+    /**
+     * Move cursor one position to the left.
+     */
+    private fun moveCursorLeft() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving cursor left", e)
+        }
+    }
+
+    /**
+     * Move cursor one position to the right.
+     */
+    private fun moveCursorRight() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving cursor right", e)
         }
     }
 
