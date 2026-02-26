@@ -36,6 +36,7 @@ fun LlmConfigSection(
     onLlmRequiresAuthChange: (Boolean) -> Unit,
     onLlmModelIdChange: (String) -> Unit,
     onResetLlmDefaults: () -> Unit,
+    onReuseLlmKeyForProvider: () -> Unit,
     onShowLlmInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -103,6 +104,16 @@ fun LlmConfigSection(
                 singleLine = true
             )
 
+            if (llmApiKey.isNotBlank()) {
+                Spacer(Modifier.padding(vertical = 4.dp))
+                OutlinedButton(
+                    onClick = onReuseLlmKeyForProvider,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Reuse this key for selected provider")
+                }
+            }
+
             Spacer(Modifier.padding(vertical = 8.dp))
         }
 
@@ -115,6 +126,7 @@ fun LlmConfigSection(
             LlmModelSelector(
                 selectedModel = llmModelId,
                 availableModels = llmProvider.defaultModels,
+                showFreeFilter = llmProvider == LlmProvider.OPENROUTER,
                 onModelSelected = onLlmModelIdChange,
                 modifier = Modifier.weight(1f)
             )

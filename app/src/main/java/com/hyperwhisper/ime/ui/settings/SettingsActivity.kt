@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import com.hyperwhisper.ime.update.UpdateCheckResult
 import com.hyperwhisper.ime.update.UpdateDialog
@@ -56,6 +57,8 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val initialProvider = intent.getStringExtra(EXTRA_PROVIDER_NAME)
+            ?.let { runCatching { ApiProvider.valueOf(it) }.getOrNull() }
 
         // Check and request microphone permission
         checkAndRequestMicrophonePermission()
@@ -73,6 +76,7 @@ class SettingsActivity : ComponentActivity() {
                 ) {
                     SettingsScreen(
                         viewModel = viewModel,
+                        initialProvider = initialProvider,
                         updateManager = updateManager,
                         onShowUpdateDialog = { info ->
                             updateInfo = info
@@ -153,6 +157,10 @@ class SettingsActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_PROVIDER_NAME = "extra_provider_name"
     }
 
     private fun checkForUpdates() {

@@ -115,6 +115,7 @@ fun KeyboardScreen(
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
     val recentlyUsedProviderModels by viewModel.recentlyUsedProviderModels.collectAsState()
+    val configuredProviders by viewModel.configuredProviders.collectAsState()
     val usageStatistics by viewModel.usageStatistics.collectAsState()
     val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
     val lastAudioFileSize by viewModel.lastAudioFileSize.collectAsState()
@@ -397,6 +398,7 @@ fun KeyboardScreen(
             ProviderModelSelectorDialog(
                 currentProvider = apiSettings.provider,
                 currentModelId = apiSettings.modelId,
+                configuredProviders = configuredProviders,
                 recentSelections = recentlyUsedProviderModels,
                 onProviderModelSelected = { provider, modelId ->
                     viewModel.setProviderAndModel(provider, modelId)

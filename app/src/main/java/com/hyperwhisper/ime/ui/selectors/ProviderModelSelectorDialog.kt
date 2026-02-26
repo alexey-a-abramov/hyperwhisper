@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,13 +19,16 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,18 +41,25 @@ import com.hyperwhisper.localization.LocalStrings
 fun ProviderModelSelectorDialog(
     currentProvider: ApiProvider,
     currentModelId: String,
+    configuredProviders: List<ApiProvider>,
     recentSelections: List<ProviderModelSelection>,
     onProviderModelSelected: (ApiProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = LocalStrings.current
+    var modelPickerProvider by remember { mutableStateOf<ApiProvider?>(null) }
+    var modelFilter by remember { mutableStateOf("") }
+    var freeOnly by remember { mutableStateOf(false) }
+    val availableProviders = remember(configuredProviders, currentProvider) {
+        configuredProviders.distinct().ifEmpty { listOf(currentProvider) }
+    }
 
-    val preferredProviderOrder = remember(currentProvider, recentSelections) {
+    val preferredProviderOrder = remember(currentProvider, recentSelections, availableProviders) {
         val recentProviders = recentSelections.map { it.provider }.distinct()
         val ordered = mutableListOf<ApiProvider>()
         ordered.add(currentProvider)
-        ordered.addAll(recentProviders.filter { it != currentProvider })
-        ordered.addAll(ApiProvider.entries.filter { it !in ordered })
+        ordered.addAll(recentProviders.filter { it in availableProviders && it != currentProvider })
+        ordered.addAll(availableProviders.filter { it !in ordered })
         ordered
     }
 
@@ -85,6 +96,11 @@ fun ProviderModelSelectorDialog(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    text = "Configured providers only (${availableProviders.size}/${ApiProvider.entries.size})",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Row(
                     modifier = Modifier
@@ -95,7 +111,9 @@ fun ProviderModelSelectorDialog(
                     chips.forEach { selection ->
                         AssistChip(
                             onClick = {
-                                onProviderModelSelected(selection.provider, selection.modelId)
+                                if (selection.provider in availableProviders) {
+                                    onProviderModelSelected(selection.provider, selection.modelId)
+                                }
                             },
                             label = {
                                 Text(
@@ -137,44 +155,35 @@ fun ProviderModelSelectorDialog(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                                val providerModel = if (provider == currentProvider) {
+                                    currentModelId
+                                } else {
+                                    recentSelections.firstOrNull { it.provider == provider }?.modelId
+                                        ?: provider.defaultModels.firstOrNull().orEmpty()
+                                }
 
-                                provider.defaultModels.forEach { model ->
-                                    Surface(
-                                        onClick = { onProviderModelSelected(provider, model) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = if (provider == currentProvider && model == currentModelId) {
-                                            MaterialTheme.colorScheme.tertiaryContainer
-                                        } else {
-                                            Color.Transparent
-                                        },
-                                        shape = RoundedCornerShape(6.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { onProviderModelSelected(provider, providerModel) },
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = model,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (provider == currentProvider && model == currentModelId) {
-                                                    FontWeight.Bold
-                                                } else {
-                                                    FontWeight.Normal
-                                                }
-                                            )
-                                            if (provider == currentProvider && model == currentModelId) {
-                                                Text(
-                                                    text = "Selected",
-                                                    fontSize = 10.sp,
-                                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                                                )
-                                            }
-                                        }
+                                        Text("Select")
+                                    }
+                                    TextButton(
+                                        onClick = { modelPickerProvider = provider },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Model")
                                     }
                                 }
+                                Text(
+                                    text = "Current: $providerModel",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -190,5 +199,73 @@ fun ProviderModelSelectorDialog(
                 }
             }
         }
+    }
+
+    modelPickerProvider?.let { provider ->
+        val showFreeFilter = provider == ApiProvider.OPENROUTER || provider == ApiProvider.HUGGINGFACE
+        val filteredModels = remember(provider, modelFilter, freeOnly) {
+            provider.defaultModels.filter { model ->
+                val matchesText = modelFilter.isBlank() || model.contains(modelFilter, ignoreCase = true)
+                val matchesFree = !showFreeFilter || !freeOnly || model.contains("free", ignoreCase = true)
+                matchesText && matchesFree
+            }
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { modelPickerProvider = null },
+            title = { Text("Select model for ${provider.displayName}") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = modelFilter,
+                        onValueChange = { modelFilter = it },
+                        label = { Text("Filter models") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (showFreeFilter) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            Checkbox(
+                                checked = freeOnly,
+                                onCheckedChange = { freeOnly = it }
+                            )
+                            Text(
+                                text = "Free",
+                                modifier = Modifier.padding(top = 14.dp)
+                            )
+                        }
+                    }
+                    filteredModels.forEach { model ->
+                        TextButton(
+                            onClick = {
+                                onProviderModelSelected(provider, model)
+                                modelPickerProvider = null
+                                modelFilter = ""
+                                freeOnly = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(model)
+                        }
+                    }
+                    if (filteredModels.isEmpty()) {
+                        Text(
+                            text = "No matching models",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { modelPickerProvider = null }) {
+                    Text(strings.cancel.uppercase())
+                }
+            }
+        )
     }
 }

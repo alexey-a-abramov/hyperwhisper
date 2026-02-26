@@ -103,8 +103,23 @@ class KeyboardViewModel @Inject constructor(
         settingsRepository.recentlyUsedProviderModels
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val configuredProviders: StateFlow<List<ApiProvider>> = apiSettings
+        .map { settings ->
+            ApiProvider.entries.filter { provider -> isProviderConfigured(provider, settings) }
+                .ifEmpty { listOf(settings.provider) }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(ApiProvider.OPENAI))
+
     val usageStatistics: StateFlow<UsageStatistics> = settingsRepository.usageStatistics
         .stateIn(viewModelScope, SharingStarted.Eagerly, UsageStatistics())
+
+    private fun isProviderConfigured(provider: ApiProvider, settings: ApiSettings): Boolean {
+        val config = settings.providerConfigs[provider]
+        val requiresAuth = config?.requiresAuth ?: provider.requiresAuth
+        val baseUrl = config?.customBaseUrl?.ifBlank { provider.defaultEndpoint } ?: provider.defaultEndpoint
+        val hasApiKey = settings.apiKeys[provider]?.isNotBlank() == true
+        return baseUrl.isNotBlank() && (!requiresAuth || hasApiKey)
+    }
 
     // Derived state for selected mode
     val selectedMode: StateFlow<VoiceMode?> = combine(

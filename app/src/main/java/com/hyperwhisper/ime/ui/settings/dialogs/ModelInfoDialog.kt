@@ -151,6 +151,13 @@ fun ModelInfoDialog(
                         Text("• Context understanding", fontSize = 14.sp)
                         Text("• Latest 2.0 Flash model", fontSize = 14.sp)
                     }
+                    ApiProvider.ANTIGRAVITY -> {
+                        Text("Google Antigravity (OAuth)", fontWeight = FontWeight.Medium)
+                        Text("• OAuth-backed quota usage", fontSize = 14.sp)
+                        Text("• OpenAI-compatible endpoint", fontSize = 14.sp)
+                        Text("• API key typically not required", fontSize = 14.sp)
+                        Text("• Chat-completion audio workflow", fontSize = 14.sp)
+                    }
                     ApiProvider.HUGGINGFACE -> {
                         Text("Hugging Face", fontWeight = FontWeight.Medium)
                         Text("• Open source models", fontSize = 14.sp)

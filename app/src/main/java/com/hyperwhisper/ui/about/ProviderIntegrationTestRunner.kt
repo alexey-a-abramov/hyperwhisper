@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 
 data class ProviderIntegrationResult(
     val provider: ApiProvider,
+    val configured: Boolean,
     val success: Boolean,
     val durationMs: Long,
     val statusCode: Int? = null,
@@ -50,9 +51,10 @@ class ProviderIntegrationTestRunner(
         if (requiresAuth && apiKey.isBlank()) {
             return ProviderIntegrationResult(
                 provider = provider,
+                configured = false,
                 success = false,
                 durationMs = 0L,
-                message = "Missing API key"
+                message = "Not configured (missing API key)"
             )
         }
 
@@ -91,6 +93,7 @@ class ProviderIntegrationTestRunner(
 
             ProviderIntegrationResult(
                 provider = provider,
+                configured = true,
                 success = response.isSuccessful,
                 durationMs = elapsedMs,
                 statusCode = response.code(),
@@ -103,6 +106,7 @@ class ProviderIntegrationTestRunner(
         } catch (e: Exception) {
             ProviderIntegrationResult(
                 provider = provider,
+                configured = true,
                 success = false,
                 durationMs = 0L,
                 message = e.message ?: "Network error"

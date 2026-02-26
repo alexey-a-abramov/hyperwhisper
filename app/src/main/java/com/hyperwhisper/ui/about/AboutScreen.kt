@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,6 +57,7 @@ fun AboutScreen(
     updateProbeDetails: UpdateProbeDetails? = null,
     onClearStatistics: () -> Unit,
     onRunIntegrationTests: () -> Unit = {},
+    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit = {},
     onRefreshUpdateProbe: (() -> Unit)? = null
 ) {
     val strings = LocalStrings.current
@@ -377,7 +379,8 @@ ${strings.languageSelectionDesc}""",
                 IntegrationTestSection(
                     running = integrationRunning,
                     results = integrationResults,
-                    onRun = onRunIntegrationTests
+                    onRun = onRunIntegrationTests,
+                    onOpenProviderConfiguration = onOpenProviderConfiguration
                 )
             }
         }
@@ -701,7 +704,8 @@ private fun ProbeResultItem(result: com.hyperwhisper.ime.update.ApkProbeResult) 
 private fun IntegrationTestSection(
     running: Boolean,
     results: List<ProviderIntegrationResult>,
-    onRun: () -> Unit
+    onRun: () -> Unit,
+    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -753,7 +757,13 @@ private fun IntegrationTestSection(
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = if (result.success) "OK" else "FAIL",
+                            text = if (result.configured) "Configured" else "Not configured",
+                            fontSize = 10.sp,
+                            color = if (result.configured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text(
+                            text = if (result.success) "Available" else "Unavailable",
                             fontSize = 11.sp,
                             color = if (result.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
@@ -768,6 +778,9 @@ private fun IntegrationTestSection(
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    TextButton(onClick = { onOpenProviderConfiguration(result.provider) }) {
+                        Text("Open provider configuration")
+                    }
                 }
             }
         }

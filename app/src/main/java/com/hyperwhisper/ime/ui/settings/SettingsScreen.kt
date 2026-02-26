@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.about.AboutActivity
@@ -61,6 +62,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    initialProvider: ApiProvider? = null,
     updateManager: com.hyperwhisper.ime.update.UpdateManager? = null,
     onShowUpdateDialog: (com.hyperwhisper.ime.update.UpdateInfo) -> Unit = {},
     modifier: Modifier = Modifier
@@ -71,7 +73,7 @@ fun SettingsScreen(
     val connectionTestState by viewModel.connectionTestState.collectAsState()
 
     // Local form state for API settings
-    var provider by remember { mutableStateOf(apiSettings.provider) }
+    var provider by remember { mutableStateOf(initialProvider ?: apiSettings.provider) }
     var baseUrl by remember { mutableStateOf(apiSettings.getCurrentBaseUrl()) }
     var apiKey by remember { mutableStateOf(apiSettings.getCurrentApiKey()) }
     var requiresAuth by remember { mutableStateOf(apiSettings.getCurrentRequiresAuth()) }
@@ -101,10 +103,16 @@ fun SettingsScreen(
     }
     val strings = LocalStrings.current
     val coroutineScope = rememberCoroutineScope()
+    var initialProviderApplied by remember { mutableStateOf(false) }
 
     // Synchronize local state when settings change externally
-    LaunchedEffect(apiSettings) {
-        provider = apiSettings.provider
+    LaunchedEffect(apiSettings, initialProvider) {
+        if (initialProvider != null && !initialProviderApplied) {
+            provider = initialProvider
+            initialProviderApplied = true
+        } else if (initialProvider == null) {
+            provider = apiSettings.provider
+        }
         baseUrl = apiSettings.getCurrentBaseUrl()
         apiKey = apiSettings.getCurrentApiKey()
         requiresAuth = apiSettings.getCurrentRequiresAuth()
@@ -285,6 +293,15 @@ fun SettingsScreen(
                     },
                     onShowModelInfo = { showModelInfo = true },
                     onShowProviderKeyHelp = { showProviderKeyHelp = true },
+                    onReuseProviderKeyForLlm = {
+                        llmApiKey = apiKey
+                        if (llmProvider == com.hyperwhisper.data.LlmProvider.NONE) {
+                            llmProvider = com.hyperwhisper.data.LlmProvider.OPENAI
+                            llmBaseUrl = com.hyperwhisper.data.LlmProvider.OPENAI.defaultEndpoint
+                            llmRequiresAuth = com.hyperwhisper.data.LlmProvider.OPENAI.requiresAuth
+                            llmModelId = com.hyperwhisper.data.LlmProvider.OPENAI.defaultModels.firstOrNull() ?: llmModelId
+                        }
+                    },
                     onShowInputLanguageInfo = { showInputLanguageInfo = true },
                     onShowLogsDialog = { showLogsDialog = true },
                     onResetConnectionTestState = { viewModel.resetConnectionTestState() }
@@ -321,6 +338,10 @@ fun SettingsScreen(
                         llmBaseUrl = llmProvider.defaultEndpoint
                         llmRequiresAuth = llmProvider.requiresAuth
                         llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
+                    },
+                    onReuseLlmKeyForProvider = {
+                        apiKey = llmApiKey
+                        if (!requiresAuth) requiresAuth = true
                     },
                     onShowLlmInfo = { showLlmInfo = true }
                 )

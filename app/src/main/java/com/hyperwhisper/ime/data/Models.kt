@@ -285,6 +285,12 @@ enum class ApiProvider(
         defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"),
         requiresAuth = true
     ),
+    ANTIGRAVITY(
+        displayName = "Google Antigravity (OAuth)",
+        defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/openai/",
+        defaultModels = listOf("gemini-2.0-flash-exp", "gemini-1.5-flash"),
+        requiresAuth = false
+    ),
     HUGGINGFACE(
         displayName = "Hugging Face",
         defaultEndpoint = "https://api-inai.endpoints.huggingface.cloud/v1/",

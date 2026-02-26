@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
@@ -12,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +24,8 @@ fun ProviderKeyInstructionsDialog(
     provider: ApiProvider,
     onDismiss: () -> Unit
 ) {
+    val uriHandler = LocalUriHandler.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("How to get API key") },
@@ -39,7 +43,15 @@ fun ProviderKeyInstructionsDialog(
                 )
                 Divider()
                 instructionsFor(provider).forEach { line ->
-                    Text(text = line, fontSize = 14.sp)
+                    Text(text = line.text, fontSize = 14.sp)
+                    line.url?.let { url ->
+                        Text(
+                            text = url,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { uriHandler.openUri(url) }
+                        )
+                    }
                 }
             }
         },
@@ -49,65 +61,75 @@ fun ProviderKeyInstructionsDialog(
     )
 }
 
-private fun instructionsFor(provider: ApiProvider): List<String> = when (provider) {
+private data class ProviderInstructionLine(
+    val text: String,
+    val url: String? = null
+)
+
+private fun instructionsFor(provider: ApiProvider): List<ProviderInstructionLine> = when (provider) {
     ApiProvider.OPENAI -> listOf(
-        "1. Open: https://platform.openai.com/api-keys",
-        "2. Click Create new secret key.",
-        "3. Copy key (starts with sk-) and paste into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://platform.openai.com/api-keys"),
+        ProviderInstructionLine("2. Click Create new secret key."),
+        ProviderInstructionLine("3. Copy key (starts with sk-) and paste into API Key.")
     )
     ApiProvider.DEEPGRAM -> listOf(
-        "1. Open: https://console.deepgram.com/project",
-        "2. Create/select project and open API Keys.",
-        "3. Create key and paste it into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://console.deepgram.com/project"),
+        ProviderInstructionLine("2. Create/select project and open API Keys."),
+        ProviderInstructionLine("3. Create key and paste it into API Key.")
     )
     ApiProvider.ASSEMBLYAI -> listOf(
-        "1. Open: https://www.assemblyai.com/dashboard",
-        "2. Go to API Keys.",
-        "3. Copy key and paste into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://www.assemblyai.com/dashboard"),
+        ProviderInstructionLine("2. Go to API Keys."),
+        ProviderInstructionLine("3. Copy key and paste into API Key.")
     )
     ApiProvider.GOOGLE_CLOUD -> listOf(
-        "1. Open: https://console.cloud.google.com/",
-        "2. Enable Speech-to-Text API for your project.",
-        "3. Create credentials and paste key/token into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://console.cloud.google.com/"),
+        ProviderInstructionLine("2. Enable Speech-to-Text API for your project."),
+        ProviderInstructionLine("3. Create credentials and paste key/token into API Key.")
     )
     ApiProvider.AWS_TRANSCRIBE -> listOf(
-        "1. Open AWS Console: https://console.aws.amazon.com/",
-        "2. Create IAM access key with Transcribe permissions.",
-        "3. Use your proxy/gateway key format in API Key field."
+        ProviderInstructionLine("1. Open AWS Console:", "https://console.aws.amazon.com/"),
+        ProviderInstructionLine("2. Create IAM access key with Transcribe permissions."),
+        ProviderInstructionLine("3. Use your proxy/gateway key format in API Key field.")
     )
     ApiProvider.AZURE_SPEECH -> listOf(
-        "1. Open: https://portal.azure.com/",
-        "2. Create Speech resource and open Keys and Endpoint.",
-        "3. Copy key and set endpoint + API Key."
+        ProviderInstructionLine("1. Open this page:", "https://portal.azure.com/"),
+        ProviderInstructionLine("2. Create Speech resource and open Keys and Endpoint."),
+        ProviderInstructionLine("3. Copy key and set endpoint + API Key.")
     )
     ApiProvider.REVAI -> listOf(
-        "1. Open: https://www.rev.ai/auth/signup",
-        "2. Create account and generate access token.",
-        "3. Paste token into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://www.rev.ai/auth/signup"),
+        ProviderInstructionLine("2. Create account and generate access token."),
+        ProviderInstructionLine("3. Paste token into API Key.")
     )
     ApiProvider.GROQ -> listOf(
-        "1. Open: https://console.groq.com/keys",
-        "2. Create API key.",
-        "3. Paste into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://console.groq.com/keys"),
+        ProviderInstructionLine("2. Create API key."),
+        ProviderInstructionLine("3. Paste into API Key.")
     )
     ApiProvider.OPENROUTER -> listOf(
-        "1. Open: https://openrouter.ai/keys",
-        "2. Create key.",
-        "3. Paste into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://openrouter.ai/keys"),
+        ProviderInstructionLine("2. Create key."),
+        ProviderInstructionLine("3. Paste into API Key.")
     )
     ApiProvider.GEMINI -> listOf(
-        "1. Open: https://aistudio.google.com/app/apikey",
-        "2. Create API key.",
-        "3. Paste into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://aistudio.google.com/app/apikey"),
+        ProviderInstructionLine("2. Create API key."),
+        ProviderInstructionLine("3. Paste into API Key.")
+    )
+    ApiProvider.ANTIGRAVITY -> listOf(
+        ProviderInstructionLine("1. Use Google OAuth-backed access to reuse available quota."),
+        ProviderInstructionLine("2. Configure Base URL to the Antigravity endpoint."),
+        ProviderInstructionLine("3. Keep API key disabled unless your gateway requires one.")
     )
     ApiProvider.HUGGINGFACE -> listOf(
-        "1. Open: https://huggingface.co/settings/tokens",
-        "2. Create access token.",
-        "3. Paste token into API Key."
+        ProviderInstructionLine("1. Open this page:", "https://huggingface.co/settings/tokens"),
+        ProviderInstructionLine("2. Create access token."),
+        ProviderInstructionLine("3. Paste token into API Key.")
     )
     ApiProvider.SELFHOSTED_WHISPER -> listOf(
-        "1. Deploy your own OpenAI-compatible Whisper server.",
-        "2. Put server URL into Base URL.",
-        "3. If auth enabled on server, paste token into API Key."
+        ProviderInstructionLine("1. Deploy your own OpenAI-compatible Whisper server."),
+        ProviderInstructionLine("2. Put server URL into Base URL."),
+        ProviderInstructionLine("3. If auth enabled on server, paste token into API Key.")
     )
 }

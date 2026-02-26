@@ -55,6 +55,7 @@ fun ApiConfigSection(
     onResetDefaults: () -> Unit,
     onShowModelInfo: () -> Unit,
     onShowProviderKeyHelp: () -> Unit,
+    onReuseProviderKeyForLlm: () -> Unit,
     onShowInputLanguageInfo: () -> Unit,
     onShowLogsDialog: () -> Unit,
     onResetConnectionTestState: () -> Unit,
@@ -132,6 +133,16 @@ fun ApiConfigSection(
             Text("How to get API key")
         }
 
+        if (apiKey.isNotBlank()) {
+            Spacer(Modifier.padding(vertical = 4.dp))
+            OutlinedButton(
+                onClick = onReuseProviderKeyForLlm,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Reuse this key for post-processing")
+            }
+        }
+
         Spacer(Modifier.padding(vertical = 8.dp))
     }
 
@@ -143,6 +154,7 @@ fun ApiConfigSection(
         verticalAlignment = Alignment.CenterVertically
     ) {
         ModelSelector(
+            provider = provider,
             selectedModel = modelId,
             availableModels = provider.defaultModels,
             onModelSelected = onModelIdChange,

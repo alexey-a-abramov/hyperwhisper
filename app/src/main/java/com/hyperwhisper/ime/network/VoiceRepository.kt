@@ -249,6 +249,9 @@ class VoiceRepository @Inject constructor(
         // Gemini supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.GEMINI) return false
 
+        // Antigravity provider is OpenAI-compatible chat endpoint with audio support
+        if (apiSettings.provider == ApiProvider.ANTIGRAVITY) return false
+
         // Hugging Face is text-only - requires two-step for all audio input
         if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
 
@@ -447,6 +450,11 @@ class VoiceRepository @Inject constructor(
             // Gemini always uses chat completion (supports audio natively)
             provider == ApiProvider.GEMINI -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (Gemini)")
+                chatCompletionStrategy
+            }
+            // Antigravity uses OpenAI-compatible chat completion with OAuth-backed quota
+            provider == ApiProvider.ANTIGRAVITY -> {
+                Log.d(TAG, "Selected ChatCompletionStrategy (Antigravity)")
                 chatCompletionStrategy
             }
             // Hugging Face always uses chat completion (text-only LLMs)

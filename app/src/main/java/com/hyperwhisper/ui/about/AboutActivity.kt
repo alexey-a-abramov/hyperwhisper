@@ -2,6 +2,7 @@ package com.hyperwhisper.ui.about
 
 import android.content.pm.PackageInfo
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.SettingsRepository
 import com.hyperwhisper.ime.update.UpdateManager
 import com.hyperwhisper.ime.update.UpdateProbeDetails
+import com.hyperwhisper.ui.settings.SettingsActivity
 import com.hyperwhisper.ui.theme.HyperWhisperTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +100,12 @@ class AboutActivity : ComponentActivity() {
                                     runningIntegration = false
                                 }
                             }
+                        },
+                        onOpenProviderConfiguration = { provider ->
+                            val intent = Intent(this@AboutActivity, SettingsActivity::class.java).apply {
+                                putExtra(SettingsActivity.EXTRA_PROVIDER_NAME, provider.name)
+                            }
+                            startActivity(intent)
                         },
                         onRefreshUpdateProbe = {
                             lifecycleScope.launch {
