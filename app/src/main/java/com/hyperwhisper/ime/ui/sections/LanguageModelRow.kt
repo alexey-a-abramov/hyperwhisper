@@ -44,6 +44,7 @@ fun LanguageModelRow(
     onShowInputLanguageDialog: () -> Unit,
     onShowOutputLanguageDialog: () -> Unit,
     onShowConfigInfo: () -> Unit,
+    onShowProviderModelDialog: () -> Unit,
     onShowModeDialog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -112,11 +113,29 @@ fun LanguageModelRow(
 
         // Provider/Model Info Button (MIDDLE RIGHT) - Shows provider and model
         Surface(
+            onClick = {
+                if (recordingState == RecordingState.IDLE) {
+                    onShowProviderModelDialog()
+                }
+            },
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 48.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(8.dp)
+            color = if (recordingState == RecordingState.IDLE) {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            },
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(
+                1.5.dp,
+                if (recordingState == RecordingState.IDLE) {
+                    MaterialTheme.colorScheme.secondary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                }
+            ),
+            enabled = recordingState == RecordingState.IDLE
         ) {
             Row(
                 modifier = Modifier
@@ -130,14 +149,22 @@ fun LanguageModelRow(
                         text = apiSettings.provider.displayName,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = if (recordingState == RecordingState.IDLE) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
                         maxLines = 1
                     )
                     Text(
                         text = apiSettings.modelId,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        color = if (recordingState == RecordingState.IDLE) {
+                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        },
                         maxLines = 1
                     )
                 }

@@ -83,20 +83,29 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideProviderModelTrackingRepository(
+        @ApplicationContext context: Context,
+        gson: Gson
+    ): ProviderModelTrackingRepository = ProviderModelTrackingRepository(context, gson)
+
+    @Provides
+    @Singleton
     fun provideSettingsRepository(
         apiSettingsRepository: ApiSettingsRepository,
         voiceModesRepository: VoiceModesRepository,
         appearanceRepository: AppearanceRepository,
         usageStatisticsRepository: UsageStatisticsRepository,
         historyRepository: HistoryRepository,
-        languageTrackingRepository: LanguageTrackingRepository
+        languageTrackingRepository: LanguageTrackingRepository,
+        providerModelTrackingRepository: ProviderModelTrackingRepository
     ): SettingsRepository = SettingsRepository(
         apiSettingsRepository,
         voiceModesRepository,
         appearanceRepository,
         usageStatisticsRepository,
         historyRepository,
-        languageTrackingRepository
+        languageTrackingRepository,
+        providerModelTrackingRepository
     )
 
     @Provides

@@ -99,6 +99,10 @@ class KeyboardViewModel @Inject constructor(
     val recentlyUsedLanguages: StateFlow<List<String>> = settingsRepository.recentlyUsedLanguages
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val recentlyUsedProviderModels: StateFlow<List<ProviderModelSelection>> =
+        settingsRepository.recentlyUsedProviderModels
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val usageStatistics: StateFlow<UsageStatistics> = settingsRepository.usageStatistics
         .stateIn(viewModelScope, SharingStarted.Eagerly, UsageStatistics())
 
@@ -208,6 +212,7 @@ class KeyboardViewModel @Inject constructor(
         val mode = selectedMode.value
         val appearance = appearanceSettings.value
         val shouldSaveAudio = appearance.saveOriginalAudioFiles
+        settingsRepository.trackProviderModelUsage(settings.provider, settings.modelId)
 
         if (mode == null) {
             recordingViewModel.setError("No voice mode selected")
@@ -341,6 +346,27 @@ class KeyboardViewModel @Inject constructor(
             // Track language usage
             settingsRepository.trackLanguageUsage(languageCode)
             Log.d(TAG, "Output language changed to: ${if (languageCode.isEmpty()) "Auto" else languageCode}")
+        }
+    }
+
+    /**
+     * Set provider and model from quick picker.
+     */
+    fun setProviderAndModel(provider: ApiProvider, modelId: String) {
+        viewModelScope.launch {
+            val currentSettings = apiSettings.value
+            val providerBaseUrl = currentSettings.providerConfigs[provider]
+                ?.customBaseUrl
+                ?.ifEmpty { provider.defaultEndpoint }
+                ?: provider.defaultEndpoint
+            val updatedSettings = currentSettings.copy(
+                provider = provider,
+                baseUrl = providerBaseUrl,
+                modelId = modelId
+            )
+            settingsRepository.saveApiSettings(updatedSettings)
+            settingsRepository.trackProviderModelUsage(provider, modelId)
+            Log.d(TAG, "Provider/model changed to: ${provider.displayName} / $modelId")
         }
     }
 

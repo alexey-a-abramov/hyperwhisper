@@ -294,7 +294,7 @@ enum class ApiProvider(
     SELFHOSTED_WHISPER(
         displayName = "Self-hosted Whisper",
         defaultEndpoint = "http://64.227.114.236:8000/v1/",
-        defaultModels = listOf("whisper-tiny", "whisper-small"),
+        defaultModels = listOf("whisper-tiny", "whisper-small", "whisper-base"),
         requiresAuth = false
     )
 }
@@ -611,7 +611,8 @@ fun getModelPricing(modelId: String): ModelPricing {
         modelId == "base" || modelId == "small" || modelId == "medium" ||
         modelId == "large" || modelId == "large-v2" || modelId == "large-v3" ||
         modelId.contains("whisper-tiny", ignoreCase = true) ||
-        modelId.contains("whisper-small", ignoreCase = true) ->
+        modelId.contains("whisper-small", ignoreCase = true) ||
+        modelId.contains("whisper-base", ignoreCase = true) ->
             ModelPricing(audioPerMinute = 0.0)
 
         // OpenAI Whisper - $0.006 per minute (exclude self-hosted and groq models)

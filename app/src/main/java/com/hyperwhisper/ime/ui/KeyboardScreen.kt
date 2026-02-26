@@ -60,6 +60,7 @@ import com.hyperwhisper.ui.sections.TopControlsRow
 import com.hyperwhisper.ui.dialogs.ModeSelectionDialog
 import com.hyperwhisper.ui.dialogs.CancelRecordingConfirmationDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
+import com.hyperwhisper.ui.selectors.ProviderModelSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
 
 private enum class KeyboardInputMode {
@@ -111,6 +112,7 @@ fun KeyboardScreen(
     val apiSettings by viewModel.apiSettings.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
+    val recentlyUsedProviderModels by viewModel.recentlyUsedProviderModels.collectAsState()
     val usageStatistics by viewModel.usageStatistics.collectAsState()
     val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
     val lastAudioFileSize by viewModel.lastAudioFileSize.collectAsState()
@@ -126,6 +128,7 @@ fun KeyboardScreen(
     var showHistoryPanel by remember { mutableStateOf(false) }
     var showTimerText by remember { mutableStateOf(true) }
     var showModeDialog by remember { mutableStateOf(false) }
+    var showProviderModelDialog by remember { mutableStateOf(false) }
     var keyboardInputMode by remember { mutableStateOf(KeyboardInputMode.DICTATION) }
     var lastSpacePressTime by remember { mutableStateOf(0L) }
 
@@ -254,6 +257,7 @@ fun KeyboardScreen(
                     onShowInputLanguageDialog = { showInputLanguageDialog = true },
                     onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
                     onShowConfigInfo = { showConfigInfo = true },
+                    onShowProviderModelDialog = { showProviderModelDialog = true },
                     onShowModeDialog = { showModeDialog = true },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -381,6 +385,20 @@ fun KeyboardScreen(
                     showInputLanguageDialog = false
                 },
                 onDismiss = { showInputLanguageDialog = false }
+            )
+        }
+
+        // Show Provider + Model Dialog
+        if (showProviderModelDialog) {
+            ProviderModelSelectorDialog(
+                currentProvider = apiSettings.provider,
+                currentModelId = apiSettings.modelId,
+                recentSelections = recentlyUsedProviderModels,
+                onProviderModelSelected = { provider, modelId ->
+                    viewModel.setProviderAndModel(provider, modelId)
+                    showProviderModelDialog = false
+                },
+                onDismiss = { showProviderModelDialog = false }
             )
         }
 

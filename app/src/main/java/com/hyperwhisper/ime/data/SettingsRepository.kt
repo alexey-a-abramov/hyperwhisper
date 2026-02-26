@@ -21,7 +21,8 @@ class SettingsRepository @Inject constructor(
     private val appearanceRepository: AppearanceRepository,
     private val usageStatisticsRepository: UsageStatisticsRepository,
     private val historyRepository: HistoryRepository,
-    private val languageTrackingRepository: LanguageTrackingRepository
+    private val languageTrackingRepository: LanguageTrackingRepository,
+    private val providerModelTrackingRepository: ProviderModelTrackingRepository
 ) {
     // ============================================================================
     // API Settings - Delegated to ApiSettingsRepository
@@ -34,6 +35,12 @@ class SettingsRepository @Inject constructor(
 
     suspend fun updateProviderApiKey(provider: ApiProvider, apiKey: String) =
         apiSettingsRepository.updateProviderApiKey(provider, apiKey)
+
+    suspend fun updateProviderConfig(provider: ApiProvider, customBaseUrl: String, requiresAuth: Boolean) =
+        apiSettingsRepository.updateProviderConfig(provider, customBaseUrl, requiresAuth)
+
+    suspend fun updateLlmConfig(llmConfig: LlmConfig) =
+        apiSettingsRepository.updateLlmConfig(llmConfig)
 
     suspend fun resetApiSettingsToDefaults(provider: ApiProvider) =
         apiSettingsRepository.resetToDefaults(provider)
@@ -119,4 +126,14 @@ class SettingsRepository @Inject constructor(
 
     suspend fun trackLanguageUsage(languageCode: String) =
         languageTrackingRepository.trackLanguageUsage(languageCode)
+
+    // ============================================================================
+    // Provider/Model Tracking - Delegated to ProviderModelTrackingRepository
+    // ============================================================================
+
+    val recentlyUsedProviderModels: Flow<List<ProviderModelSelection>> =
+        providerModelTrackingRepository.recentlyUsedProviderModels
+
+    suspend fun trackProviderModelUsage(provider: ApiProvider, modelId: String) =
+        providerModelTrackingRepository.trackProviderModelUsage(provider, modelId)
 }
