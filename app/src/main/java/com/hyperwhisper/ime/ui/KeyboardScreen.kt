@@ -12,6 +12,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,6 +43,7 @@ import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.buttons.InputLanguageButton
@@ -62,12 +64,7 @@ import com.hyperwhisper.ui.dialogs.CancelRecordingConfirmationDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ProviderModelSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
-
-private enum class KeyboardInputMode {
-    DICTATION,
-    QWERTY,
-    SPECIAL_CHARS
-}
+import kotlinx.coroutines.CoroutineScope
 
 private enum class KeyboardActionStyle {
     NORMAL,
@@ -95,6 +92,12 @@ fun KeyboardScreen(
     onEnter: () -> Unit = {},
     onMoveCursorLeft: () -> Unit = {},
     onMoveCursorRight: () -> Unit = {},
+    onMoveCursorUp: () -> Unit = {},
+    onMoveCursorDown: () -> Unit = {},
+    onPageUp: () -> Unit = {},
+    onPageDown: () -> Unit = {},
+    onHome: () -> Unit = {},
+    onEnd: () -> Unit = {},
     onInsertClipboard: () -> Unit = {},
     onSwitchKeyboard: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -132,8 +135,9 @@ fun KeyboardScreen(
     var showTimerText by remember { mutableStateOf(true) }
     var showModeDialog by remember { mutableStateOf(false) }
     var showProviderModelDialog by remember { mutableStateOf(false) }
-    var keyboardInputMode by remember { mutableStateOf(KeyboardInputMode.DICTATION) }
+    var keyboardInputMode by remember { mutableStateOf(appearanceSettings.lastKeyboardInputMode) }
     var lastSpacePressTime by remember { mutableStateOf(0L) }
+    val coroutineScope = rememberCoroutineScope()
 
     // Track last transcribed text for paste button
     // Initialize from history if available
@@ -148,6 +152,14 @@ fun KeyboardScreen(
 
     // Get clipboard manager
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+
+    // Save keyboard input mode to settings whenever it changes
+    LaunchedEffect(keyboardInputMode) {
+        if (keyboardInputMode != appearanceSettings.lastKeyboardInputMode) {
+            val updatedSettings = appearanceSettings.copy(lastKeyboardInputMode = keyboardInputMode)
+            viewModel.saveKeyboardInputMode(updatedSettings)
+        }
+    }
 
     val handleSpacePress = {
         val currentTime = System.currentTimeMillis()
@@ -309,7 +321,7 @@ fun KeyboardScreen(
                     onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY }
                 )
             } else {
-                TextKeyboardSection(
+                TextKeyboardSectionNew(
                     mode = keyboardInputMode,
                     onModeChange = { keyboardInputMode = it },
                     onKeyPress = onTextCommit,
@@ -318,6 +330,12 @@ fun KeyboardScreen(
                     onEnter = onEnter,
                     onMoveCursorLeft = onMoveCursorLeft,
                     onMoveCursorRight = onMoveCursorRight,
+                    onMoveCursorUp = onMoveCursorUp,
+                    onMoveCursorDown = onMoveCursorDown,
+                    onPageUp = onPageUp,
+                    onPageDown = onPageDown,
+                    onHome = onHome,
+                    onEnd = onEnd,
                     onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
                     modifier = Modifier.weight(1f)
                 )
@@ -491,7 +509,7 @@ fun KeyboardScreen(
 }
 
 @Composable
-private fun TextKeyboardSection(
+private fun TextKeyboardSectionNew(
     mode: KeyboardInputMode,
     onModeChange: (KeyboardInputMode) -> Unit,
     onKeyPress: (String) -> Unit,
@@ -500,14 +518,28 @@ private fun TextKeyboardSection(
     onEnter: () -> Unit,
     onMoveCursorLeft: () -> Unit,
     onMoveCursorRight: () -> Unit,
+    onMoveCursorUp: () -> Unit,
+    onMoveCursorDown: () -> Unit,
+    onPageUp: () -> Unit,
+    onPageDown: () -> Unit,
+    onHome: () -> Unit,
+    onEnd: () -> Unit,
     onReturnToDictation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isSpecialChars = mode == KeyboardInputMode.SPECIAL_CHARS
     var shiftEnabled by remember { mutableStateOf(false) }
+    var capsLockEnabled by remember { mutableStateOf(false) }
+    
     val letterCase: (String) -> String = { key ->
-        if (shiftEnabled && key.all { it.isLetter() }) key.uppercase() else key
+        when {
+            capsLockEnabled -> key.uppercase()
+            shiftEnabled && key.all { it.isLetter() } -> key.uppercase()
+            else -> key
+        }
     }
+
+    val isSpecialChars = mode == KeyboardInputMode.SPECIAL_CHARS
+
     val topRows = if (isSpecialChars) {
         listOf(
             listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
@@ -523,182 +555,345 @@ private fun TextKeyboardSection(
         )
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth().fillMaxHeight(),
-        color = KeyboardSurfaceColor,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        val horizontalGap = 1.dp
-        val verticalGap = 2.dp
-        val bottomRowHeight = (maxHeight * 0.16f).coerceIn(32.dp, 44.dp)
-        val cursorRowHeight = (maxHeight * 0.13f).coerceIn(28.dp, 38.dp)
-        val keyRowCount = topRows.size + if (isSpecialChars) 1 else 2
-        val totalVerticalGaps = verticalGap * (keyRowCount + 1)
-        val reservedHeight = bottomRowHeight + if (isSpecialChars) 0.dp else cursorRowHeight
-        val availableKeyHeight = (maxHeight - reservedHeight - totalVerticalGaps).coerceAtLeast(110.dp)
-        val keyHeight = (availableKeyHeight / keyRowCount).coerceIn(20.dp, 40.dp)
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(verticalGap)
-        ) {
-            topRows.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    row.forEach { key ->
-                        if (key.isEmpty()) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        } else {
-                            KeyboardKeyButton(
-                                label = key,
-                                onClick = {
-                                    val out = if (isSpecialChars) key else letterCase(key)
-                                    onKeyPress(out)
-                                    if (shiftEnabled && !isSpecialChars && key.all { it.isLetter() }) {
-                                        shiftEnabled = false
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                height = keyHeight
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (isSpecialChars) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    listOf(",", "_", "@", "#", "$", "€", "£", "¥", "§", "⌫").forEach { key ->
-                        KeyboardKeyButton(
-                            label = key,
-                            onClick = { if (key == "⌫") onDelete() else onKeyPress(key) },
-                            modifier = Modifier.weight(1f),
-                            height = keyHeight
-                        )
-                    }
-                }
-            } else {
-                // Shift on the left, then letters, then backspace. 10 fixed cells.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    KeyboardActionButton(
-                        icon = if (shiftEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
-                        onClick = { shiftEnabled = !shiftEnabled },
-                        modifier = Modifier.weight(1f),
-                        style = KeyboardActionStyle.NORMAL,
-                        height = keyHeight
-                    )
-                    listOf("z", "x", "c", "v", "b", "n", "m", "").forEach { key ->
-                        if (key.isEmpty()) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        } else {
-                            KeyboardKeyButton(
-                                label = key,
-                                onClick = {
-                                    onKeyPress(letterCase(key))
-                                    if (shiftEnabled) shiftEnabled = false
-                                },
-                                modifier = Modifier.weight(1f),
-                                height = keyHeight
-                            )
-                        }
-                    }
-                    KeyboardActionButton(
-                        icon = Icons.Default.Backspace,
-                        onClick = onDelete,
-                        modifier = Modifier.weight(1f),
-                        style = KeyboardActionStyle.BACKSPACE,
-                        height = keyHeight
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(cursorRowHeight),
-                    horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    KeyboardActionButton(
-                        icon = Icons.Default.KeyboardArrowLeft,
-                        onClick = onMoveCursorLeft,
-                        modifier = Modifier.weight(1f),
-                        style = KeyboardActionStyle.NORMAL
-                    )
-                    KeyboardActionButton(
-                        icon = Icons.Default.KeyboardArrowRight,
-                        onClick = onMoveCursorRight,
-                        modifier = Modifier.weight(1f),
-                        style = KeyboardActionStyle.NORMAL
-                    )
-                    KeyboardActionButton(
-                        icon = Icons.Default.KeyboardReturn,
-                        onClick = onEnter,
-                        modifier = Modifier.weight(1f),
-                        style = KeyboardActionStyle.ENTER
-                    )
-                    repeat(7) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(bottomRowHeight),
-                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                verticalAlignment = Alignment.CenterVertically
+    when (mode) {
+        KeyboardInputMode.SYSTEM_KEYS -> {
+            // System keys layout
+            Surface(
+                modifier = modifier.fillMaxWidth().fillMaxHeight(),
+                color = KeyboardSurfaceColor,
+                shape = RoundedCornerShape(10.dp)
             ) {
-                KeyboardActionButton(
-                    label = if (isSpecialChars) "ABC" else "?123",
-                    onClick = {
-                        onModeChange(
-                            if (isSpecialChars) KeyboardInputMode.QWERTY else KeyboardInputMode.SPECIAL_CHARS
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // F-keys row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        (1..12).forEach { num ->
+                            KeyboardKeyButton(
+                                label = "F$num",
+                                onClick = { onKeyPress("\u001B[$num~") },
+                                modifier = Modifier.weight(1f),
+                                height = 40.dp
+                            )
+                        }
+                    }
+
+                    // Navigation row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        KeyboardActionButton(
+                            label = "HOME",
+                            onClick = onHome,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
                         )
-                    },
-                    modifier = Modifier.weight(1f),
-                    style = KeyboardActionStyle.NORMAL
-                )
+                        KeyboardActionButton(
+                            label = "END",
+                            onClick = onEnd,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        KeyboardActionButton(
+                            label = "PG↑",
+                            onClick = onPageUp,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        KeyboardActionButton(
+                            label = "PG↓",
+                            onClick = onPageDown,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                    }
 
-                KeyboardActionButton(
-                    label = ",",
-                    onClick = { onKeyPress(",") },
-                    modifier = Modifier.weight(1f),
-                    style = KeyboardActionStyle.NORMAL
-                )
+                    // Cursor keys
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowUp,
+                            onClick = onMoveCursorUp,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        Spacer(Modifier.weight(2f))
+                    }
 
-                KeyboardActionButton(
-                    icon = Icons.Default.Mic,
-                    onClick = onReturnToDictation,
-                    modifier = Modifier.weight(1f),
-                    style = KeyboardActionStyle.NORMAL
-                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowLeft,
+                            onClick = onMoveCursorLeft,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowDown,
+                            onClick = onMoveCursorDown,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowRight,
+                            onClick = onMoveCursorRight,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = 40.dp
+                        )
+                        Spacer(Modifier.weight(1f))
+                    }
 
-                KeyboardActionButton(
-                    label = "space",
-                    onClick = onSpacePress,
-                    modifier = Modifier.weight(7f),
-                    style = KeyboardActionStyle.SPACE
-                )
+                    Spacer(Modifier.weight(1f))
+
+                    // Bottom row
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        KeyboardActionButton(
+                            label = "ABC",
+                            onClick = { onModeChange(KeyboardInputMode.QWERTY) },
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.Mic,
+                            onClick = onReturnToDictation,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL
+                        )
+                        KeyboardActionButton(
+                            label = "space",
+                            onClick = onSpacePress,
+                            modifier = Modifier.weight(4f),
+                            style = KeyboardActionStyle.SPACE
+                        )
+                        RepeatingActionButton(
+                            icon = Icons.Default.Backspace,
+                            onAction = onDelete,
+                            style = KeyboardActionStyle.BACKSPACE,
+                            modifier = Modifier.weight(1f)
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardReturn,
+                            onClick = onEnter,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.ENTER
+                        )
+                    }
+                }
+            }
+        }
+        else -> {
+            // QWERTY and SPECIAL_CHARS layouts
+            Surface(
+                modifier = modifier.fillMaxWidth().fillMaxHeight(),
+                color = KeyboardSurfaceColor,
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val horizontalGap = 1.dp
+                    val verticalGap = 2.dp
+                    // Calculate total rows: topRows + shiftRow + (cursorRow if QWERTY) + bottomRow
+                    val totalRows = if (isSpecialChars) {
+                        topRows.size + 1 + 1 // topRows + symbols row + bottom row
+                    } else {
+                        topRows.size + 1 + 1 + 1 // topRows + shift row + cursor row + bottom row
+                    }
+                    val totalVerticalGaps = verticalGap * (totalRows + 1)
+                    val availableHeight = maxHeight - totalVerticalGaps
+                    val keyHeight = (availableHeight / totalRows).coerceIn(28.dp, 42.dp)
+
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(verticalGap)
+                    ) {
+                        topRows.forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                row.forEach { key ->
+                                    if (key.isEmpty()) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    } else {
+                                        KeyboardKeyButton(
+                                            label = key,
+                                            onClick = {
+                                                val out = if (isSpecialChars) key else letterCase(key)
+                                                onKeyPress(out)
+                                                if (shiftEnabled && !isSpecialChars && key.all { it.isLetter() }) {
+                                                    shiftEnabled = false
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isSpecialChars) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf(",", "_", "@", "#", "$", "€", "£", "¥", "§", "⌫").forEach { key ->
+                                    KeyboardKeyButton(
+                                        label = key,
+                                        onClick = { if (key == "⌫") onDelete() else onKeyPress(key) },
+                                        modifier = Modifier.weight(1f),
+                                        height = keyHeight
+                                    )
+                                }
+                            }
+                        } else {
+                            // Shift on the left, then letters, then backspace
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(keyHeight),
+                                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                KeyboardActionButton(
+                                    icon = if (shiftEnabled || capsLockEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
+                                    onClick = {
+                                        if (shiftEnabled) {
+                                            capsLockEnabled = true
+                                            shiftEnabled = false
+                                        } else if (capsLockEnabled) {
+                                            capsLockEnabled = false
+                                        } else {
+                                            shiftEnabled = true
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    style = KeyboardActionStyle.NORMAL,
+                                    height = keyHeight
+                                )
+                                listOf("z", "x", "c", "v", "b", "n", "m", "").forEach { key ->
+                                    if (key.isEmpty()) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    } else {
+                                        KeyboardKeyButton(
+                                            label = key,
+                                            onClick = {
+                                                onKeyPress(letterCase(key))
+                                                if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    }
+                                }
+                                KeyboardActionButton(
+                                    icon = Icons.Default.Backspace,
+                                    onClick = onDelete,
+                                    modifier = Modifier.weight(1f),
+                                    style = KeyboardActionStyle.BACKSPACE,
+                                    height = keyHeight
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(keyHeight),
+                                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                KeyboardActionButton(
+                                    icon = Icons.Default.KeyboardArrowLeft,
+                                    onClick = onMoveCursorLeft,
+                                    modifier = Modifier.weight(1f),
+                                    style = KeyboardActionStyle.NORMAL,
+                                    height = keyHeight
+                                )
+                                KeyboardActionButton(
+                                    icon = Icons.Default.KeyboardArrowRight,
+                                    onClick = onMoveCursorRight,
+                                    modifier = Modifier.weight(1f),
+                                    style = KeyboardActionStyle.NORMAL,
+                                    height = keyHeight
+                                )
+                                KeyboardActionButton(
+                                    icon = Icons.Default.KeyboardReturn,
+                                    onClick = onEnter,
+                                    modifier = Modifier.weight(1f),
+                                    style = KeyboardActionStyle.ENTER,
+                                    height = keyHeight
+                                )
+                                repeat(7) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(keyHeight),
+                            horizontalArrangement = Arrangement.spacedBy(horizontalGap),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            KeyboardActionButton(
+                                label = if (isSpecialChars) "ABC" else "?123",
+                                onClick = {
+                                    onModeChange(
+                                        if (isSpecialChars) KeyboardInputMode.QWERTY else KeyboardInputMode.SPECIAL_CHARS
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                style = KeyboardActionStyle.NORMAL,
+                                height = keyHeight
+                            )
+                            KeyboardActionButton(
+                                label = ",",
+                                onClick = { onKeyPress(",") },
+                                modifier = Modifier.weight(1f),
+                                style = KeyboardActionStyle.NORMAL,
+                                height = keyHeight
+                            )
+                            KeyboardActionButton(
+                                icon = Icons.Default.Mic,
+                                onClick = onReturnToDictation,
+                                modifier = Modifier.weight(1f),
+                                style = KeyboardActionStyle.NORMAL,
+                                height = keyHeight
+                            )
+                            KeyboardActionButton(
+                                label = "space",
+                                onClick = onSpacePress,
+                                modifier = Modifier.weight(7f),
+                                style = KeyboardActionStyle.SPACE,
+                                height = keyHeight
+                            )
+                        }
+                    }
+                }
             }
         }
     }
-    }
 }
+
 
 @Composable
 private fun KeyboardKeyButton(
@@ -723,6 +918,68 @@ private fun KeyboardKeyButton(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = KeyboardKeyTextColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun RepeatingActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onAction: () -> Unit,
+    style: KeyboardActionStyle = KeyboardActionStyle.NORMAL,
+    modifier: Modifier = Modifier,
+    initialDelayMs: Long = 500L,
+    repeatDelayMs: Long = 50L
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var isPressed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            delay(initialDelayMs)
+            while (isPressed) {
+                onAction()
+                delay(repeatDelayMs)
+            }
+        }
+    }
+
+    val backgroundColor = when (style) {
+        KeyboardActionStyle.NORMAL -> KeyboardKeyColor
+        KeyboardActionStyle.SPACE -> KeyboardSpaceColor
+        KeyboardActionStyle.BACKSPACE -> KeyboardBackspaceColor
+        KeyboardActionStyle.ENTER -> KeyboardEnterColor
+    }
+    val contentColor = when (style) {
+        KeyboardActionStyle.NORMAL -> KeyboardKeyTextColor
+        else -> KeyboardSpecialTextColor
+    }
+
+    Surface(
+        modifier = modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    onAction() // Fire immediately on press
+                    tryAwaitRelease()
+                    isPressed = false
+                },
+                onTap = { } // Already handled in onPress
+            )
+        },
+        shape = RoundedCornerShape(10.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = "repeating action",
+                tint = contentColor
             )
         }
     }
