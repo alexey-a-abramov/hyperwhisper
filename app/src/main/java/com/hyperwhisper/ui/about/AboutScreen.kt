@@ -17,8 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import android.widget.Toast
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
@@ -34,8 +36,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,10 +61,12 @@ fun AboutScreen(
     integrationResults: List<ProviderIntegrationResult> = emptyList(),
     integrationRunning: Boolean = false,
     updateProbeDetails: UpdateProbeDetails? = null,
+    updateManager: com.hyperwhisper.ime.update.UpdateManager? = null,
     onClearStatistics: () -> Unit,
     onRunIntegrationTests: () -> Unit = {},
     onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit = {},
-    onRefreshUpdateProbe: (() -> Unit)? = null
+    onRefreshUpdateProbe: (() -> Unit)? = null,
+    onShowUpdateDialog: (com.hyperwhisper.ime.update.UpdateInfo) -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current

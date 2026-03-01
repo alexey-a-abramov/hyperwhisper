@@ -712,25 +712,26 @@ private fun TextKeyboardSectionNew(
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    val horizontalGap = 1.dp
-                    val verticalGap = 2.dp
-                    // Calculate total rows: topRows + shiftRow + (cursorRow if QWERTY) + bottomRow
+                    val horizontalGap = 2.dp
+                    val verticalGap = 4.dp
+                    // Calculate total rows: topRows + shiftRow + bottomRow
                     val totalRows = if (isSpecialChars) {
                         topRows.size + 1 + 1 // topRows + symbols row + bottom row
                     } else {
-                        topRows.size + 1 + 1 + 1 // topRows + shift row + cursor row + bottom row
+                        topRows.size + 1 + 1 // topRows + shift row + bottom row
                     }
                     val totalVerticalGaps = verticalGap * (totalRows + 1)
                     val availableHeight = maxHeight - totalVerticalGaps
-                    val keyHeight = (availableHeight / totalRows).coerceIn(28.dp, 42.dp)
+                    val keyHeight = (availableHeight / totalRows).coerceIn(32.dp, 48.dp)
 
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(4.dp),
                         verticalArrangement = Arrangement.spacedBy(verticalGap)
                     ) {
+                        // Number row
                         topRows.forEach { row ->
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().height(keyHeight),
                                 horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -739,7 +740,7 @@ private fun TextKeyboardSectionNew(
                                         Spacer(modifier = Modifier.weight(1f))
                                     } else {
                                         KeyboardKeyButton(
-                                            label = key,
+                                            label = if (isSpecialChars) key else letterCase(key),
                                             onClick = {
                                                 val out = if (isSpecialChars) key else letterCase(key)
                                                 onKeyPress(out)
@@ -756,8 +757,9 @@ private fun TextKeyboardSectionNew(
                         }
 
                         if (isSpecialChars) {
+                            // Special characters row
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().height(keyHeight),
                                 horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -771,14 +773,14 @@ private fun TextKeyboardSectionNew(
                                 }
                             }
                         } else {
-                            // Shift on the left, then letters, then backspace
+                            // Shift row (z-m with shift and backspace)
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(keyHeight),
                                 horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 KeyboardActionButton(
-                                    icon = if (shiftEnabled || capsLockEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
+                                    icon = if (capsLockEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
                                     onClick = {
                                         if (shiftEnabled) {
                                             capsLockEnabled = true
@@ -789,71 +791,38 @@ private fun TextKeyboardSectionNew(
                                             shiftEnabled = true
                                         }
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1.5f),
                                     style = KeyboardActionStyle.NORMAL,
                                     height = keyHeight
                                 )
-                                listOf("z", "x", "c", "v", "b", "n", "m", "").forEach { key ->
-                                    if (key.isEmpty()) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    } else {
-                                        KeyboardKeyButton(
-                                            label = key,
-                                            onClick = {
-                                                onKeyPress(letterCase(key))
-                                                if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                            height = keyHeight
-                                        )
-                                    }
+                                listOf("z", "x", "c", "v", "b", "n", "m").forEach { key ->
+                                    KeyboardKeyButton(
+                                        label = letterCase(key),
+                                        onClick = {
+                                            onKeyPress(letterCase(key))
+                                            if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        height = keyHeight
+                                    )
                                 }
                                 KeyboardActionButton(
                                     icon = Icons.Default.Backspace,
                                     onClick = onDelete,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1.5f),
                                     style = KeyboardActionStyle.BACKSPACE,
                                     height = keyHeight
                                 )
                             }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(keyHeight),
-                                horizontalArrangement = Arrangement.spacedBy(horizontalGap),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                KeyboardActionButton(
-                                    icon = Icons.Default.KeyboardArrowLeft,
-                                    onClick = onMoveCursorLeft,
-                                    modifier = Modifier.weight(1f),
-                                    style = KeyboardActionStyle.NORMAL,
-                                    height = keyHeight
-                                )
-                                KeyboardActionButton(
-                                    icon = Icons.Default.KeyboardArrowRight,
-                                    onClick = onMoveCursorRight,
-                                    modifier = Modifier.weight(1f),
-                                    style = KeyboardActionStyle.NORMAL,
-                                    height = keyHeight
-                                )
-                                KeyboardActionButton(
-                                    icon = Icons.Default.KeyboardReturn,
-                                    onClick = onEnter,
-                                    modifier = Modifier.weight(1f),
-                                    style = KeyboardActionStyle.ENTER,
-                                    height = keyHeight
-                                )
-                                repeat(7) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
                         }
 
+                        // Bottom row with all controls
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // ?123/ABC button
                             KeyboardActionButton(
                                 label = if (isSpecialChars) "ABC" else "?123",
                                 onClick = {
@@ -861,29 +830,46 @@ private fun TextKeyboardSectionNew(
                                         if (isSpecialChars) KeyboardInputMode.QWERTY else KeyboardInputMode.SPECIAL_CHARS
                                     )
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1.2f),
                                 style = KeyboardActionStyle.NORMAL,
                                 height = keyHeight
                             )
-                            KeyboardActionButton(
+                            // Comma
+                            KeyboardKeyButton(
                                 label = ",",
                                 onClick = { onKeyPress(",") },
-                                modifier = Modifier.weight(1f),
-                                style = KeyboardActionStyle.NORMAL,
+                                modifier = Modifier.weight(0.8f),
                                 height = keyHeight
                             )
+                            // Mic/Globe button
                             KeyboardActionButton(
                                 icon = Icons.Default.Mic,
                                 onClick = onReturnToDictation,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(0.8f),
                                 style = KeyboardActionStyle.NORMAL,
                                 height = keyHeight
                             )
+                            // Space bar
                             KeyboardActionButton(
                                 label = "space",
                                 onClick = onSpacePress,
-                                modifier = Modifier.weight(7f),
+                                modifier = Modifier.weight(4f),
                                 style = KeyboardActionStyle.SPACE,
+                                height = keyHeight
+                            )
+                            // Period
+                            KeyboardKeyButton(
+                                label = ".",
+                                onClick = { onKeyPress(".") },
+                                modifier = Modifier.weight(0.8f),
+                                height = keyHeight
+                            )
+                            // Enter/Return
+                            KeyboardActionButton(
+                                icon = Icons.Default.KeyboardReturn,
+                                onClick = onEnter,
+                                modifier = Modifier.weight(1.2f),
+                                style = KeyboardActionStyle.ENTER,
                                 height = keyHeight
                             )
                         }

@@ -7,23 +7,28 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Api
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -36,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,7 +50,6 @@ import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.about.AboutActivity
-import com.hyperwhisper.ui.settings.components.cards.ProviderStatusCard
 import com.hyperwhisper.ui.settings.components.cards.SectionCard
 import com.hyperwhisper.ui.settings.dialogs.AddModeDialog
 import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
@@ -53,10 +58,19 @@ import com.hyperwhisper.ui.settings.dialogs.LogsInfoDialog
 import com.hyperwhisper.ui.settings.dialogs.ModelInfoDialog
 import com.hyperwhisper.ui.settings.dialogs.ProviderKeyInstructionsDialog
 import com.hyperwhisper.ui.settings.sections.ApiConfigSection
-import com.hyperwhisper.ui.settings.sections.AppUpdateSection
 import com.hyperwhisper.ui.settings.sections.AppearanceSection
 import com.hyperwhisper.ui.settings.sections.VoiceModesSection
 import kotlinx.coroutines.launch
+
+private enum class SettingsTab(
+    val title: String,
+    val icon: ImageVector
+) {
+    API_CONFIG("API & Models", Icons.Default.Api),
+    LLM_CONFIG("Post-Processing", Icons.Default.AutoAwesome),
+    VOICE_MODES("Voice Modes", Icons.Default.Mic),
+    APPEARANCE("Appearance", Icons.Default.Palette)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +85,11 @@ fun SettingsScreen(
     val voiceModes by viewModel.voiceModes.collectAsState()
     val appearanceSettings by viewModel.appearanceSettings.collectAsState()
     val connectionTestState by viewModel.connectionTestState.collectAsState()
+    val apiCallLogs by viewModel.apiCallLogs.collectAsState()
+    val apiCallStatistics by viewModel.apiCallStatistics.collectAsState()
+
+    // Tab state
+    var selectedTab by remember { mutableStateOf(SettingsTab.API_CONFIG) }
 
     // Local form state for API settings
     var provider by remember { mutableStateOf(initialProvider ?: apiSettings.provider) }
@@ -96,6 +115,7 @@ fun SettingsScreen(
     var editingMode by remember { mutableStateOf<VoiceMode?>(null) }
     var showLogsDialog by remember { mutableStateOf(false) }
     var showProviderKeyHelp by remember { mutableStateOf(false) }
+    var showApiCallLogs by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val clipboardManager = remember {
@@ -239,158 +259,212 @@ fun SettingsScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Provider Status Card
-            item {
-                ProviderStatusCard(
-                    provider = provider,
-                    modelId = modelId
-                )
-            }
-
-            // API Configuration Section
-            item {
-                Text(
-                    text = "API Configuration",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item { Divider() }
-
-            item {
-                ApiConfigSection(
-                    provider = provider,
-                    baseUrl = baseUrl,
-                    apiKey = apiKey,
-                    requiresAuth = requiresAuth,
-                    modelId = modelId,
-                    inputLanguage = inputLanguage,
-                    outputLanguage = outputLanguage,
-                    connectionTestState = connectionTestState,
-                    onProviderChange = { provider = it },
-                    onBaseUrlChange = { baseUrl = it },
-                    onApiKeyChange = { apiKey = it },
-                    onRequiresAuthChange = { requiresAuth = it },
-                    onModelIdChange = { modelId = it },
-                    onInputLanguageChange = { inputLanguage = it },
-                    onOutputLanguageChange = { outputLanguage = it },
-                    onTestConnection = {
-                        viewModel.testConnection(baseUrl, apiKey, modelId)
-                    },
-                    onResetDefaults = {
-                        baseUrl = provider.defaultEndpoint
-                        requiresAuth = provider.requiresAuth
-                        modelId = provider.defaultModels.firstOrNull() ?: modelId
-                    },
-                    onShowModelInfo = { showModelInfo = true },
-                    onShowProviderKeyHelp = { showProviderKeyHelp = true },
-                    onReuseProviderKeyForLlm = {
-                        llmApiKey = apiKey
-                        if (llmProvider == com.hyperwhisper.data.LlmProvider.NONE) {
-                            llmProvider = com.hyperwhisper.data.LlmProvider.OPENAI
-                            llmBaseUrl = com.hyperwhisper.data.LlmProvider.OPENAI.defaultEndpoint
-                            llmRequiresAuth = com.hyperwhisper.data.LlmProvider.OPENAI.requiresAuth
-                            llmModelId = com.hyperwhisper.data.LlmProvider.OPENAI.defaultModels.firstOrNull() ?: llmModelId
+            // Tab Row
+            TabRow(
+                selectedTabIndex = selectedTab.ordinal,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                SettingsTab.values().forEach { tab ->
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
+                        text = {
+                            Text(
+                                text = tab.title,
+                                fontSize = 13.sp,
+                                fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.title
+                            )
                         }
-                    },
-                    onShowInputLanguageInfo = { showInputLanguageInfo = true },
-                    onShowLogsDialog = { showLogsDialog = true },
-                    onResetConnectionTestState = { viewModel.resetConnectionTestState() }
-                )
-            }
-
-            // LLM Configuration Section
-            item { Divider() }
-
-            item {
-                Text(
-                    text = "Post-Processing LLM",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item { Divider() }
-
-            item {
-                com.hyperwhisper.ui.settings.sections.LlmConfigSection(
-                    llmProvider = llmProvider,
-                    llmBaseUrl = llmBaseUrl,
-                    llmApiKey = llmApiKey,
-                    llmRequiresAuth = llmRequiresAuth,
-                    llmModelId = llmModelId,
-                    onLlmProviderChange = { llmProvider = it },
-                    onLlmBaseUrlChange = { llmBaseUrl = it },
-                    onLlmApiKeyChange = { llmApiKey = it },
-                    onLlmRequiresAuthChange = { llmRequiresAuth = it },
-                    onLlmModelIdChange = { llmModelId = it },
-                    onResetLlmDefaults = {
-                        llmBaseUrl = llmProvider.defaultEndpoint
-                        llmRequiresAuth = llmProvider.requiresAuth
-                        llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
-                    },
-                    onReuseLlmKeyForProvider = {
-                        apiKey = llmApiKey
-                        if (!requiresAuth) requiresAuth = true
-                    },
-                    onShowLlmInfo = { showLlmInfo = true }
-                )
-            }
-
-            // Appearance Section
-            item { Divider() }
-
-            item {
-                SectionCard(
-                    title = strings.appearanceSettings,
-                    icon = Icons.Default.Palette
-                ) {
-                    AppearanceSection(
-                        appearanceSettings = appearanceSettings,
-                        onSettingsChange = { viewModel.saveAppearanceSettings(it) }
                     )
                 }
             }
 
-            // Voice Modes Section
-            item { Divider() }
+            // Tab Content
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                when (selectedTab) {
+                    SettingsTab.API_CONFIG -> {
+                        item {
+                            Text(
+                                text = "Transcription API",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-            item {
-                VoiceModesSection(
-                    voiceModes = voiceModes,
-                    onAddMode = { showAddModeDialog = true },
-                    onEditMode = { editingMode = it },
-                    onDeleteMode = { viewModel.deleteVoiceMode(it) }
-                )
-            }
+                        item { Divider() }
 
-            // App Update Section
-            item { Divider() }
+                        item {
+                            ApiConfigSection(
+                                provider = provider,
+                                baseUrl = baseUrl,
+                                apiKey = apiKey,
+                                requiresAuth = requiresAuth,
+                                modelId = modelId,
+                                inputLanguage = inputLanguage,
+                                outputLanguage = outputLanguage,
+                                connectionTestState = connectionTestState,
+                                llmApiKey = llmApiKey,
+                                onProviderChange = { provider = it },
+                                onBaseUrlChange = { baseUrl = it },
+                                onApiKeyChange = { apiKey = it },
+                                onRequiresAuthChange = { requiresAuth = it },
+                                onModelIdChange = { modelId = it },
+                                onInputLanguageChange = { inputLanguage = it },
+                                onOutputLanguageChange = { outputLanguage = it },
+                                onTestConnection = {
+                                    viewModel.testConnection(baseUrl, apiKey, modelId)
+                                },
+                                onResetDefaults = {
+                                    baseUrl = provider.defaultEndpoint
+                                    requiresAuth = provider.requiresAuth
+                                    modelId = provider.defaultModels.firstOrNull() ?: modelId
+                                },
+                                onShowModelInfo = { showModelInfo = true },
+                                onShowProviderKeyHelp = { showProviderKeyHelp = true },
+                                onReuseProviderKeyForLlm = {
+                                    llmApiKey = apiKey
+                                    if (llmProvider == com.hyperwhisper.data.LlmProvider.NONE) {
+                                        llmProvider = com.hyperwhisper.data.LlmProvider.OPENAI
+                                        llmBaseUrl = com.hyperwhisper.data.LlmProvider.OPENAI.defaultEndpoint
+                                        llmRequiresAuth = com.hyperwhisper.data.LlmProvider.OPENAI.requiresAuth
+                                        llmModelId = com.hyperwhisper.data.LlmProvider.OPENAI.defaultModels.firstOrNull() ?: llmModelId
+                                    }
+                                },
+                                onShowInputLanguageInfo = { showInputLanguageInfo = true },
+                                onShowLogsDialog = { showLogsDialog = true },
+                                onShowApiCallLogs = { showApiCallLogs = true },
+                                onResetConnectionTestState = { viewModel.resetConnectionTestState() }
+                            )
+                        }
+                    }
 
-            item {
-                Text(
-                    text = "App",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+                    SettingsTab.LLM_CONFIG -> {
+                        item {
+                            Text(
+                                text = "Post-Processing LLM",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-            item {
-                AppUpdateSection(
-                    updateManager = updateManager,
-                    onShowUpdateDialog = onShowUpdateDialog
-                )
+                        item {
+                            Text(
+                                text = "Configure the LLM used for transforming and translating transcriptions",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        item { Divider() }
+
+                        item {
+                            com.hyperwhisper.ui.settings.sections.LlmConfigSection(
+                                llmProvider = llmProvider,
+                                llmBaseUrl = llmBaseUrl,
+                                llmApiKey = llmApiKey,
+                                llmRequiresAuth = llmRequiresAuth,
+                                llmModelId = llmModelId,
+                                providerApiKey = apiKey,
+                                onLlmProviderChange = { llmProvider = it },
+                                onLlmBaseUrlChange = { llmBaseUrl = it },
+                                onLlmApiKeyChange = { llmApiKey = it },
+                                onLlmRequiresAuthChange = { llmRequiresAuth = it },
+                                onLlmModelIdChange = { llmModelId = it },
+                                onResetLlmDefaults = {
+                                    llmBaseUrl = llmProvider.defaultEndpoint
+                                    llmRequiresAuth = llmProvider.requiresAuth
+                                    llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
+                                },
+                                onReuseLlmKeyForProvider = {
+                                    apiKey = llmApiKey
+                                    if (!requiresAuth) requiresAuth = true
+                                },
+                                onShowLlmInfo = { showLlmInfo = true }
+                            )
+                        }
+                    }
+
+                    SettingsTab.VOICE_MODES -> {
+                        item {
+                            Text(
+                                text = "Voice Modes",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        item {
+                            Text(
+                                text = "Customize how your transcriptions are processed and formatted",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        item { Divider() }
+
+                        item {
+                            VoiceModesSection(
+                                voiceModes = voiceModes,
+                                onAddMode = { showAddModeDialog = true },
+                                onEditMode = { editingMode = it },
+                                onDeleteMode = { viewModel.deleteVoiceMode(it) }
+                            )
+                        }
+                    }
+
+                    SettingsTab.APPEARANCE -> {
+                        item {
+                            Text(
+                                text = "Appearance",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        item {
+                            Text(
+                                text = "Customize the look and feel of HyperWhisper",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        item { Divider() }
+
+                        item {
+                            SectionCard(
+                                title = strings.appearanceSettings,
+                                icon = Icons.Default.Palette
+                            ) {
+                                AppearanceSection(
+                                    appearanceSettings = appearanceSettings,
+                                    onSettingsChange = { viewModel.saveAppearanceSettings(it) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -468,6 +542,19 @@ fun SettingsScreen(
                 viewModel.updateVoiceMode(updatedMode)
                 editingMode = null
             }
+        )
+    }
+
+    if (showApiCallLogs) {
+        ApiCallLogsScreen(
+            logs = apiCallLogs,
+            statistics = apiCallStatistics,
+            onClearLogs = {
+                coroutineScope.launch {
+                    viewModel.clearApiCallLogs()
+                }
+            },
+            onDismiss = { showApiCallLogs = false }
         )
     }
 }
