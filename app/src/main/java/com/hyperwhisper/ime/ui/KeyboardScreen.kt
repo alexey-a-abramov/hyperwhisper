@@ -80,6 +80,90 @@ private val KeyboardSpaceColor = Color(0xFFFFEB3B)
 private val KeyboardBackspaceColor = Color(0xFFD32F2F)
 private val KeyboardEnterColor = Color(0xFF00C853)
 private val KeyboardSpecialTextColor = Color(0xFF000000)
+private val KeyboardModeSwitcherColor = Color(0xFF424242)
+
+@Composable
+private fun UnifiedModeSwitcher(
+    currentMode: KeyboardInputMode,
+    onModeChange: (KeyboardInputMode) -> Unit,
+    onReturnToDictation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // ABC+123 button
+        Surface(
+            onClick = {
+                when (currentMode) {
+                    KeyboardInputMode.QWERTY -> onModeChange(KeyboardInputMode.SPECIAL_CHARS)
+                    KeyboardInputMode.SPECIAL_CHARS -> onModeChange(KeyboardInputMode.QWERTY)
+                    else -> onModeChange(KeyboardInputMode.QWERTY)
+                }
+            },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(6.dp),
+            color = if (currentMode == KeyboardInputMode.QWERTY || currentMode == KeyboardInputMode.SPECIAL_CHARS)
+                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "ABC",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+
+        // Dictation button (with mic icon)
+        Surface(
+            onClick = onReturnToDictation,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(6.dp),
+            color = if (currentMode == KeyboardInputMode.DICTATION)
+                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Dictation",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // Vibe Coding button
+        Surface(
+            onClick = { onModeChange(KeyboardInputMode.VIBE_CODING) },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(6.dp),
+            color = if (currentMode == KeyboardInputMode.VIBE_CODING)
+                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "</>",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun KeyboardScreen(
@@ -663,27 +747,23 @@ private fun TextKeyboardSectionNew(
 
                     Spacer(Modifier.weight(1f))
 
-                    // Bottom row
+                    // Bottom row with unified mode switcher
                     Row(
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        KeyboardActionButton(
-                            label = "ABC",
-                            onClick = { onModeChange(KeyboardInputMode.QWERTY) },
-                            modifier = Modifier.weight(1f),
-                            style = KeyboardActionStyle.NORMAL
+                        // Unified mode switcher (left)
+                        UnifiedModeSwitcher(
+                            currentMode = mode,
+                            onModeChange = onModeChange,
+                            onReturnToDictation = onReturnToDictation,
+                            modifier = Modifier.weight(2f).fillMaxHeight()
                         )
-                        KeyboardActionButton(
-                            icon = Icons.Default.Mic,
-                            onClick = onReturnToDictation,
-                            modifier = Modifier.weight(1f),
-                            style = KeyboardActionStyle.NORMAL
-                        )
+
                         KeyboardActionButton(
                             label = "space",
                             onClick = onSpacePress,
-                            modifier = Modifier.weight(4f),
+                            modifier = Modifier.weight(3f),
                             style = KeyboardActionStyle.SPACE
                         )
                         RepeatingActionButton(
@@ -692,6 +772,200 @@ private fun TextKeyboardSectionNew(
                             style = KeyboardActionStyle.BACKSPACE,
                             modifier = Modifier.weight(1f)
                         )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardReturn,
+                            onClick = onEnter,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.ENTER
+                        )
+                    }
+                }
+            }
+        }
+        KeyboardInputMode.VIBE_CODING -> {
+            // Vibe Coding mode - programmer's keyboard
+            Surface(
+                modifier = modifier.fillMaxWidth().fillMaxHeight(),
+                color = KeyboardSurfaceColor,
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    val keyHeight = 38.dp
+
+                    // Row 1: Common brackets and symbols
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf("{", "}", "[", "]", "(", ")", "<", ">", "/", "\\").forEach { key ->
+                            KeyboardKeyButton(
+                                label = key,
+                                onClick = { onKeyPress(key) },
+                                modifier = Modifier.weight(1f),
+                                height = keyHeight
+                            )
+                        }
+                    }
+
+                    // Row 2: Special operators
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf("&", "|", "^", "~", "!", "?", ":", ";", "=", "_").forEach { key ->
+                            KeyboardKeyButton(
+                                label = key,
+                                onClick = { onKeyPress(key) },
+                                modifier = Modifier.weight(1f),
+                                height = keyHeight
+                            )
+                        }
+                    }
+
+                    // Row 3: More symbols
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf("@", "#", "$", "%", "*", "+", "-", ".", ",", "\"").forEach { key ->
+                            KeyboardKeyButton(
+                                label = key,
+                                onClick = { onKeyPress(key) },
+                                modifier = Modifier.weight(1f),
+                                height = keyHeight
+                            )
+                        }
+                    }
+
+                    // Row 4: Navigation cluster
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        KeyboardActionButton(
+                            label = "HOME",
+                            onClick = onHome,
+                            modifier = Modifier.weight(1.2f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            label = "END",
+                            onClick = onEnd,
+                            modifier = Modifier.weight(1.2f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            label = "PG↑",
+                            onClick = onPageUp,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            label = "PG↓",
+                            onClick = onPageDown,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowUp,
+                            onClick = onMoveCursorUp,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.Backspace,
+                            onClick = onDelete,
+                            modifier = Modifier.weight(1.2f),
+                            style = KeyboardActionStyle.BACKSPACE,
+                            height = keyHeight
+                        )
+                    }
+
+                    // Row 5: Cursor controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        KeyboardKeyButton(
+                            label = "Tab",
+                            onClick = { onKeyPress("\t") },
+                            modifier = Modifier.weight(1.5f),
+                            height = keyHeight
+                        )
+                        KeyboardKeyButton(
+                            label = "'",
+                            onClick = { onKeyPress("'") },
+                            modifier = Modifier.weight(1f),
+                            height = keyHeight
+                        )
+                        KeyboardKeyButton(
+                            label = "`",
+                            onClick = { onKeyPress("`") },
+                            modifier = Modifier.weight(1f),
+                            height = keyHeight
+                        )
+                        Spacer(modifier = Modifier.weight(1.5f))
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowLeft,
+                            onClick = onMoveCursorLeft,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowDown,
+                            onClick = onMoveCursorDown,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardArrowRight,
+                            onClick = onMoveCursorRight,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL,
+                            height = keyHeight
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Bottom row with unified mode switcher and mic
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(45.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        // Unified mode switcher (left)
+                        UnifiedModeSwitcher(
+                            currentMode = mode,
+                            onModeChange = onModeChange,
+                            onReturnToDictation = onReturnToDictation,
+                            modifier = Modifier.weight(2f).fillMaxHeight()
+                        )
+
+                        KeyboardActionButton(
+                            label = "space",
+                            onClick = onSpacePress,
+                            modifier = Modifier.weight(3f),
+                            style = KeyboardActionStyle.SPACE
+                        )
+
+                        // Small mic button for recording in coding mode
+                        KeyboardActionButton(
+                            icon = Icons.Default.Mic,
+                            onClick = onReturnToDictation,
+                            modifier = Modifier.weight(1f),
+                            style = KeyboardActionStyle.NORMAL
+                        )
+
                         KeyboardActionButton(
                             icon = Icons.Default.KeyboardReturn,
                             onClick = onEnter,
@@ -816,44 +1090,32 @@ private fun TextKeyboardSectionNew(
                             }
                         }
 
-                        // Bottom row with all controls
+                        // Bottom row with unified mode switcher
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // ?123/ABC button
-                            KeyboardActionButton(
-                                label = if (isSpecialChars) "ABC" else "?123",
-                                onClick = {
-                                    onModeChange(
-                                        if (isSpecialChars) KeyboardInputMode.QWERTY else KeyboardInputMode.SPECIAL_CHARS
-                                    )
-                                },
-                                modifier = Modifier.weight(1.2f),
-                                style = KeyboardActionStyle.NORMAL,
-                                height = keyHeight
+                            // Unified mode switcher (left)
+                            UnifiedModeSwitcher(
+                                currentMode = mode,
+                                onModeChange = onModeChange,
+                                onReturnToDictation = onReturnToDictation,
+                                modifier = Modifier.weight(2f).height(keyHeight)
                             )
+
                             // Comma
                             KeyboardKeyButton(
                                 label = ",",
                                 onClick = { onKeyPress(",") },
-                                modifier = Modifier.weight(0.8f),
-                                height = keyHeight
-                            )
-                            // Mic/Globe button
-                            KeyboardActionButton(
-                                icon = Icons.Default.Mic,
-                                onClick = onReturnToDictation,
-                                modifier = Modifier.weight(0.8f),
-                                style = KeyboardActionStyle.NORMAL,
+                                modifier = Modifier.weight(0.7f),
                                 height = keyHeight
                             )
                             // Space bar
                             KeyboardActionButton(
                                 label = "space",
                                 onClick = onSpacePress,
-                                modifier = Modifier.weight(4f),
+                                modifier = Modifier.weight(3.5f),
                                 style = KeyboardActionStyle.SPACE,
                                 height = keyHeight
                             )
@@ -861,14 +1123,14 @@ private fun TextKeyboardSectionNew(
                             KeyboardKeyButton(
                                 label = ".",
                                 onClick = { onKeyPress(".") },
-                                modifier = Modifier.weight(0.8f),
+                                modifier = Modifier.weight(0.7f),
                                 height = keyHeight
                             )
                             // Enter/Return
                             KeyboardActionButton(
                                 icon = Icons.Default.KeyboardReturn,
                                 onClick = onEnter,
-                                modifier = Modifier.weight(1.2f),
+                                modifier = Modifier.weight(1f),
                                 style = KeyboardActionStyle.ENTER,
                                 height = keyHeight
                             )

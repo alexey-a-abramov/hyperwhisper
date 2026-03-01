@@ -510,7 +510,8 @@ enum class KeyboardInputMode(val displayName: String) {
     DICTATION("Voice Input"),
     QWERTY("ABC Keyboard"),
     SPECIAL_CHARS("Symbols"),
-    SYSTEM_KEYS("System Keys")
+    SYSTEM_KEYS("System Keys"),
+    VIBE_CODING("Vibe Coding")
 }
 
 // Appearance settings data class
