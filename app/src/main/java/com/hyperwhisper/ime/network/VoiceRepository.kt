@@ -20,6 +20,7 @@ class VoiceRepository @Inject constructor(
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
     private val settingsRepository: SettingsRepository,
+    private val apiCallLogRepository: ApiCallLogRepository,
     private val gson: Gson
 ) {
     companion object {
@@ -88,9 +89,9 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): ApiResult<String> {
+        val processingStartTime = System.currentTimeMillis()
+        val audioFileSizeBytes = audioFile.length()
         return try {
-            val processingStartTime = System.currentTimeMillis()
-            val audioFileSizeBytes = audioFile.length()
 
             Log.d(TAG, "=== PROCESSING STARTED ===")
             Log.d(TAG, "File: ${audioFile.name}")
@@ -214,6 +215,21 @@ class VoiceRepository @Inject constructor(
                             )
                         }
 
+                        // Log API call
+                        apiCallLogRepository.addLog(
+                            ApiCallLog(
+                                provider = apiSettings.provider,
+                                modelId = apiSettings.modelId,
+                                requestType = strategyName,
+                                inputSize = audioFileSizeBytes,
+                                responseText = result.data.take(100), // First 100 chars
+                                success = true,
+                                errorMessage = null,
+                                durationMs = totalProcessingTimeMs,
+                                tokenUsage = result.processingInfo?.transcriptionTokens
+                            )
+                        )
+
                         ApiResult.Success(result.data, processingInfo)
                     }
                     else -> result
@@ -221,6 +237,21 @@ class VoiceRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing audio", e)
+
+            // Log API call error
+            apiCallLogRepository.addLog(
+                ApiCallLog(
+                    provider = apiSettings.provider,
+                    modelId = apiSettings.modelId,
+                    requestType = "transcription",
+                    inputSize = audioFile.length(),
+                    responseText = null,
+                    success = false,
+                    errorMessage = e.message,
+                    durationMs = System.currentTimeMillis() - processingStartTime
+                )
+            )
+
             ApiResult.Error("Processing failed: ${e.message}", e)
         }
     }

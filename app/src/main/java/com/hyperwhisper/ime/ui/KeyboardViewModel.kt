@@ -365,6 +365,16 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Save keyboard input mode preference
+     */
+    fun saveKeyboardInputMode(settings: AppearanceSettings) {
+        viewModelScope.launch {
+            settingsRepository.saveAppearanceSettings(settings)
+            Log.d(TAG, "Keyboard input mode saved: ${settings.lastKeyboardInputMode}")
+        }
+    }
+
+    /**
      * Set provider and model from quick picker.
      */
     fun setProviderAndModel(provider: ApiProvider, modelId: String) {

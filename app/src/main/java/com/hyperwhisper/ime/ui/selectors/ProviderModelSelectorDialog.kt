@@ -72,131 +72,153 @@ fun ProviderModelSelectorDialog(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        tonalElevation = 16.dp
+        color = MaterialTheme.colorScheme.surface
     ) {
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(16.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Header section
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    text = "Provider + Model",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Configured providers only (${availableProviders.size}/${ApiProvider.entries.size})",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    chips.forEach { selection ->
-                        AssistChip(
-                            onClick = {
-                                if (selection.provider in availableProviders) {
-                                    onProviderModelSelected(selection.provider, selection.modelId)
-                                }
-                            },
-                            label = {
-                                Text(
-                                    text = "${selection.provider.displayName}: ${selection.modelId}",
-                                    maxLines = 1
-                                )
-                            }
-                        )
-                    }
+                    Text(
+                        text = "SELECT PROVIDER + MODEL",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Choose your transcription provider and model",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "Configured: ${availableProviders.size}/${ApiProvider.entries.size}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
                 }
+            }
 
-                Divider()
+            // Recent selections chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                chips.forEach { selection ->
+                    AssistChip(
+                        onClick = {
+                            if (selection.provider in availableProviders) {
+                                onProviderModelSelected(selection.provider, selection.modelId)
+                            }
+                        },
+                        label = {
+                            Text(
+                                text = "${selection.provider.displayName}: ${selection.modelId}",
+                                maxLines = 1
+                            )
+                        }
+                    )
+                }
+            }
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(preferredProviderOrder.size) { index ->
-                        val provider = preferredProviderOrder[index]
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (provider == currentProvider) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                                } else {
-                                    MaterialTheme.colorScheme.surface
-                                }
-                            ),
-                            shape = RoundedCornerShape(10.dp)
+            Divider()
+
+            // Provider list
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(preferredProviderOrder.size) { index ->
+                    val provider = preferredProviderOrder[index]
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (provider == currentProvider) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        tonalElevation = if (provider == currentProvider) 6.dp else 2.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = provider.displayName,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                val providerModel = if (provider == currentProvider) {
-                                    currentModelId
+                            Text(
+                                text = provider.displayName,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (provider == currentProvider) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
-                                    recentSelections.firstOrNull { it.provider == provider }?.modelId
-                                        ?: provider.defaultModels.firstOrNull().orEmpty()
+                                    MaterialTheme.colorScheme.onSurfaceVariant
                                 }
+                            )
+                            val providerModel = if (provider == currentProvider) {
+                                currentModelId
+                            } else {
+                                recentSelections.firstOrNull { it.provider == provider }?.modelId
+                                    ?: provider.defaultModels.firstOrNull().orEmpty()
+                            }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { onProviderModelSelected(provider, providerModel) },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Select")
-                                    }
-                                    TextButton(
-                                        onClick = { modelPickerProvider = provider },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Model")
-                                    }
+                            Text(
+                                text = "Current: $providerModel",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (provider == currentProvider) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                                 }
-                                Text(
-                                    text = "Current: $providerModel",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { onProviderModelSelected(provider, providerModel) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("SELECT", fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { modelPickerProvider = provider },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("PICK MODEL", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
+            }
 
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                ) {
-                    Text(strings.cancel.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+            // Bottom close button
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Text(strings.cancel.uppercase(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

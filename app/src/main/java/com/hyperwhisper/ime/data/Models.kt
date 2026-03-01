@@ -505,6 +505,14 @@ enum class DarkModePreference(val displayName: String) {
     DARK("Always Dark")
 }
 
+// Keyboard input mode options
+enum class KeyboardInputMode(val displayName: String) {
+    DICTATION("Voice Input"),
+    QWERTY("ABC Keyboard"),
+    SPECIAL_CHARS("Symbols"),
+    SYSTEM_KEYS("System Keys")
+}
+
 // Appearance settings data class
 data class AppearanceSettings(
     val colorScheme: ColorSchemeOption = ColorSchemeOption.OCEAN_DEEP,
@@ -519,7 +527,8 @@ data class AppearanceSettings(
     val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
     val saveOriginalAudioFiles: Boolean = false, // Save audio files for playback/reprocessing from history
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
-    val unlimitedHistory: Boolean = false // If true, maxHistoryItems is ignored
+    val unlimitedHistory: Boolean = false, // If true, maxHistoryItems is ignored
+    val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION // Remember last keyboard mode
 )
 
 /**

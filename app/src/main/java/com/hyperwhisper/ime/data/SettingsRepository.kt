@@ -22,7 +22,8 @@ class SettingsRepository @Inject constructor(
     private val usageStatisticsRepository: UsageStatisticsRepository,
     private val historyRepository: HistoryRepository,
     private val languageTrackingRepository: LanguageTrackingRepository,
-    private val providerModelTrackingRepository: ProviderModelTrackingRepository
+    private val providerModelTrackingRepository: ProviderModelTrackingRepository,
+    private val apiCallLogRepository: ApiCallLogRepository
 ) {
     // ============================================================================
     // API Settings - Delegated to ApiSettingsRepository
@@ -136,4 +137,28 @@ class SettingsRepository @Inject constructor(
 
     suspend fun trackProviderModelUsage(provider: ApiProvider, modelId: String) =
         providerModelTrackingRepository.trackProviderModelUsage(provider, modelId)
+
+    // ============================================================================
+    // API Call Logs - Delegated to ApiCallLogRepository
+    // ============================================================================
+
+    val apiCallLogs: Flow<List<ApiCallLog>> = apiCallLogRepository.logs
+
+    suspend fun addApiCallLog(log: ApiCallLog) =
+        apiCallLogRepository.addLog(log)
+
+    fun getApiCallLogsForProvider(provider: ApiProvider): List<ApiCallLog> =
+        apiCallLogRepository.getLogsForProvider(provider)
+
+    fun getApiCallLogsForModel(provider: ApiProvider, modelId: String): List<ApiCallLog> =
+        apiCallLogRepository.getLogsForModel(provider, modelId)
+
+    fun getApiCallLogsGroupedByModel(): Map<String, List<ApiCallLog>> =
+        apiCallLogRepository.getLogsGroupedByModel()
+
+    fun getApiCallStatistics(): ApiCallStatistics =
+        apiCallLogRepository.getStatistics()
+
+    suspend fun clearApiCallLogs() =
+        apiCallLogRepository.clearAllLogs()
 }

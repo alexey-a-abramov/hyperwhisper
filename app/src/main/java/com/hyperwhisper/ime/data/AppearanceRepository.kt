@@ -38,6 +38,7 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY = booleanPreferencesKey("appearance_save_original_audio_files")
         private val APPEARANCE_MAX_HISTORY_ITEMS_KEY = stringPreferencesKey("appearance_max_history_items")
         private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
+        private val APPEARANCE_LAST_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_last_keyboard_mode")
     }
 
     /**
@@ -82,7 +83,14 @@ class AppearanceRepository @Inject constructor(
             showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false,
             saveOriginalAudioFiles = preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] ?: false,
             maxHistoryItems = preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY]?.toIntOrNull() ?: 20,
-            unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false
+            unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false,
+            lastKeyboardInputMode = preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY]?.let {
+                try {
+                    KeyboardInputMode.valueOf(it)
+                } catch (e: Exception) {
+                    KeyboardInputMode.DICTATION
+                }
+            } ?: KeyboardInputMode.DICTATION
         )
     }
 
@@ -104,6 +112,7 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] = settings.saveOriginalAudioFiles
             preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY] = settings.maxHistoryItems.toString()
             preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
+            preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY] = settings.lastKeyboardInputMode.name
         }
     }
 }

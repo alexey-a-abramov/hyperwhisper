@@ -90,6 +90,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideApiCallLogRepository(
+        @ApplicationContext context: Context
+    ): ApiCallLogRepository = ApiCallLogRepository(context)
+
+    @Provides
+    @Singleton
     fun provideSettingsRepository(
         apiSettingsRepository: ApiSettingsRepository,
         voiceModesRepository: VoiceModesRepository,
@@ -97,7 +103,8 @@ object NetworkModule {
         usageStatisticsRepository: UsageStatisticsRepository,
         historyRepository: HistoryRepository,
         languageTrackingRepository: LanguageTrackingRepository,
-        providerModelTrackingRepository: ProviderModelTrackingRepository
+        providerModelTrackingRepository: ProviderModelTrackingRepository,
+        apiCallLogRepository: ApiCallLogRepository
     ): SettingsRepository = SettingsRepository(
         apiSettingsRepository,
         voiceModesRepository,
@@ -105,7 +112,8 @@ object NetworkModule {
         usageStatisticsRepository,
         historyRepository,
         languageTrackingRepository,
-        providerModelTrackingRepository
+        providerModelTrackingRepository,
+        apiCallLogRepository
     )
 
     @Provides

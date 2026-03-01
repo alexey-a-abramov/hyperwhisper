@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.GsonBuilder
+import com.hyperwhisper.data.ApiCallLog
+import com.hyperwhisper.data.ApiCallStatistics
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.AppearanceSettings
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -50,6 +53,21 @@ class SettingsViewModel @Inject constructor(
 
     val appearanceSettings: StateFlow<AppearanceSettings> = settingsRepository.appearanceSettings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppearanceSettings())
+
+    val apiCallLogs: StateFlow<List<ApiCallLog>> = settingsRepository.apiCallLogs
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _apiCallStatistics = MutableStateFlow(ApiCallStatistics(0, 0, 0, emptyMap(), 0))
+    val apiCallStatistics: StateFlow<ApiCallStatistics> = _apiCallStatistics.asStateFlow()
+
+    init {
+        // Update statistics whenever logs change
+        viewModelScope.launch {
+            apiCallLogs.collect {
+                _apiCallStatistics.value = settingsRepository.getApiCallStatistics()
+            }
+        }
+    }
 
     private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
     val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
@@ -292,5 +310,15 @@ class SettingsViewModel @Inject constructor(
             "providers" to providers
         )
         return GsonBuilder().setPrettyPrinting().create().toJson(payload)
+    }
+
+    /**
+     * Clear all API call logs
+     */
+    fun clearApiCallLogs() {
+        viewModelScope.launch {
+            settingsRepository.clearApiCallLogs()
+            Log.d(TAG, "Cleared all API call logs")
+        }
     }
 }

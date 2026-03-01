@@ -44,6 +44,7 @@ fun ApiConfigSection(
     inputLanguage: String,
     outputLanguage: String,
     connectionTestState: com.hyperwhisper.ui.settings.ConnectionTestState,
+    llmApiKey: String = "", // For conditional "reuse" button
     onProviderChange: (ApiProvider) -> Unit,
     onBaseUrlChange: (String) -> Unit,
     onApiKeyChange: (String) -> Unit,
@@ -58,6 +59,7 @@ fun ApiConfigSection(
     onReuseProviderKeyForLlm: () -> Unit,
     onShowInputLanguageInfo: () -> Unit,
     onShowLogsDialog: () -> Unit,
+    onShowApiCallLogs: () -> Unit,
     onResetConnectionTestState: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -95,23 +97,25 @@ fun ApiConfigSection(
 
     Spacer(Modifier.padding(vertical = 8.dp))
 
-    // No API Key checkbox
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = !requiresAuth,
-            onCheckedChange = { onRequiresAuthChange(!it) }
-        )
-        Text(
-            text = "No API key required",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(start = 8.dp)
-        )
-    }
+    // No API Key checkbox - only for self-hosted Whisper
+    if (provider == ApiProvider.SELFHOSTED_WHISPER) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = !requiresAuth,
+                onCheckedChange = { onRequiresAuthChange(!it) }
+            )
+            Text(
+                text = "No API key required",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
 
-    Spacer(Modifier.padding(vertical = 8.dp))
+        Spacer(Modifier.padding(vertical = 8.dp))
+    }
 
     // API Key (only shown if auth is required)
     if (requiresAuth) {
@@ -133,7 +137,8 @@ fun ApiConfigSection(
             Text("How to get API key")
         }
 
-        if (apiKey.isNotBlank()) {
+        // Only show reuse button if this key is set and LLM key is empty
+        if (apiKey.isNotBlank() && llmApiKey.isBlank()) {
             Spacer(Modifier.padding(vertical = 4.dp))
             OutlinedButton(
                 onClick = onReuseProviderKeyForLlm,
@@ -141,6 +146,16 @@ fun ApiConfigSection(
             ) {
                 Text("Reuse this key for post-processing")
             }
+        }
+
+        Spacer(Modifier.padding(vertical = 8.dp))
+
+        // View API Call Logs button
+        OutlinedButton(
+            onClick = onShowApiCallLogs,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("View API Call Logs")
         }
 
         Spacer(Modifier.padding(vertical = 8.dp))

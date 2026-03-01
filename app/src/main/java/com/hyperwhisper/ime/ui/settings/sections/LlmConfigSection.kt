@@ -30,6 +30,7 @@ fun LlmConfigSection(
     llmApiKey: String,
     llmRequiresAuth: Boolean,
     llmModelId: String,
+    providerApiKey: String = "", // For conditional "reuse" button
     onLlmProviderChange: (LlmProvider) -> Unit,
     onLlmBaseUrlChange: (String) -> Unit,
     onLlmApiKeyChange: (String) -> Unit,
@@ -104,7 +105,8 @@ fun LlmConfigSection(
                 singleLine = true
             )
 
-            if (llmApiKey.isNotBlank()) {
+            // Only show reuse button if this key is set and provider key is empty
+            if (llmApiKey.isNotBlank() && providerApiKey.isBlank()) {
                 Spacer(Modifier.padding(vertical = 4.dp))
                 OutlinedButton(
                     onClick = onReuseLlmKeyForProvider,
