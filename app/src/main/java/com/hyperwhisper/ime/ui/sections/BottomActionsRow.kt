@@ -2,6 +2,7 @@ package com.hyperwhisper.ui.sections
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -26,16 +28,100 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
 
+private val KeyboardModeSwitcherColor = Color(0xFF424242)
+
+@Composable
+private fun UnifiedModeSwitcherCompact(
+    currentMode: KeyboardInputMode,
+    onModeChange: (KeyboardInputMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // ABC button
+        Surface(
+            onClick = {
+                when (currentMode) {
+                    KeyboardInputMode.QWERTY -> onModeChange(KeyboardInputMode.SPECIAL_CHARS)
+                    KeyboardInputMode.SPECIAL_CHARS -> onModeChange(KeyboardInputMode.QWERTY)
+                    else -> onModeChange(KeyboardInputMode.QWERTY)
+                }
+            },
+            modifier = Modifier.weight(1f).height(56.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = if (currentMode == KeyboardInputMode.QWERTY || currentMode == KeyboardInputMode.SPECIAL_CHARS)
+                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "ABC",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+
+        // Dictation button (current mode - shown but not clickable since we're already in it)
+        Surface(
+            modifier = Modifier.weight(1f).height(56.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.primary // Always highlighted in dictation mode
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Dictation",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // Vibe Coding button
+        Surface(
+            onClick = { onModeChange(KeyboardInputMode.VIBE_CODING) },
+            modifier = Modifier.weight(1f).height(56.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = if (currentMode == KeyboardInputMode.VIBE_CODING)
+                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "</>",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
 /**
  * Bottom actions row of the keyboard
- * Contains paste last transcription button (with long press for history) and space button
+ * Contains mode switcher, paste last transcription button (with long press for history) and space button
  */
 @Composable
 fun BottomActionsRow(
@@ -47,6 +133,8 @@ fun BottomActionsRow(
     onSpace: () -> Unit,
     showKeyboardButton: Boolean = false,
     onKeyboardButtonClick: () -> Unit = {},
+    currentKeyboardMode: KeyboardInputMode = KeyboardInputMode.DICTATION,
+    onModeChange: (KeyboardInputMode) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -56,17 +144,13 @@ fun BottomActionsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Unified mode switcher (replaces single keyboard button)
         if (showKeyboardButton) {
-            IconButton(
-                onClick = onKeyboardButtonClick,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Keyboard,
-                    contentDescription = strings.switchKeyboardDesc,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            UnifiedModeSwitcherCompact(
+                currentMode = currentKeyboardMode,
+                onModeChange = onModeChange,
+                modifier = Modifier.width(180.dp)
+            )
         }
 
         // Paste last transcribed text button with long press for history

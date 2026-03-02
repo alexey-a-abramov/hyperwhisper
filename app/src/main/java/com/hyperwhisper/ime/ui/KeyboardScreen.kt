@@ -402,11 +402,15 @@ fun KeyboardScreen(
                     onShowHistory = { showHistoryPanel = true },
                     onSpace = handleSpacePress,
                     showKeyboardButton = true,
-                    onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY }
+                    onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY },
+                    currentKeyboardMode = keyboardInputMode,
+                    onModeChange = { keyboardInputMode = it }
                 )
             } else {
                 TextKeyboardSectionNew(
                     mode = keyboardInputMode,
+                    recordingState = recordingState,
+                    recordingDuration = recordingDuration,
                     onModeChange = { keyboardInputMode = it },
                     onKeyPress = onTextCommit,
                     onSpacePress = handleSpacePress,
@@ -421,6 +425,8 @@ fun KeyboardScreen(
                     onHome = onHome,
                     onEnd = onEnd,
                     onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    onStartRecording = { viewModel.startRecording() },
+                    onStopRecording = { viewModel.stopRecording() },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -595,6 +601,8 @@ fun KeyboardScreen(
 @Composable
 private fun TextKeyboardSectionNew(
     mode: KeyboardInputMode,
+    recordingState: RecordingState = RecordingState.IDLE,
+    recordingDuration: Long = 0L,
     onModeChange: (KeyboardInputMode) -> Unit,
     onKeyPress: (String) -> Unit,
     onSpacePress: () -> Unit,
@@ -609,6 +617,8 @@ private fun TextKeyboardSectionNew(
     onHome: () -> Unit,
     onEnd: () -> Unit,
     onReturnToDictation: () -> Unit,
+    onStartRecording: () -> Unit = {},
+    onStopRecording: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var shiftEnabled by remember { mutableStateOf(false) }
@@ -958,13 +968,69 @@ private fun TextKeyboardSectionNew(
                             style = KeyboardActionStyle.SPACE
                         )
 
-                        // Small mic button for recording in coding mode
-                        KeyboardActionButton(
-                            icon = Icons.Default.Mic,
-                            onClick = onReturnToDictation,
-                            modifier = Modifier.weight(1f),
-                            style = KeyboardActionStyle.NORMAL
-                        )
+                        // Recording button for voice input in coding mode
+                        Surface(
+                            onClick = {
+                                when (recordingState) {
+                                    RecordingState.IDLE, RecordingState.ERROR -> onStartRecording()
+                                    RecordingState.RECORDING, RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION -> onStopRecording()
+                                    else -> {}
+                                }
+                            },
+                            modifier = Modifier.weight(1.2f).height(45.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = when (recordingState) {
+                                RecordingState.RECORDING, RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION ->
+                                    Color(0xFFE53935) // Red when recording
+                                RecordingState.PROCESSING -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                when (recordingState) {
+                                    RecordingState.RECORDING, RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION -> {
+                                        // Show timer when recording
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Stop,
+                                                contentDescription = "Stop Recording",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            val seconds = (recordingDuration / 1000) % 60
+                                            val minutes = (recordingDuration / 1000) / 60
+                                            Text(
+                                                text = "$minutes:${seconds.toString().padStart(2, '0')}",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                    RecordingState.PROCESSING -> {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = Color.White
+                                        )
+                                    }
+                                    else -> {
+                                        Icon(
+                                            imageVector = Icons.Default.Mic,
+                                            contentDescription = "Start Recording",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                         KeyboardActionButton(
                             icon = Icons.Default.KeyboardReturn,
