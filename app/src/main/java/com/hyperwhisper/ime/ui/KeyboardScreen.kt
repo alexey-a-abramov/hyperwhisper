@@ -91,10 +91,10 @@ private fun UnifiedModeSwitcher(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ABC+123 button
+        // ABC button
         Surface(
             onClick = {
                 when (currentMode) {
@@ -103,18 +103,18 @@ private fun UnifiedModeSwitcher(
                     else -> onModeChange(KeyboardInputMode.QWERTY)
                 }
             },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            shape = RoundedCornerShape(8.dp),
             color = if (currentMode == KeyboardInputMode.QWERTY || currentMode == KeyboardInputMode.SPECIAL_CHARS)
                 MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(4.dp),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "ABC",
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -124,20 +124,20 @@ private fun UnifiedModeSwitcher(
         // Dictation button (with mic icon)
         Surface(
             onClick = onReturnToDictation,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            shape = RoundedCornerShape(8.dp),
             color = if (currentMode == KeyboardInputMode.DICTATION)
                 MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(4.dp),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = "Dictation",
                     tint = Color.White,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -145,18 +145,18 @@ private fun UnifiedModeSwitcher(
         // Vibe Coding button
         Surface(
             onClick = { onModeChange(KeyboardInputMode.VIBE_CODING) },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            shape = RoundedCornerShape(8.dp),
             color = if (currentMode == KeyboardInputMode.VIBE_CODING)
                 MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(4.dp),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "</>",
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -767,13 +767,13 @@ private fun TextKeyboardSectionNew(
                             currentMode = mode,
                             onModeChange = onModeChange,
                             onReturnToDictation = onReturnToDictation,
-                            modifier = Modifier.weight(2f).fillMaxHeight()
+                            modifier = Modifier.weight(3f).fillMaxHeight()
                         )
 
                         KeyboardActionButton(
                             label = "space",
                             onClick = onSpacePress,
-                            modifier = Modifier.weight(3f),
+                            modifier = Modifier.weight(2.5f),
                             style = KeyboardActionStyle.SPACE
                         )
                         RepeatingActionButton(
@@ -803,7 +803,7 @@ private fun TextKeyboardSectionNew(
                     modifier = Modifier.fillMaxSize().padding(4.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    val keyHeight = 38.dp
+                    val keyHeight = 36.dp
 
                     // Row 1: Common brackets and symbols
                     Row(
@@ -850,7 +850,7 @@ private fun TextKeyboardSectionNew(
                         }
                     }
 
-                    // Row 4: Navigation cluster
+                    // Row 4: Navigation cluster with reorganized cursor/backspace/enter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -883,6 +883,7 @@ private fun TextKeyboardSectionNew(
                             style = KeyboardActionStyle.NORMAL,
                             height = keyHeight
                         )
+                        Spacer(modifier = Modifier.weight(1f))
                         KeyboardActionButton(
                             icon = Icons.Default.KeyboardArrowUp,
                             onClick = onMoveCursorUp,
@@ -890,6 +891,7 @@ private fun TextKeyboardSectionNew(
                             style = KeyboardActionStyle.NORMAL,
                             height = keyHeight
                         )
+                        Spacer(modifier = Modifier.weight(0.5f))
                         KeyboardActionButton(
                             icon = Icons.Default.Backspace,
                             onClick = onDelete,
@@ -899,7 +901,7 @@ private fun TextKeyboardSectionNew(
                         )
                     }
 
-                    // Row 5: Cursor controls
+                    // Row 5: Tab, quotes, cursor controls (down positioned below up)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -922,7 +924,7 @@ private fun TextKeyboardSectionNew(
                             modifier = Modifier.weight(1f),
                             height = keyHeight
                         )
-                        Spacer(modifier = Modifier.weight(1.5f))
+                        Spacer(modifier = Modifier.weight(1f))
                         KeyboardActionButton(
                             icon = Icons.Default.KeyboardArrowLeft,
                             onClick = onMoveCursorLeft,
@@ -944,13 +946,19 @@ private fun TextKeyboardSectionNew(
                             style = KeyboardActionStyle.NORMAL,
                             height = keyHeight
                         )
+                        Spacer(modifier = Modifier.weight(0.5f))
+                        KeyboardActionButton(
+                            icon = Icons.Default.KeyboardReturn,
+                            onClick = onEnter,
+                            modifier = Modifier.weight(1.2f),
+                            style = KeyboardActionStyle.ENTER,
+                            height = keyHeight
+                        )
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    // Bottom row with unified mode switcher and mic
+                    // Row 6: Recording controls (cancel + mic)
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(45.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         // Unified mode switcher (left)
@@ -958,15 +966,24 @@ private fun TextKeyboardSectionNew(
                             currentMode = mode,
                             onModeChange = onModeChange,
                             onReturnToDictation = onReturnToDictation,
-                            modifier = Modifier.weight(2f).fillMaxHeight()
+                            modifier = Modifier.weight(2.5f).height(40.dp)
                         )
 
-                        KeyboardActionButton(
-                            label = "space",
-                            onClick = onSpacePress,
-                            modifier = Modifier.weight(3f),
-                            style = KeyboardActionStyle.SPACE
-                        )
+                        Spacer(modifier = Modifier.weight(3f))
+
+                        // Cancel recording button (only shown when recording)
+                        if (recordingState == RecordingState.RECORDING ||
+                            recordingState == RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION) {
+                            KeyboardActionButton(
+                                icon = Icons.Default.Close,
+                                onClick = { /* Cancel recording */ },
+                                modifier = Modifier.weight(1f),
+                                style = KeyboardActionStyle.NORMAL,
+                                height = 40.dp
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
 
                         // Recording button for voice input in coding mode
                         Surface(
@@ -977,7 +994,7 @@ private fun TextKeyboardSectionNew(
                                     else -> {}
                                 }
                             },
-                            modifier = Modifier.weight(1.2f).height(45.dp),
+                            modifier = Modifier.weight(1.3f).height(40.dp),
                             shape = RoundedCornerShape(8.dp),
                             color = when (recordingState) {
                                 RecordingState.RECORDING, RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION ->
@@ -1031,12 +1048,20 @@ private fun TextKeyboardSectionNew(
                                 }
                             }
                         }
+                    }
 
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // Bottom row: Space bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         KeyboardActionButton(
-                            icon = Icons.Default.KeyboardReturn,
-                            onClick = onEnter,
-                            modifier = Modifier.weight(1f),
-                            style = KeyboardActionStyle.ENTER
+                            label = "space",
+                            onClick = onSpacePress,
+                            modifier = Modifier.fillMaxWidth(),
+                            style = KeyboardActionStyle.SPACE
                         )
                     }
                 }
@@ -1167,7 +1192,7 @@ private fun TextKeyboardSectionNew(
                                 currentMode = mode,
                                 onModeChange = onModeChange,
                                 onReturnToDictation = onReturnToDictation,
-                                modifier = Modifier.weight(2f).height(keyHeight)
+                                modifier = Modifier.weight(3f).height(keyHeight)
                             )
 
                             // Comma
@@ -1181,7 +1206,7 @@ private fun TextKeyboardSectionNew(
                             KeyboardActionButton(
                                 label = "space",
                                 onClick = onSpacePress,
-                                modifier = Modifier.weight(3.5f),
+                                modifier = Modifier.weight(2.5f),
                                 style = KeyboardActionStyle.SPACE,
                                 height = keyHeight
                             )
