@@ -51,7 +51,7 @@ fun IdleMicButton(
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier
-            .size(72.dp)
+            .size(56.dp)
             .micGestureDetector(
                 onSingleTap = if (walkieTalkieMode) ({}) else onClick,
                 onDoubleTap = onDoubleTap,
@@ -60,13 +60,13 @@ fun IdleMicButton(
                 onPressRelease = if (walkieTalkieMode) onPressRelease else ({})
             ),
         shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.primary,
+        containerColor = Color(0xFF4CAF50), // Green
         contentColor = Color.White
     ) {
         Icon(
             imageVector = Icons.Default.Mic,
             contentDescription = "Start Recording",
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(28.dp)
         )
     }
 }
@@ -223,13 +223,13 @@ private fun AnimatedProcessingButton(
     }
 
     Box(
-        modifier = Modifier.size(72.dp),
+        modifier = Modifier.size(56.dp),
         contentAlignment = Alignment.Center
     ) {
         FloatingActionButton(
             onClick = onClick,
             modifier = Modifier
-                .size(72.dp)
+                .size(56.dp)
                 .scale(scale)
                 .alpha(alpha),
             shape = RoundedCornerShape(16.dp),
@@ -240,7 +240,7 @@ private fun AnimatedProcessingButton(
                 imageVector = icon,
                 contentDescription = "Processing",
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(28.dp)
                     .rotate(rotation)
             )
         }
@@ -248,7 +248,7 @@ private fun AnimatedProcessingButton(
         // Show a circular progress indicator around the button for some phases
         if (animationType == AnimationType.ROTATE || animationType == AnimationType.PULSE_FAST) {
             CircularProgressIndicator(
-                modifier = Modifier.size(76.dp),
+                modifier = Modifier.size(60.dp),
                 strokeWidth = 2.dp,
                 color = color.copy(alpha = 0.5f)
             )
@@ -291,7 +291,7 @@ fun AwaitingConfirmationButton(
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier
-            .size(72.dp)
+            .size(56.dp)
             .scale(scale)
             .alpha(alpha),
         shape = RoundedCornerShape(16.dp),
@@ -306,11 +306,11 @@ fun AwaitingConfirmationButton(
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = "Confirm Recording",
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(22.dp)
             )
             Text(
                 text = timeText,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
@@ -345,7 +345,7 @@ fun RecordingMicButton(
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier
-            .size(72.dp)
+            .size(56.dp)
             .scale(scale)
             .micGestureDetector(
                 onSingleTap = onClick,
@@ -363,11 +363,11 @@ fun RecordingMicButton(
             Icon(
                 imageVector = Icons.Default.Stop,
                 contentDescription = "Stop Recording",
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(22.dp)
             )
             Text(
                 text = timeText,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )

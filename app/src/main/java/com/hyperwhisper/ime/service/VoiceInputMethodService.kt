@@ -236,6 +236,36 @@ class VoiceInputMethodService : InputMethodService(),
                 onMoveCursorRight = {
                     moveCursorRight()
                 },
+                onMoveCursorUp = {
+                    moveCursorUp()
+                },
+                onMoveCursorDown = {
+                    moveCursorDown()
+                },
+                onPageUp = {
+                    pageUp()
+                },
+                onPageDown = {
+                    pageDown()
+                },
+                onHome = {
+                    moveToHome()
+                },
+                onEnd = {
+                    moveToEnd()
+                },
+                onInsert = {
+                    sendInsert()
+                },
+                onForwardDelete = {
+                    sendForwardDelete()
+                },
+                onEscape = {
+                    sendEscape()
+                },
+                onTab = {
+                    sendTab()
+                },
                 onInsertClipboard = {
                     insertClipboard()
                 },
@@ -427,6 +457,136 @@ class VoiceInputMethodService : InputMethodService(),
             ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
         } catch (e: Exception) {
             Log.e(TAG, "Error moving cursor right", e)
+        }
+    }
+
+    /**
+     * Move cursor one line up.
+     */
+    private fun moveCursorUp() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_UP))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving cursor up", e)
+        }
+    }
+
+    /**
+     * Move cursor one line down.
+     */
+    private fun moveCursorDown() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving cursor down", e)
+        }
+    }
+
+    /**
+     * Page up.
+     */
+    private fun pageUp() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_PAGE_UP))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_PAGE_UP))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending page up", e)
+        }
+    }
+
+    /**
+     * Page down.
+     */
+    private fun pageDown() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_PAGE_DOWN))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending page down", e)
+        }
+    }
+
+    /**
+     * Move cursor to beginning of line/field.
+     */
+    private fun moveToHome() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MOVE_HOME))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MOVE_HOME))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving to home", e)
+        }
+    }
+
+    /**
+     * Move cursor to end of line/field.
+     */
+    private fun moveToEnd() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MOVE_END))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MOVE_END))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error moving to end", e)
+        }
+    }
+
+    /**
+     * Send Insert key.
+     */
+    private fun sendInsert() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_INSERT))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_INSERT))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending insert", e)
+        }
+    }
+
+    /**
+     * Send forward delete (Delete key, not Backspace).
+     */
+    private fun sendForwardDelete() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_FORWARD_DEL))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_FORWARD_DEL))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending forward delete", e)
+        }
+    }
+
+    /**
+     * Send Escape key.
+     */
+    private fun sendEscape() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ESCAPE))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ESCAPE))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending escape", e)
+        }
+    }
+
+    /**
+     * Send Tab key.
+     */
+    private fun sendTab() {
+        val ic = currentInputConnection ?: return
+        try {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_TAB))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_TAB))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending tab", e)
         }
     }
 

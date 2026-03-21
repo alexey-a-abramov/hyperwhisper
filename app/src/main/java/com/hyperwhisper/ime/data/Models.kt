@@ -511,7 +511,23 @@ enum class KeyboardInputMode(val displayName: String) {
     QWERTY("ABC Keyboard"),
     SPECIAL_CHARS("Symbols"),
     SYSTEM_KEYS("System Keys"),
-    VIBE_CODING("Vibe Coding")
+    VIBE_CODING("Vibe Coding"),
+    NUMPAD("Numpad"),
+    EMOJI("Emoji")
+}
+
+// Keyboard layout options (language-specific)
+enum class KeyboardLayout(
+    val code: String,
+    val displayName: String,
+    val nativeName: String
+) {
+    ENGLISH("EN", "English", "English"),
+    RUSSIAN("RU", "Russian", "Русский"),
+    SPANISH("ES", "Spanish", "Español"),
+    FRENCH("FR", "French", "Français"),
+    GERMAN("DE", "German", "Deutsch"),
+    ARABIC("AR", "Arabic", "العربية")
 }
 
 // Appearance settings data class
@@ -529,7 +545,10 @@ data class AppearanceSettings(
     val saveOriginalAudioFiles: Boolean = false, // Save audio files for playback/reprocessing from history
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
     val unlimitedHistory: Boolean = false, // If true, maxHistoryItems is ignored
-    val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION // Remember last keyboard mode
+    val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION, // Remember last keyboard mode
+    val currentKeyboardLayout: KeyboardLayout = KeyboardLayout.ENGLISH, // Current active layout
+    val enabledKeyboardLayouts: Set<KeyboardLayout> = setOf(KeyboardLayout.ENGLISH), // Enabled layouts (EN enabled by default)
+    val recentEmojis: List<String> = emptyList() // Last 10 recently used emojis
 )
 
 /**

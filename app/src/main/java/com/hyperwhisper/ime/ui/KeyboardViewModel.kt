@@ -375,6 +375,26 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Update keyboard layout.
+     */
+    fun updateKeyboardLayout(settings: AppearanceSettings) {
+        viewModelScope.launch {
+            settingsRepository.saveAppearanceSettings(settings)
+            Log.d(TAG, "Keyboard layout updated: ${settings.currentKeyboardLayout}")
+        }
+    }
+
+    /**
+     * Update recent emojis.
+     */
+    fun updateRecentEmojis(settings: AppearanceSettings) {
+        viewModelScope.launch {
+            settingsRepository.saveAppearanceSettings(settings)
+            Log.d(TAG, "Recent emojis updated")
+        }
+    }
+
+    /**
      * Set provider and model from quick picker.
      */
     fun setProviderAndModel(provider: ApiProvider, modelId: String) {

@@ -82,7 +82,7 @@ fun RecordingSection(
     ) {
         // Far left: Cancel button during recording
         Box(
-            modifier = Modifier.width(70.dp).fillMaxHeight(),
+            modifier = Modifier.width(60.dp).fillMaxHeight(),
             contentAlignment = Alignment.CenterStart
         ) {
             when (recordingState) {
@@ -90,7 +90,7 @@ fun RecordingSection(
                     // Show cancel button during recording
                     OutlinedButton(
                         onClick = onCancelRecording,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         ),
@@ -102,11 +102,11 @@ fun RecordingSection(
                             Icon(
                                 imageVector = Icons.Default.Cancel,
                                 contentDescription = strings.cancelDesc,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 strings.cancel.uppercase(),
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -153,12 +153,12 @@ fun RecordingSection(
 
         // Right side: Enter button (same size as REC button)
         Box(
-            modifier = Modifier.width(90.dp).fillMaxHeight(),
+            modifier = Modifier.width(70.dp).fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
             Surface(
                 onClick = onEnter,
-                modifier = Modifier.size(72.dp),
+                modifier = Modifier.size(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                 tonalElevation = 2.dp
@@ -171,7 +171,7 @@ fun RecordingSection(
                         imageVector = Icons.Default.KeyboardReturn,
                         contentDescription = strings.enterDesc,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
