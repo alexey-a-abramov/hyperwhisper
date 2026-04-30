@@ -128,7 +128,8 @@ data class ApiSettings(
     val modelId: String = "whisper-1",
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
     val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
-    val llmConfig: LlmConfig = LlmConfig() // LLM configuration for post-processing
+    val llmConfig: LlmConfig = LlmConfig(), // LLM configuration for post-processing
+    val localModelSettings: LocalModelSettings = LocalModelSettings() // Local model configuration
 ) {
     // Helper to get API key for current provider
     fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
@@ -186,6 +187,12 @@ enum class LlmProvider(
         defaultModels = listOf("claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"),
         requiresAuth = true
     ),
+    MISTRAL(
+        displayName = "Mistral AI",
+        defaultEndpoint = "https://api.mistral.ai/v1/",
+        defaultModels = listOf("mistral-large-latest", "mistral-small-latest", "pixtral-large-latest"),
+        requiresAuth = true
+    ),
     GROQ(
         displayName = "Groq",
         defaultEndpoint = "https://api.groq.com/openai/v1/",
@@ -202,6 +209,12 @@ enum class LlmProvider(
         displayName = "OpenAI-Compatible",
         defaultEndpoint = "http://localhost:8080/v1/",
         defaultModels = listOf("gpt-3.5-turbo", "gpt-4"),
+        requiresAuth = false
+    ),
+    LOCAL_GEMMA(
+        displayName = "Local Gemma",
+        defaultEndpoint = "http://127.0.0.1:8081/v1/",
+        defaultModels = listOf("gemma-3n-E2B-it", "google/gemma-2-9b-it", "gemma-2-9b-it"),
         requiresAuth = false
     )
 }
@@ -261,6 +274,18 @@ enum class ApiProvider(
         defaultModels = listOf("default", "conversation", "dictation", "interactive"),
         requiresAuth = true
     ),
+    DEEPSEEK(
+        displayName = "DeepSeek",
+        defaultEndpoint = "https://api.deepseek.com/v1/",
+        defaultModels = listOf("deepseek-chat", "deepseek-reasoner"),
+        requiresAuth = true
+    ),
+    MISTRAL(
+        displayName = "Mistral AI",
+        defaultEndpoint = "https://api.mistral.ai/v1/",
+        defaultModels = listOf("mistral-large-latest", "mistral-small-latest", "open-mistral-nemo"),
+        requiresAuth = true
+    ),
     REVAI(
         displayName = "Rev.ai",
         defaultEndpoint = "https://api.rev.ai/speechtotext/v1/",
@@ -299,11 +324,47 @@ enum class ApiProvider(
     ),
     SELFHOSTED_WHISPER(
         displayName = "Self-hosted Whisper",
-        defaultEndpoint = "http://64.227.114.236:8000/v1/",
-        defaultModels = listOf("whisper-tiny", "whisper-small", "whisper-base"),
+        defaultEndpoint = "http://127.0.0.1:8080/",
+        defaultModels = listOf("base.en", "small.en", "medium.en"),
+        requiresAuth = false
+    ),
+    LOCAL_WHISPER(
+        displayName = "Local Whisper (.bin)",
+        defaultEndpoint = "local",
+        defaultModels = listOf("tiny.en", "tiny", "base.en", "base", "small.en", "small"),
         requiresAuth = false
     )
 }
+
+/**
+ * Local model information for discovery and integrity
+ */
+data class LocalModelInfo(
+    val name: String,
+    val path: String,
+    val sizeBytes: Long,
+    val lastModified: Long,
+    val hash: String = "",
+    val type: LocalModelType = LocalModelType.WHISPER,
+    val isVerified: Boolean = false
+)
+
+enum class LocalModelType {
+    WHISPER,
+    GEMMA,
+    LLAMA
+}
+
+data class LocalModelSettings(
+    val whisperModelPath: String = "",
+    val gemmaModelPath: String = "",
+    val whisperModelHash: String = "",
+    val gemmaModelHash: String = "",
+    val useLocalWhisper: Boolean = false,
+    val useLocalGemma: Boolean = false,
+    val threads: Int = 4,
+    val autoDiscover: Boolean = true
+)
 
 enum class RecordingState {
     IDLE,

@@ -23,7 +23,8 @@ class SettingsRepository @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val languageTrackingRepository: LanguageTrackingRepository,
     private val providerModelTrackingRepository: ProviderModelTrackingRepository,
-    private val apiCallLogRepository: ApiCallLogRepository
+    private val apiCallLogRepository: ApiCallLogRepository,
+    val localModelRepository: LocalModelRepository
 ) {
     // ============================================================================
     // API Settings - Delegated to ApiSettingsRepository
@@ -42,6 +43,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun updateLlmConfig(llmConfig: LlmConfig) =
         apiSettingsRepository.updateLlmConfig(llmConfig)
+
+    suspend fun updateLocalModelSettings(settings: LocalModelSettings) =
+        apiSettingsRepository.updateLocalModelSettings(settings)
 
     suspend fun resetApiSettingsToDefaults(provider: ApiProvider) =
         apiSettingsRepository.resetToDefaults(provider)

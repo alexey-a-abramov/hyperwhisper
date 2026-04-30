@@ -104,7 +104,8 @@ object NetworkModule {
         historyRepository: HistoryRepository,
         languageTrackingRepository: LanguageTrackingRepository,
         providerModelTrackingRepository: ProviderModelTrackingRepository,
-        apiCallLogRepository: ApiCallLogRepository
+        apiCallLogRepository: ApiCallLogRepository,
+        localModelRepository: com.hyperwhisper.data.LocalModelRepository
     ): SettingsRepository = SettingsRepository(
         apiSettingsRepository,
         voiceModesRepository,
@@ -113,8 +114,17 @@ object NetworkModule {
         historyRepository,
         languageTrackingRepository,
         providerModelTrackingRepository,
-        apiCallLogRepository
+        apiCallLogRepository,
+        localModelRepository
     )
+
+    @Provides
+    @Singleton
+    fun provideLocalProcessingStrategy(
+        settingsRepository: SettingsRepository
+    ): com.hyperwhisper.network.LocalProcessingStrategy {
+        return com.hyperwhisper.network.LocalProcessingStrategy(settingsRepository)
+    }
 
     @Provides
     @Singleton
@@ -171,8 +181,15 @@ object NetworkModule {
         gson: Gson,
         baseUrl: String
     ): Retrofit {
+        // Bypassing "local" or invalid URLs for Retrofit as it requires a valid schema
+        val finalUrl = if (baseUrl == "local" || (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://"))) {
+            "http://localhost/" 
+        } else {
+            if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        }
+        
         return Retrofit.Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(finalUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()

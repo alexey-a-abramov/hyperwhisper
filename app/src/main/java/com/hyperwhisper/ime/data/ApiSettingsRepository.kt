@@ -36,6 +36,7 @@ class ApiSettingsRepository @Inject constructor(
         private val INPUT_LANGUAGE_KEY = stringPreferencesKey("input_language")
         private val OUTPUT_LANGUAGE_KEY = stringPreferencesKey("output_language")
         private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config") // LLM configuration as JSON
+        private val LOCAL_MODEL_SETTINGS_KEY = stringPreferencesKey("local_model_settings") // Local model settings as JSON
 
         // Legacy key for migration from single-key version
         private val API_KEY_KEY = stringPreferencesKey("api_key")
@@ -96,6 +97,18 @@ class ApiSettingsRepository @Inject constructor(
             LlmConfig() // Default
         }
 
+        // Parse local model settings
+        val localModelSettings = try {
+            val json = preferences[LOCAL_MODEL_SETTINGS_KEY]
+            if (json.isNullOrEmpty()) {
+                LocalModelSettings() // Default
+            } else {
+                gson.fromJson(json, LocalModelSettings::class.java)
+            }
+        } catch (e: Exception) {
+            LocalModelSettings() // Default
+        }
+
         ApiSettings(
             provider = provider,
             baseUrl = preferences[BASE_URL_KEY] ?: provider.defaultEndpoint,
@@ -104,7 +117,8 @@ class ApiSettingsRepository @Inject constructor(
             modelId = preferences[MODEL_ID_KEY] ?: provider.defaultModels.firstOrNull() ?: "whisper-1",
             inputLanguage = preferences[INPUT_LANGUAGE_KEY] ?: "",
             outputLanguage = preferences[OUTPUT_LANGUAGE_KEY] ?: "",
-            llmConfig = llmConfig
+            llmConfig = llmConfig,
+            localModelSettings = localModelSettings
         )
     }
 
@@ -135,9 +149,21 @@ class ApiSettingsRepository @Inject constructor(
             // Save LLM config
             preferences[LLM_CONFIG_KEY] = gson.toJson(settings.llmConfig)
 
+            // Save local model settings
+            preferences[LOCAL_MODEL_SETTINGS_KEY] = gson.toJson(settings.localModelSettings)
+
             preferences[MODEL_ID_KEY] = settings.modelId
             preferences[INPUT_LANGUAGE_KEY] = settings.inputLanguage
             preferences[OUTPUT_LANGUAGE_KEY] = settings.outputLanguage
+        }
+    }
+
+    /**
+     * Update local model configuration
+     */
+    suspend fun updateLocalModelSettings(settings: LocalModelSettings) {
+        dataStore.edit { preferences ->
+            preferences[LOCAL_MODEL_SETTINGS_KEY] = gson.toJson(settings)
         }
     }
 

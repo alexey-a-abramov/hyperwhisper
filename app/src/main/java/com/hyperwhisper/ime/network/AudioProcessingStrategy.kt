@@ -65,8 +65,10 @@ class TranscriptionStrategy(
             // Log request details
             Log.d(TAG, "Request Details:")
             Log.d(TAG, "  Base URL: ${apiSettings.baseUrl}")
-            Log.d(TAG, "  Endpoint: audio/transcriptions")
-            Log.d(TAG, "  Full URL: ${apiSettings.baseUrl}audio/transcriptions")
+            val isLocalWhisper = apiSettings.provider == ApiProvider.SELFHOSTED_WHISPER
+            val endpointPath = if (isLocalWhisper) "inference" else "audio/transcriptions"
+            Log.d(TAG, "  Endpoint: $endpointPath")
+            Log.d(TAG, "  Full URL: ${apiSettings.getCurrentBaseUrl()}$endpointPath")
             Log.d(TAG, "  Model: $modelId")
             Log.d(TAG, "  Language: ${if (apiSettings.inputLanguage.isEmpty()) "auto-detect" else apiSettings.inputLanguage}")
             Log.d(TAG, "  Audio file: ${audioFile.name} (${audioFile.length()} bytes)")
@@ -76,13 +78,21 @@ class TranscriptionStrategy(
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call with additional parameters for token usage
-            val response = apiService.transcribeWithDetails(
-                file = filePart,
-                model = modelPart,
-                responseFormat = formatPart,
-                timestampGranularity = timestampGranularityPart,
-                language = languagePart
-            )
+            val response = if (isLocalWhisper) {
+                apiService.transcribeLocal(
+                    file = filePart,
+                    responseFormat = formatPart,
+                    language = languagePart
+                )
+            } else {
+                apiService.transcribeWithDetails(
+                    file = filePart,
+                    model = modelPart,
+                    responseFormat = formatPart,
+                    timestampGranularity = timestampGranularityPart,
+                    language = languagePart
+                )
+            }
 
             // Log response details
             Log.d(TAG, "Response Details:")
@@ -141,12 +151,12 @@ class TranscriptionStrategy(
                     appendLine()
                     appendLine("Provider: ${apiSettings.provider.displayName}")
                     appendLine("Model: $modelId")
-                    appendLine("Endpoint: ${apiSettings.baseUrl}audio/transcriptions")
+                    appendLine("Endpoint: ${apiSettings.getCurrentBaseUrl()}$endpointPath")
                     appendLine()
                     appendLine("Status: $statusCode ${response.message()}")
                     appendLine()
                     when (statusCode) {
-                        400 -> appendLine("Bad Request - Check audio format or parameters")
+                        400 -> appendLine(if (isLocalWhisper) "Bad Request - Check audio format; local whisper.cpp expects a valid audio file" else "Bad Request - Check audio format or parameters")
                         401 -> appendLine("Authentication Failed - Check API key")
                         403 -> appendLine("Access Forbidden - Verify API key permissions")
                         404 -> appendLine("Endpoint Not Found - Check base URL")
@@ -409,6 +419,98 @@ class ChatCompletionStrategy(
             }
 
             ApiResult.Error(errorMessage, e)
+        }
+    }
+}
+
+/**
+ * Strategy C: Local Processing (On-device)
+ * Used for on-device transcription with whisper.cpp and post-processing with Gemma/Llama
+ */
+class LocalProcessingStrategy(
+    private val settingsRepository: com.hyperwhisper.data.SettingsRepository
+) : AudioProcessingStrategy {
+
+    companion object {
+        private const val TAG = "LocalProcessingStrategy"
+    }
+
+    override suspend fun processAudio(
+        audioFile: File,
+        audioBase64: String,
+        voiceMode: VoiceMode,
+        modelId: String
+    ): ApiResult<String> {
+        return try {
+            Log.d(TAG, "========== LOCAL PROCESSING REQUEST ==========")
+            val settings = settingsRepository.apiSettings.first()
+            val localSettings = settings.localModelSettings
+            
+            // 1. Check if Whisper model exists
+            val whisperModel = if (localSettings.whisperModelPath.isNotEmpty()) {
+                File(localSettings.whisperModelPath)
+            } else {
+                return ApiResult.Error("Local Whisper model path is not configured.")
+            }
+            
+            if (!whisperModel.exists()) {
+                return ApiResult.Error("Local Whisper model not found at: ${localSettings.whisperModelPath}")
+            }
+            
+            Log.d(TAG, "Starting local transcription with ${whisperModel.name}")
+            val startTime = System.currentTimeMillis()
+            
+            // NOTE: Integration point for whisper.cpp JNI or shell execution
+            val transcription = " [Local Transcription Placeholder] " + 
+                "(Using model: ${whisperModel.name})"
+            
+            val transcriptionTime = System.currentTimeMillis() - startTime
+            
+            // 2. Local Post-processing if needed
+            var finalResult = transcription
+            var postProcessingTime: Long? = null
+            
+            if (voiceMode.processingMode != "direct" && localSettings.useLocalGemma) {
+                val gemmaModelPath = localSettings.gemmaModelPath
+                if (gemmaModelPath.isNotEmpty()) {
+                    val gemmaModel = File(gemmaModelPath)
+                    if (gemmaModel.exists()) {
+                        Log.d(TAG, "Starting local post-processing with ${gemmaModel.name}")
+                        val ppStartTime = System.currentTimeMillis()
+                        
+                        // Simulation of local LLM processing
+                        finalResult = "[Local Post-processed] $transcription"
+                        
+                        postProcessingTime = System.currentTimeMillis() - ppStartTime
+                    }
+                }
+            }
+            
+            val totalTime = System.currentTimeMillis() - startTime
+            
+            val processingInfo = ProcessingInfo(
+                processingMode = if (localSettings.useLocalGemma) "two-step" else "single-step",
+                strategy = "local",
+                transcriptionModel = whisperModel.name,
+                postProcessingModel = if (localSettings.useLocalGemma && localSettings.gemmaModelPath.isNotEmpty()) 
+                    File(localSettings.gemmaModelPath).name else null,
+                voiceModeName = voiceMode.name,
+                systemPrompt = voiceMode.systemPrompt,
+                audioDurationSeconds = if (audioFile.length() > 44) (audioFile.length() - 44) / 32000.0 else 0.0,
+                processingTimeMs = totalTime,
+                transcriptionTimeMs = transcriptionTime,
+                postProcessingTimeMs = postProcessingTime,
+                audioFileSizeBytes = audioFile.length()
+            )
+            
+            Log.d(TAG, "✓ Local processing complete in ${totalTime}ms")
+            Log.d(TAG, "========== END REQUEST ==========")
+            
+            ApiResult.Success(finalResult, processingInfo)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "✗ Error in local processing", e)
+            ApiResult.Error("Local processing failed: ${e.message}", e)
         }
     }
 }
