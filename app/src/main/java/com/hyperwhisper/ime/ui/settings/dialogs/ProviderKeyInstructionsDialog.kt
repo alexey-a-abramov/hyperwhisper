@@ -97,6 +97,16 @@ private fun instructionsFor(provider: ApiProvider): List<ProviderInstructionLine
         ProviderInstructionLine("2. Create Speech resource and open Keys and Endpoint."),
         ProviderInstructionLine("3. Copy key and set endpoint + API Key.")
     )
+    ApiProvider.DEEPSEEK -> listOf(
+        ProviderInstructionLine("1. Open this page:", "https://platform.deepseek.com/api_keys"),
+        ProviderInstructionLine("2. Create an API key."),
+        ProviderInstructionLine("3. Paste the key into API Key.")
+    )
+    ApiProvider.MISTRAL -> listOf(
+        ProviderInstructionLine("1. Open this page:", "https://console.mistral.ai/api-keys/"),
+        ProviderInstructionLine("2. Create a new API key."),
+        ProviderInstructionLine("3. Paste the key into API Key.")
+    )
     ApiProvider.REVAI -> listOf(
         ProviderInstructionLine("1. Open this page:", "https://www.rev.ai/auth/signup"),
         ProviderInstructionLine("2. Create account and generate access token."),
@@ -128,8 +138,13 @@ private fun instructionsFor(provider: ApiProvider): List<ProviderInstructionLine
         ProviderInstructionLine("3. Paste token into API Key.")
     )
     ApiProvider.SELFHOSTED_WHISPER -> listOf(
-        ProviderInstructionLine("1. Deploy your own OpenAI-compatible Whisper server."),
-        ProviderInstructionLine("2. Put server URL into Base URL."),
-        ProviderInstructionLine("3. If auth enabled on server, paste token into API Key.")
+        ProviderInstructionLine("1. Start a local or remote whisper.cpp server."),
+        ProviderInstructionLine("2. Put server URL into Base URL (for local default use http://127.0.0.1:8080/)."),
+        ProviderInstructionLine("3. If auth is enabled on your gateway, paste token into API Key.")
+    )
+    ApiProvider.LOCAL_WHISPER -> listOf(
+        ProviderInstructionLine("1. Local processing does not require an API key."),
+        ProviderInstructionLine("2. Download a whisper.cpp model (.bin) and place it on your device."),
+        ProviderInstructionLine("3. Go to 'Local Models' section to scan and select the model file.")
     )
 }

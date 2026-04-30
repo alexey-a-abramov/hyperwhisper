@@ -166,12 +166,32 @@ fun ModelInfoDialog(
                         Text("• Community-driven", fontSize = 14.sp)
                     }
                     ApiProvider.SELFHOSTED_WHISPER -> {
-                        Text("Self-hosted Whisper", fontWeight = FontWeight.Medium)
-                        Text("• Your own infrastructure (free)", fontSize = 14.sp)
-                        Text("• OpenAI-compatible API", fontSize = 14.sp)
-                        Text("• Privacy-focused (local deployment)", fontSize = 14.sp)
+                        Text("Self-hosted Whisper.cpp", fontWeight = FontWeight.Medium)
+                        Text("• Works with local whisper.cpp server", fontSize = 14.sp)
+                        Text("• Privacy-focused local transcription", fontSize = 14.sp)
+                        Text("• Uses /inference endpoint instead of OpenAI audio API", fontSize = 14.sp)
                         Text("• Customizable base URL", fontSize = 14.sp)
                         Text("• Optional authentication", fontSize = 14.sp)
+                    }
+                    ApiProvider.DEEPSEEK -> {
+                        Text("DeepSeek", fontWeight = FontWeight.Medium)
+                        Text("• High-performance and cost-effective models", fontSize = 14.sp)
+                        Text("• DeepSeek-V3 and DeepSeek-R1 (Reasoner)", fontSize = 14.sp)
+                        Text("• OpenAI-compatible API", fontSize = 14.sp)
+                    }
+                    ApiProvider.MISTRAL -> {
+                        Text("Mistral AI", fontWeight = FontWeight.Medium)
+                        Text("• High-quality open-weights models", fontSize = 14.sp)
+                        Text("• Mistral Large and Mistral Small", fontSize = 14.sp)
+                        Text("• Native support for multilingual tasks", fontSize = 14.sp)
+                    }
+                    ApiProvider.LOCAL_WHISPER -> {
+                        Text("On-device Whisper (.bin)", fontWeight = FontWeight.Medium)
+                        Text("• Processing happens on your device", fontSize = 14.sp)
+                        Text("• 100% private and offline-capable", fontSize = 14.sp)
+                        Text("• Requires whisper.cpp model file (.bin)", fontSize = 14.sp)
+                        Text("• Performance depends on device CPU/NPU", fontSize = 14.sp)
+                        Text("• Customizable thread count", fontSize = 14.sp)
                     }
                 }
 

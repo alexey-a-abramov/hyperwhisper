@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -72,6 +73,25 @@ class ProviderIntegrationTestRunner(
                     chain.proceed(reqBuilder.build())
                 }
                 .build()
+
+            if (provider == ApiProvider.SELFHOSTED_WHISPER) {
+                val request = Request.Builder()
+                    .url(baseUrl)
+                    .get()
+                    .build()
+                val startedAt = System.nanoTime()
+                client.newCall(request).execute().use { response ->
+                    val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+                    return ProviderIntegrationResult(
+                        provider = provider,
+                        configured = true,
+                        success = response.isSuccessful,
+                        durationMs = elapsedMs,
+                        statusCode = response.code,
+                        message = if (response.isSuccessful) "Success" else "HTTP ${response.code}"
+                    )
+                }
+            }
 
             val service = Retrofit.Builder()
                 .baseUrl(baseUrl)

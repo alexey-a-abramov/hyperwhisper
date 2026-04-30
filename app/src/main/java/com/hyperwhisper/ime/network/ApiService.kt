@@ -30,6 +30,14 @@ interface TranscriptionApiService {
         @Part("timestamp_granularity") timestampGranularity: RequestBody? = null,
         @Part("language") language: RequestBody? = null
     ): Response<TranscriptionResponse>
+
+    @Multipart
+    @POST("inference")
+    suspend fun transcribeLocal(
+        @Part file: MultipartBody.Part,
+        @Part("response_format") responseFormat: RequestBody? = null,
+        @Part("language") language: RequestBody? = null
+    ): Response<TranscriptionResponse>
 }
 
 /**

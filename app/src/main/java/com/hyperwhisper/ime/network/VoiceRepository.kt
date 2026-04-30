@@ -493,7 +493,7 @@ class VoiceRepository @Inject constructor(
                 Log.d(TAG, "Selected ChatCompletionStrategy (HuggingFace - text-only)")
                 chatCompletionStrategy
             }
-            // Verbatim mode with OpenAI/Groq/Self-hosted Whisper uses transcription
+            // Verbatim mode with transcription-style providers uses transcription
             voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ || provider == ApiProvider.SELFHOSTED_WHISPER) -> {
                 Log.d(TAG, "Selected TranscriptionStrategy (Verbatim)")
                 transcriptionStrategy
