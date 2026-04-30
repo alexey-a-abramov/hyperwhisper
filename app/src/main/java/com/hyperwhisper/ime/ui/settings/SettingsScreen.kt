@@ -6,12 +6,21 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -19,19 +28,16 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material3.Divider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
+import com.hyperwhisper.ui.settings.components.SettingsHamburgerMenu
+import com.hyperwhisper.ui.settings.sections.LocalModelsSection
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,17 +68,7 @@ import com.hyperwhisper.ui.settings.sections.AppearanceSection
 import com.hyperwhisper.ui.settings.sections.VoiceModesSection
 import kotlinx.coroutines.launch
 
-private enum class SettingsTab(
-    val title: String,
-    val icon: ImageVector
-) {
-    API_CONFIG("API & Models", Icons.Default.Api),
-    LLM_CONFIG("Post-Processing", Icons.Default.AutoAwesome),
-    VOICE_MODES("Voice Modes", Icons.Default.Mic),
-    APPEARANCE("Appearance", Icons.Default.Palette)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -87,9 +83,12 @@ fun SettingsScreen(
     val connectionTestState by viewModel.connectionTestState.collectAsState()
     val apiCallLogs by viewModel.apiCallLogs.collectAsState()
     val apiCallStatistics by viewModel.apiCallStatistics.collectAsState()
+    val discoveredModels by viewModel.discoveredModels.collectAsState()
 
-    // Tab state
-    var selectedTab by remember { mutableStateOf(SettingsTab.API_CONFIG) }
+    // Navigation and Pager state
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val pagerState = rememberPagerState(pageCount = { SettingsTab.values().size })
+    val selectedTab = SettingsTab.values()[pagerState.currentPage]
 
     // Local form state for API settings
     var provider by remember { mutableStateOf(initialProvider ?: apiSettings.provider) }
@@ -177,291 +176,332 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(strings.settingsTitle) },
-                actions = {
-                    if (appearanceSettings.techieModeEnabled) {
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            SettingsHamburgerMenu(
+                selectedTab = selectedTab,
+                onTabSelected = { tab ->
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(tab.ordinal)
+                    }
+                },
+                onClose = {
+                    coroutineScope.launch { drawerState.close() }
+                }
+            )
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(strings.settingsTitle, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                selectedTab.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            )
+                        }
+                    },
+                    navigationIcon = {
                         IconButton(onClick = {
-                            val exportJson = viewModel.buildSecretsExportJson()
-                            val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
-                            clipboardManager.setPrimaryClip(clip)
-                            Toast.makeText(
-                                context,
-                                "Secrets exported. Save clipboard as local .env in project root.",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            coroutineScope.launch { drawerState.open() }
+                        }) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                        }
+                    },
+                    actions = {
+                        if (appearanceSettings.techieModeEnabled) {
+                            IconButton(onClick = {
+                                val exportJson = viewModel.buildSecretsExportJson()
+                                val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
+                                clipboardManager.setPrimaryClip(clip)
+                                Toast.makeText(
+                                    context,
+                                    "Secrets exported. Save clipboard as local .env in project root.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Export Secrets",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+
+                        // Save and close button
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                // Save transcription provider settings
+                                viewModel.saveApiSettingsAndWait(
+                                    provider, baseUrl, apiKey, requiresAuth, modelId,
+                                    inputLanguage, outputLanguage
+                                )
+                                // Save LLM configuration
+                                viewModel.updateLlmConfig(
+                                    com.hyperwhisper.data.LlmConfig(
+                                        provider = llmProvider,
+                                        customBaseUrl = llmBaseUrl,
+                                        apiKey = llmApiKey,
+                                        requiresAuth = llmRequiresAuth,
+                                        modelId = llmModelId
+                                    )
+                                )
+                                (context as? Activity)?.finish()
+                            }
                         }) {
                             Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Export Secrets",
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Save and Close",
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
-                    }
 
-                    // Save and close button
-                    IconButton(onClick = {
-                        coroutineScope.launch {
-                            // Save transcription provider settings
-                            viewModel.saveApiSettingsAndWait(
-                                provider, baseUrl, apiKey, requiresAuth, modelId,
-                                inputLanguage, outputLanguage
-                            )
-                            // Save LLM configuration
-                            viewModel.updateLlmConfig(
-                                com.hyperwhisper.data.LlmConfig(
-                                    provider = llmProvider,
-                                    customBaseUrl = llmBaseUrl,
-                                    apiKey = llmApiKey,
-                                    requiresAuth = llmRequiresAuth,
-                                    modelId = llmModelId
-                                )
-                            )
+                        // Close button (without saving)
+                        IconButton(onClick = {
                             (context as? Activity)?.finish()
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Save and Close",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-
-                    // Close button (without saving)
-                    IconButton(onClick = {
-                        (context as? Activity)?.finish()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-
-                    // Help/About button
-                    IconButton(onClick = {
-                        context.startActivity(Intent(context, AboutActivity::class.java))
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "About",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // Tab Row
-            TabRow(
-                selectedTabIndex = selectedTab.ordinal,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                SettingsTab.values().forEach { tab ->
-                    Tab(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        text = {
-                            Text(
-                                text = tab.title,
-                                fontSize = 13.sp,
-                                fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        icon = {
+                        }) {
                             Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
-                    )
-                }
-            }
 
-            // Tab Content
-            LazyColumn(
+                        // Help/About button
+                        IconButton(onClick = {
+                            context.startActivity(Intent(context, AboutActivity::class.java))
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "About",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+            }
+        ) { paddingValues ->
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(paddingValues)
             ) {
-                when (selectedTab) {
-                    SettingsTab.API_CONFIG -> {
+                VerticalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = true,
+                    beyondBoundsPageCount = 1
+                ) { page ->
+                    val tab = SettingsTab.values()[page]
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                         item {
-                            Text(
-                                text = "Transcription API",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        item { Divider() }
-
-                        item {
-                            ApiConfigSection(
-                                provider = provider,
-                                baseUrl = baseUrl,
-                                apiKey = apiKey,
-                                requiresAuth = requiresAuth,
-                                modelId = modelId,
-                                inputLanguage = inputLanguage,
-                                outputLanguage = outputLanguage,
-                                connectionTestState = connectionTestState,
-                                llmApiKey = llmApiKey,
-                                onProviderChange = { provider = it },
-                                onBaseUrlChange = { baseUrl = it },
-                                onApiKeyChange = { apiKey = it },
-                                onRequiresAuthChange = { requiresAuth = it },
-                                onModelIdChange = { modelId = it },
-                                onInputLanguageChange = { inputLanguage = it },
-                                onOutputLanguageChange = { outputLanguage = it },
-                                onTestConnection = {
-                                    viewModel.testConnection(baseUrl, apiKey, modelId)
-                                },
-                                onResetDefaults = {
-                                    baseUrl = provider.defaultEndpoint
-                                    requiresAuth = provider.requiresAuth
-                                    modelId = provider.defaultModels.firstOrNull() ?: modelId
-                                },
-                                onShowModelInfo = { showModelInfo = true },
-                                onShowProviderKeyHelp = { showProviderKeyHelp = true },
-                                onReuseProviderKeyForLlm = {
-                                    llmApiKey = apiKey
-                                    if (llmProvider == com.hyperwhisper.data.LlmProvider.NONE) {
-                                        llmProvider = com.hyperwhisper.data.LlmProvider.OPENAI
-                                        llmBaseUrl = com.hyperwhisper.data.LlmProvider.OPENAI.defaultEndpoint
-                                        llmRequiresAuth = com.hyperwhisper.data.LlmProvider.OPENAI.requiresAuth
-                                        llmModelId = com.hyperwhisper.data.LlmProvider.OPENAI.defaultModels.firstOrNull() ?: llmModelId
-                                    }
-                                },
-                                onShowInputLanguageInfo = { showInputLanguageInfo = true },
-                                onShowLogsDialog = { showLogsDialog = true },
-                                onShowApiCallLogs = { showApiCallLogs = true },
-                                onResetConnectionTestState = { viewModel.resetConnectionTestState() }
-                            )
-                        }
-                    }
-
-                    SettingsTab.LLM_CONFIG -> {
-                        item {
-                            Text(
-                                text = "Post-Processing LLM",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        item {
-                            Text(
-                                text = "Configure the LLM used for transforming and translating transcriptions",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        item { Divider() }
-
-                        item {
-                            com.hyperwhisper.ui.settings.sections.LlmConfigSection(
-                                llmProvider = llmProvider,
-                                llmBaseUrl = llmBaseUrl,
-                                llmApiKey = llmApiKey,
-                                llmRequiresAuth = llmRequiresAuth,
-                                llmModelId = llmModelId,
-                                providerApiKey = apiKey,
-                                onLlmProviderChange = { llmProvider = it },
-                                onLlmBaseUrlChange = { llmBaseUrl = it },
-                                onLlmApiKeyChange = { llmApiKey = it },
-                                onLlmRequiresAuthChange = { llmRequiresAuth = it },
-                                onLlmModelIdChange = { llmModelId = it },
-                                onResetLlmDefaults = {
-                                    llmBaseUrl = llmProvider.defaultEndpoint
-                                    llmRequiresAuth = llmProvider.requiresAuth
-                                    llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
-                                },
-                                onReuseLlmKeyForProvider = {
-                                    apiKey = llmApiKey
-                                    if (!requiresAuth) requiresAuth = true
-                                },
-                                onShowLlmInfo = { showLlmInfo = true }
-                            )
-                        }
-                    }
-
-                    SettingsTab.VOICE_MODES -> {
-                        item {
-                            Text(
-                                text = "Voice Modes",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        item {
-                            Text(
-                                text = "Customize how your transcriptions are processed and formatted",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        item { Divider() }
-
-                        item {
-                            VoiceModesSection(
-                                voiceModes = voiceModes,
-                                onAddMode = { showAddModeDialog = true },
-                                onEditMode = { editingMode = it },
-                                onDeleteMode = { viewModel.deleteVoiceMode(it) }
-                            )
-                        }
-                    }
-
-                    SettingsTab.APPEARANCE -> {
-                        item {
-                            Text(
-                                text = "Appearance",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        item {
-                            Text(
-                                text = "Customize the look and feel of HyperWhisper",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        item { Divider() }
-
-                        item {
-                            SectionCard(
-                                title = strings.appearanceSettings,
-                                icon = Icons.Default.Palette
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                AppearanceSection(
-                                    appearanceSettings = appearanceSettings,
-                                    onSettingsChange = { viewModel.saveAppearanceSettings(it) }
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = tab.title,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
+
+                        item { Divider() }
+
+                        when (tab) {
+                            SettingsTab.API_CONFIG -> {
+                                item {
+                                    ApiConfigSection(
+                                        provider = provider,
+                                        baseUrl = baseUrl,
+                                        apiKey = apiKey,
+                                        requiresAuth = requiresAuth,
+                                        modelId = modelId,
+                                        inputLanguage = inputLanguage,
+                                        outputLanguage = outputLanguage,
+                                        connectionTestState = connectionTestState,
+                                        llmApiKey = llmApiKey,
+                                        onProviderChange = { provider = it },
+                                        onBaseUrlChange = { baseUrl = it },
+                                        onApiKeyChange = { apiKey = it },
+                                        onRequiresAuthChange = { requiresAuth = it },
+                                        onModelIdChange = { modelId = it },
+                                        onInputLanguageChange = { inputLanguage = it },
+                                        onOutputLanguageChange = { outputLanguage = it },
+                                        onTestConnection = {
+                                            viewModel.testConnection(provider, baseUrl, apiKey, modelId)
+                                        },
+                                        onResetDefaults = {
+                                            baseUrl = provider.defaultEndpoint
+                                            requiresAuth = provider.requiresAuth
+                                            modelId = provider.defaultModels.firstOrNull() ?: modelId
+                                        },
+                                        onShowModelInfo = { showModelInfo = true },
+                                        onShowProviderKeyHelp = { showProviderKeyHelp = true },
+                                        onReuseProviderKeyForLlm = {
+                                            llmApiKey = apiKey
+                                            if (llmProvider == com.hyperwhisper.data.LlmProvider.NONE) {
+                                                llmProvider = com.hyperwhisper.data.LlmProvider.OPENAI
+                                                llmBaseUrl = com.hyperwhisper.data.LlmProvider.OPENAI.defaultEndpoint
+                                                llmRequiresAuth = com.hyperwhisper.data.LlmProvider.OPENAI.requiresAuth
+                                                llmModelId = com.hyperwhisper.data.LlmProvider.OPENAI.defaultModels.firstOrNull() ?: llmModelId
+                                            }
+                                        },
+                                        onShowInputLanguageInfo = { showInputLanguageInfo = true },
+                                        onShowLogsDialog = { showLogsDialog = true },
+                                        onShowApiCallLogs = { showApiCallLogs = true },
+                                        onResetConnectionTestState = { viewModel.resetConnectionTestState() }
+                                    )
+                                }
+                            }
+
+                            SettingsTab.LOCAL_MODELS -> {
+                                item {
+                                    LocalModelsSection(
+                                        localSettings = apiSettings.localModelSettings,
+                                        discoveredModels = discoveredModels,
+                                        onSettingsChange = { viewModel.updateLocalModelSettings(it) },
+                                        onDiscoverModels = { viewModel.discoverModels() },
+                                        onVerifyModel = { viewModel.verifyModelIntegrity(it) }
+                                    )
+                                }
+                            }
+
+                            SettingsTab.LLM_CONFIG -> {
+                                item {
+                                    Text(
+                                        text = "Configure the LLM used for transforming and translating transcriptions",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                item {
+                                    com.hyperwhisper.ui.settings.sections.LlmConfigSection(
+                                        llmProvider = llmProvider,
+                                        llmBaseUrl = llmBaseUrl,
+                                        llmApiKey = llmApiKey,
+                                        llmRequiresAuth = llmRequiresAuth,
+                                        llmModelId = llmModelId,
+                                        providerApiKey = apiKey,
+                                        onLlmProviderChange = { llmProvider = it },
+                                        onLlmBaseUrlChange = { llmBaseUrl = it },
+                                        onLlmApiKeyChange = { llmApiKey = it },
+                                        onLlmRequiresAuthChange = { llmRequiresAuth = it },
+                                        onLlmModelIdChange = { llmModelId = it },
+                                        onResetLlmDefaults = {
+                                            llmBaseUrl = llmProvider.defaultEndpoint
+                                            llmRequiresAuth = llmProvider.requiresAuth
+                                            llmModelId = llmProvider.defaultModels.firstOrNull() ?: llmModelId
+                                        },
+                                        onReuseLlmKeyForProvider = {
+                                            apiKey = llmApiKey
+                                            if (!requiresAuth) requiresAuth = true
+                                        },
+                                        onShowLlmInfo = { showLlmInfo = true }
+                                    )
+                                }
+                            }
+
+                            SettingsTab.VOICE_MODES -> {
+                                item {
+                                    Text(
+                                        text = "Customize how your transcriptions are processed and formatted",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                item {
+                                    VoiceModesSection(
+                                        voiceModes = voiceModes,
+                                        onAddMode = { showAddModeDialog = true },
+                                        onEditMode = { editingMode = it },
+                                        onDeleteMode = { viewModel.deleteVoiceMode(it) }
+                                    )
+                                }
+                            }
+
+                            SettingsTab.APPEARANCE -> {
+                                item {
+                                    Text(
+                                        text = "Customize the look and feel of HyperWhisper",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                item {
+                                    SectionCard(
+                                        title = strings.appearanceSettings,
+                                        icon = Icons.Default.Palette
+                                    ) {
+                                        AppearanceSection(
+                                            appearanceSettings = appearanceSettings,
+                                            onSettingsChange = { viewModel.saveAppearanceSettings(it) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        item {
+                            Spacer(Modifier.height(100.dp))
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 24.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    tonalElevation = 4.dp
+                ) {
+                    val currentPage = pagerState.currentPage
+                    val totalPages = SettingsTab.values().size
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable {
+                                if (currentPage < totalPages - 1) {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(currentPage + 1)
+                                    }
+                                }
+                            },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (currentPage < totalPages - 1) "NEXT: ${SettingsTab.values()[currentPage + 1].title}" else "END OF SETTINGS",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (currentPage < totalPages - 1) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(20.dp))
                         }
                     }
                 }

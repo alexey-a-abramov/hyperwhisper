@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.*
 import javax.inject.Inject
@@ -60,6 +62,12 @@ class SettingsViewModel @Inject constructor(
     private val _apiCallStatistics = MutableStateFlow(ApiCallStatistics(0, 0, 0, emptyMap(), 0))
     val apiCallStatistics: StateFlow<ApiCallStatistics> = _apiCallStatistics.asStateFlow()
 
+    private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
+    val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
+
+    private val _discoveredModels = MutableStateFlow<List<com.hyperwhisper.data.LocalModelInfo>>(emptyList())
+    val discoveredModels: StateFlow<List<com.hyperwhisper.data.LocalModelInfo>> = _discoveredModels.asStateFlow()
+
     init {
         // Update statistics whenever logs change
         viewModelScope.launch {
@@ -67,10 +75,53 @@ class SettingsViewModel @Inject constructor(
                 _apiCallStatistics.value = settingsRepository.getApiCallStatistics()
             }
         }
+        
+        // Initial model discovery
+        viewModelScope.launch {
+            apiSettings.collect { settings ->
+                if (settings.localModelSettings.autoDiscover && _discoveredModels.value.isEmpty()) {
+                    discoverModels()
+                }
+            }
+        }
     }
 
-    private val _connectionTestState = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
-    val connectionTestState: StateFlow<ConnectionTestState> = _connectionTestState.asStateFlow()
+    fun discoverModels() {
+        viewModelScope.launch {
+            try {
+                _discoveredModels.value = settingsRepository.localModelRepository.discoverModels()
+                Log.d(TAG, "Discovered ${_discoveredModels.value.size} local models")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error discovering models", e)
+            }
+        }
+    }
+
+    fun verifyModelIntegrity(path: String) {
+        viewModelScope.launch {
+            try {
+                val hash = settingsRepository.localModelRepository.verifyIntegrity(path)
+                // Update the model info in our list with the hash
+                _discoveredModels.value = _discoveredModels.value.map {
+                    if (it.path == path) it.copy(hash = hash, isVerified = hash.isNotEmpty()) else it
+                }
+                Log.d(TAG, "Verified model integrity for: $path, hash: $hash")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error verifying model integrity", e)
+            }
+        }
+    }
+
+    fun updateLocalModelSettings(settings: com.hyperwhisper.data.LocalModelSettings) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.updateLocalModelSettings(settings)
+                Log.d(TAG, "Local model settings updated: $settings")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating local model settings", e)
+            }
+        }
+    }
 
     fun saveApiSettings(
         provider: ApiProvider,
@@ -247,12 +298,29 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun testConnection(baseUrl: String, apiKey: String, modelId: String) {
+    fun testConnection(provider: ApiProvider, baseUrl: String, apiKey: String, modelId: String) {
         viewModelScope.launch {
             _connectionTestState.value = ConnectionTestState.Testing
             Log.d(TAG, "Testing connection to: $baseUrl")
 
             try {
+                if (provider == ApiProvider.SELFHOSTED_WHISPER) {
+                    val request = Request.Builder()
+                        .url(if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/")
+                        .get()
+                        .build()
+                    OkHttpClient.Builder().build().newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            _connectionTestState.value = ConnectionTestState.Success(
+                                "Connection successful! Local whisper.cpp server is responding."
+                            )
+                            Log.d(TAG, "Local whisper.cpp connection test successful")
+                            return@launch
+                        }
+                        throw IllegalStateException("HTTP ${response.code}")
+                    }
+                }
+
                 // Create a minimal test request - empty audio file
                 val emptyAudio = ByteArray(44) // Minimal WAV header
                 val audioPart = MultipartBody.Part.createFormData(
