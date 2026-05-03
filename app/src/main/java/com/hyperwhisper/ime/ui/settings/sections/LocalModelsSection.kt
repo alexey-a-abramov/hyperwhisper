@@ -59,6 +59,10 @@ fun LocalModelsSection(
     onCancelGemmaDownload: (String) -> Unit,
     onDeleteGemmaDownload: (String) -> Unit,
     onSetActiveGemma: (String) -> Unit,
+    integrationResults: List<com.hyperwhisper.ui.about.ProviderIntegrationResult> = emptyList(),
+    integrationRunning: Boolean = false,
+    onRunIntegrationTests: () -> Unit = {},
+    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -94,8 +98,174 @@ fun LocalModelsSection(
             onDelete = onDeleteGemmaDownload,
             onSetActive = onSetActiveGemma
         )
+
+        IntegrationTestCard(
+            running = integrationRunning,
+            results = integrationResults,
+            onRun = onRunIntegrationTests,
+            onOpenProviderConfiguration = onOpenProviderConfiguration
+        )
     }
 }
+
+// region Integration tests
+
+@Composable
+private fun IntegrationTestCard(
+    running: Boolean,
+    results: List<com.hyperwhisper.ui.about.ProviderIntegrationResult>,
+    onRun: () -> Unit,
+    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val configured = results.filter { it.configured }
+    val notConfigured = results.filter { !it.configured }
+    val passCount = configured.count { it.success }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Provider integration tests",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (results.isNotEmpty()) {
+                    Text(
+                        text = "$passCount/${configured.size} pass · ${notConfigured.size} skipped",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                "Probes every cloud provider with a synthetic request to verify " +
+                    "endpoint + key validity. Skips providers without an API key set.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(
+                    onClick = onRun,
+                    enabled = !running,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (running) "Running…" else "Run all providers", fontSize = 12.sp)
+                }
+                if (results.isNotEmpty()) {
+                    OutlinedButton(onClick = {
+                        val json = buildIntegrationResultsJson(results)
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(json))
+                        android.widget.Toast.makeText(
+                            context,
+                            "Copied ${results.size} results as JSON",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }) { Text("Copy JSON", fontSize = 12.sp) }
+                }
+            }
+
+            if (configured.isNotEmpty()) {
+                Text(
+                    "CONFIGURED · ${configured.size}",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                configured.forEach { IntegrationRow(it, onOpenProviderConfiguration) }
+            }
+            if (notConfigured.isNotEmpty()) {
+                Text(
+                    "NOT CONFIGURED · ${notConfigured.size}",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                notConfigured.forEach { IntegrationRow(it, onOpenProviderConfiguration) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IntegrationRow(
+    result: com.hyperwhisper.ui.about.ProviderIntegrationResult,
+    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit
+) {
+    val (glyph, color) = when {
+        !result.configured -> "–" to MaterialTheme.colorScheme.onSurfaceVariant
+        result.success -> "✓" to MaterialTheme.colorScheme.primary
+        else -> "✗" to MaterialTheme.colorScheme.error
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            glyph,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            modifier = Modifier.padding(end = 6.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(result.provider.displayName, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            val detail = buildString {
+                result.statusCode?.let { append("HTTP ").append(it).append(" · ") }
+                if (result.configured) append(result.durationMs).append(" ms · ")
+                append(result.message)
+            }
+            Text(
+                detail,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2
+            )
+        }
+        androidx.compose.material3.TextButton(
+            onClick = { onOpenProviderConfiguration(result.provider) },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = 6.dp, vertical = 0.dp
+            )
+        ) { Text("Configure", fontSize = 10.sp, fontWeight = FontWeight.Medium) }
+    }
+}
+
+private fun buildIntegrationResultsJson(
+    results: List<com.hyperwhisper.ui.about.ProviderIntegrationResult>
+): String {
+    fun esc(s: String): String = s
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    val items = results.joinToString(",\n") { r ->
+        buildString {
+            append("  {")
+            append("\"provider\":\"").append(esc(r.provider.name)).append("\",")
+            append("\"displayName\":\"").append(esc(r.provider.displayName)).append("\",")
+            append("\"configured\":").append(r.configured).append(',')
+            append("\"success\":").append(r.success).append(',')
+            append("\"durationMs\":").append(r.durationMs).append(',')
+            append("\"statusCode\":").append(r.statusCode?.toString() ?: "null").append(',')
+            append("\"message\":\"").append(esc(r.message)).append("\"")
+            append("}")
+        }
+    }
+    return "[\n$items\n]\n"
+}
+
+// endregion
 
 // region Whisper
 

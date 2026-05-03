@@ -128,6 +128,30 @@ class SettingsViewModel @Inject constructor(
     val discoveredModels: StateFlow<List<com.hyperwhisper.data.LocalModelInfo>> = _discoveredModels.asStateFlow()
 
     val whisperDownloadStates: StateFlow<Map<String, WhisperDownloadState>> = whisperDownloader.states
+
+    private val _integrationResults =
+        MutableStateFlow<List<com.hyperwhisper.ui.about.ProviderIntegrationResult>>(emptyList())
+    val integrationResults: StateFlow<List<com.hyperwhisper.ui.about.ProviderIntegrationResult>> =
+        _integrationResults.asStateFlow()
+
+    private val _integrationRunning = MutableStateFlow(false)
+    val integrationRunning: StateFlow<Boolean> = _integrationRunning.asStateFlow()
+
+    /** Run the integration probe across every [ApiProvider]. Hits configured
+     *  providers with a real HTTP probe; skips ones with no key set. */
+    fun runIntegrationTests() {
+        viewModelScope.launch {
+            _integrationRunning.value = true
+            try {
+                val runner = com.hyperwhisper.ui.about.ProviderIntegrationTestRunner(gson)
+                _integrationResults.value = runner.runAll(apiSettings.value)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Integration tests failed", t)
+            } finally {
+                _integrationRunning.value = false
+            }
+        }
+    }
     val gemmaDownloadStates: StateFlow<Map<String, com.hyperwhisper.data.GemmaDownloadState>> =
         gemmaDownloader.states
 

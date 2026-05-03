@@ -85,6 +85,7 @@ fun SettingsScreen(
     val openRouterError by viewModel.openRouterError.collectAsState()
 
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val coroutineScope = rememberCoroutineScope()
     val clipboardManager = remember {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -133,16 +134,15 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     val current = route
-                    val strings = LocalStrings.current
                     val title = if (current is SettingsRoute.Detail) current.category.localizedTitle()
                         else strings.settings
                     val subtitle: String? = when {
                         current is SettingsRoute.Detail &&
                             current.category == SettingsCategory.TRANSCRIPTION ->
-                            "Active: " + SettingsStatusLabels.transcriptionLabel(apiSettings)
+                            strings.settingsActivePrefix + SettingsStatusLabels.transcriptionLabel(apiSettings)
                         current is SettingsRoute.Detail &&
                             current.category == SettingsCategory.POST_PROCESSING ->
-                            "Active: " + SettingsStatusLabels.postProcessingLabel(apiSettings)
+                            strings.settingsActivePrefix + SettingsStatusLabels.postProcessingLabel(apiSettings)
                         else -> null
                     }
                     androidx.compose.foundation.layout.Column {
@@ -160,32 +160,32 @@ fun SettingsScreen(
                     val current = route
                     if (current is SettingsRoute.Detail) {
                         IconButton(onClick = { route = SettingsRoute.Home }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Filled.ArrowBack, contentDescription = strings.back)
                         }
                     } else {
                         IconButton(onClick = { (context as? Activity)?.finish() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                            Icon(Icons.Default.Close, contentDescription = strings.close)
                         }
                     }
                 },
                 actions = {
                     Box {
                         IconButton(onClick = { overflowOpen = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            Icon(Icons.Default.MoreVert, contentDescription = strings.settingsOverflowMoreDesc)
                         }
                         DropdownMenu(
                             expanded = overflowOpen,
                             onDismissRequest = { overflowOpen = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("About") },
+                                text = { Text(strings.settingsOverflowAbout) },
                                 onClick = {
                                     overflowOpen = false
                                     context.startActivity(Intent(context, AboutActivity::class.java))
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("View API logs") },
+                                text = { Text(strings.viewApiLogs) },
                                 onClick = {
                                     overflowOpen = false
                                     showApiCallLogs = true
@@ -193,7 +193,7 @@ fun SettingsScreen(
                             )
                             if (appearanceSettings.techieModeEnabled) {
                                 DropdownMenuItem(
-                                    text = { Text("Export secrets") },
+                                    text = { Text(strings.settingsOverflowExportSecrets) },
                                     onClick = {
                                         overflowOpen = false
                                         val exportJson = viewModel.buildSecretsExportJson()
@@ -201,7 +201,7 @@ fun SettingsScreen(
                                         clipboardManager.setPrimaryClip(clip)
                                         Toast.makeText(
                                             context,
-                                            "Secrets copied to clipboard",
+                                            strings.settingsSecretsCopiedToast,
                                             Toast.LENGTH_LONG
                                         ).show()
                                     }
@@ -305,6 +305,8 @@ fun SettingsScreen(
 
                             SettingsCategory.LOCAL_MODELS -> {
                                 val gemmaStates by viewModel.gemmaDownloadStates.collectAsState()
+                                val integrationResults by viewModel.integrationResults.collectAsState()
+                                val integrationRunning by viewModel.integrationRunning.collectAsState()
                                 com.hyperwhisper.ui.settings.sections.LocalModelsSection(
                                     whisperStates = whisperDownloadStates,
                                     gemmaStates = gemmaStates,
@@ -319,7 +321,27 @@ fun SettingsScreen(
                                     onStartGemmaDownload = { viewModel.startGemmaDownload(it) },
                                     onCancelGemmaDownload = { viewModel.cancelGemmaDownload(it) },
                                     onDeleteGemmaDownload = { viewModel.deleteDownloadedGemmaModel(it) },
-                                    onSetActiveGemma = { viewModel.setActiveGemmaModel(it) }
+                                    onSetActiveGemma = { viewModel.setActiveGemmaModel(it) },
+                                    integrationResults = integrationResults,
+                                    integrationRunning = integrationRunning,
+                                    onRunIntegrationTests = { viewModel.runIntegrationTests() },
+                                    onOpenProviderConfiguration = { provider ->
+                                        viewModel.saveApiSettings(
+                                            provider = provider,
+                                            baseUrl = apiSettings.providerConfigs[provider]?.customBaseUrl?.ifEmpty {
+                                                provider.defaultEndpoint
+                                            } ?: provider.defaultEndpoint,
+                                            apiKey = apiSettings.apiKeys[provider] ?: "",
+                                            requiresAuth = apiSettings.providerConfigs[provider]?.requiresAuth
+                                                ?: provider.requiresAuth,
+                                            modelId = apiSettings.modelId.ifEmpty {
+                                                provider.defaultModels.firstOrNull() ?: ""
+                                            },
+                                            inputLanguage = apiSettings.inputLanguage,
+                                            outputLanguage = apiSettings.outputLanguage
+                                        )
+                                        route = SettingsRoute.Detail(SettingsCategory.TRANSCRIPTION)
+                                    }
                                 )
                             }
 
@@ -352,7 +374,7 @@ fun SettingsScreen(
                                     val exportJson = viewModel.buildSecretsExportJson()
                                     val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
                                     clipboardManager.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Secrets copied to clipboard", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, strings.settingsSecretsCopiedToast, Toast.LENGTH_LONG).show()
                                 }
                             )
 
@@ -526,6 +548,7 @@ private fun AdvancedDetail(
     techieModeEnabled: Boolean,
     onExportSecrets: () -> Unit
 ) {
+    val strings = LocalStrings.current
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
             .padding(16.dp)
@@ -533,19 +556,19 @@ private fun AdvancedDetail(
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
     ) {
         AdvancedRow(
-            title = "API call logs",
-            description = "Inspect recent transcription/LLM requests",
+            title = strings.advancedApiLogsTitle,
+            description = strings.advancedApiLogsDescription,
             onClick = onOpenApiLogs
         )
         AdvancedRow(
-            title = "Provider API key help",
-            description = "How to get an API key for the current provider",
+            title = strings.advancedProviderKeyHelpTitle,
+            description = strings.advancedProviderKeyHelpDescription,
             onClick = onOpenProviderKeyHelp
         )
         if (techieModeEnabled) {
             AdvancedRow(
-                title = "Export secrets to clipboard",
-                description = "Copies all provider keys & endpoints as JSON",
+                title = strings.advancedExportSecretsTitle,
+                description = strings.advancedExportSecretsDescription,
                 onClick = onExportSecrets
             )
         }

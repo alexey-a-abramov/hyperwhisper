@@ -418,15 +418,9 @@ ${strings.languageSelectionDesc}""",
                 )
             }
 
-            if (techieModeEnabled) {
-                Spacer(modifier = Modifier.height(16.dp))
-                IntegrationTestSection(
-                    running = integrationRunning,
-                    results = integrationResults,
-                    onRun = onRunIntegrationTests,
-                    onOpenProviderConfiguration = onOpenProviderConfiguration
-                )
-            }
+            // Integration tests moved to Settings → Local models. About stays
+            // version-info / build-probe only; provider diagnostics live with
+            // the rest of the model-tooling.
         }
     }
 }
