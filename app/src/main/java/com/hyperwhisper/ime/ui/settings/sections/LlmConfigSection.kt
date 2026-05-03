@@ -57,6 +57,10 @@ fun LlmConfigSection(
     postProcessingTestLog: List<TestLogEntry> = emptyList(),
     onTestPostProcessing: () -> Unit = {},
     onResetPostProcessingTestState: () -> Unit = {},
+    openRouterModels: List<com.hyperwhisper.ui.settings.OpenRouterModelInfo> = emptyList(),
+    openRouterRefreshing: Boolean = false,
+    openRouterError: String? = null,
+    onRefreshOpenRouterModels: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -176,6 +180,25 @@ fun LlmConfigSection(
         }
 
         Spacer(Modifier.padding(vertical = 8.dp))
+
+        // OpenRouter free-models discovery — same panel as the transcription
+        // side, but with the audio filter OFF by default since LLM
+        // post-processing wants chat-capable models, not audio ones.
+        if (llmProvider == LlmProvider.OPENROUTER) {
+            OpenRouterDiscoveryPanel(
+                models = openRouterModels,
+                refreshing = openRouterRefreshing,
+                error = openRouterError,
+                selectedModelId = llmModelId,
+                onRefresh = onRefreshOpenRouterModels,
+                onSelect = onLlmModelIdChange,
+                audioFilterDefault = false,
+                audioFilterLabel = "Audio-capable only",
+                descriptionText = "Browse the OpenRouter catalog. Filter for " +
+                    "free models; tap any row to use it for post-processing."
+            )
+            Spacer(Modifier.padding(vertical = 8.dp))
+        }
 
         // Info text
         Text(

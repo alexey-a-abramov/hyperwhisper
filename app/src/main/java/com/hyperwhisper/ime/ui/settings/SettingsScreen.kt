@@ -293,7 +293,11 @@ fun SettingsScreen(
                                         )
                                     viewModel.testPostProcessing(mode)
                                 },
-                                onResetPostProcessingTestState = { viewModel.resetPostProcessingTestState() }
+                                onResetPostProcessingTestState = { viewModel.resetPostProcessingTestState() },
+                                openRouterModels = openRouterModels,
+                                openRouterRefreshing = openRouterRefreshing,
+                                openRouterError = openRouterError,
+                                onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() }
                             )
 
                             SettingsCategory.VOICE_MODES -> Box(modifier = Modifier.padding(16.dp)) {
@@ -414,7 +418,11 @@ private fun PostProcessingDetail(
         com.hyperwhisper.ui.settings.ConnectionTestState.Idle,
     postProcessingTestLog: List<com.hyperwhisper.ui.settings.TestLogEntry> = emptyList(),
     onTestPostProcessing: () -> Unit = {},
-    onResetPostProcessingTestState: () -> Unit = {}
+    onResetPostProcessingTestState: () -> Unit = {},
+    openRouterModels: List<com.hyperwhisper.ui.settings.OpenRouterModelInfo> = emptyList(),
+    openRouterRefreshing: Boolean = false,
+    openRouterError: String? = null,
+    onRefreshOpenRouterModels: () -> Unit = {}
 ) {
     val cfg = apiSettings.llmConfig
     var llmProvider by remember(cfg) { mutableStateOf(cfg.provider) }
@@ -485,7 +493,11 @@ private fun PostProcessingDetail(
             postProcessingTestState = postProcessingTestState,
             postProcessingTestLog = postProcessingTestLog,
             onTestPostProcessing = onTestPostProcessing,
-            onResetPostProcessingTestState = onResetPostProcessingTestState
+            onResetPostProcessingTestState = onResetPostProcessingTestState,
+            openRouterModels = openRouterModels,
+            openRouterRefreshing = openRouterRefreshing,
+            openRouterError = openRouterError,
+            onRefreshOpenRouterModels = onRefreshOpenRouterModels
         )
     }
 }
