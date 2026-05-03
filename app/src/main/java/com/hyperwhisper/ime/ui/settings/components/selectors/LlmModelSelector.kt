@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +29,7 @@ fun LlmModelSelector(
     onModelSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
     var customModel by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
@@ -52,7 +54,7 @@ fun LlmModelSelector(
                 customModel = it
                 onModelSelected(it)
             },
-            label = { Text("LLM Model") },
+            label = { Text(strings.selectorLlmModelLabel) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
@@ -68,7 +70,7 @@ fun LlmModelSelector(
             OutlinedTextField(
                 value = filter,
                 onValueChange = { filter = it },
-                label = { Text("Filter models") },
+                label = { Text(strings.selectorFilterModelsLabel) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -86,7 +88,7 @@ fun LlmModelSelector(
                         onCheckedChange = { freeOnly = it }
                     )
                     Text(
-                        text = "Free",
+                        text = strings.selectorFreeFilterLabel,
                         modifier = Modifier.padding(top = 14.dp)
                     )
                 }
@@ -103,7 +105,7 @@ fun LlmModelSelector(
             }
             if (filteredModels.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("No matching models") },
+                    text = { Text(strings.selectorNoMatchingModels) },
                     onClick = {}
                 )
             }

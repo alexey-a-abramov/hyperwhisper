@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +25,7 @@ fun UILanguageSelector(
     selectedLanguageCode: String,
     onLanguageSelected: (String) -> Unit
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
     val selectedLanguage = com.hyperwhisper.localization.getLanguageByCode(selectedLanguageCode)
 
@@ -35,7 +37,7 @@ fun UILanguageSelector(
             value = selectedLanguage.nativeName,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Language") },
+            label = { Text(strings.selectorLanguageLabel) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor().fillMaxWidth()

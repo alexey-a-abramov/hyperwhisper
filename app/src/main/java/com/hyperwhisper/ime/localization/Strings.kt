@@ -279,4 +279,251 @@ interface Strings {
     val statsAudioTranscribedLabel: String
     val statsTextWrittenLabel: String
     val statsTypingTimeSavedLabel: String
+
+    // Settings overflow menu, top bar misc, advanced detail rows, toasts.
+    val settingsOverflowAbout: String
+    val settingsOverflowExportSecrets: String
+    val settingsOverflowMoreDesc: String
+    val settingsActivePrefix: String  // e.g. "Active: " (with trailing space)
+    val settingsSecretsCopiedToast: String
+    val advancedApiLogsTitle: String
+    val advancedApiLogsDescription: String
+    val advancedProviderKeyHelpTitle: String
+    val advancedProviderKeyHelpDescription: String
+    val advancedExportSecretsTitle: String
+    val advancedExportSecretsDescription: String
+
+    // Appearance section group headers + toggle labels.
+    val appearanceSectionColorHeader: String
+    val appearanceDynamicColorTitle: String
+    val appearanceDynamicColorDescription: String
+    val appearanceSectionThemeHeader: String
+    val appearanceSectionTypographyHeader: String
+    val appearanceTextSizeLabel: String
+    val appearanceFontFamilyLabel: String
+    val appearanceSectionInterfaceLanguageHeader: String
+
+    // LLM config section.
+    val llmLocalLlamacppHeader: String
+    val llmLocalLlamacppDescription: String
+    val llmLocalLlamacppCommands: String
+    val llmLocalLlamacppModelHint: String
+    val llmLocalGemmaHeader: String
+    val llmLocalGemmaActiveModelPrefix: String  // "Model: " — concatenated with file name
+    val llmLocalGemmaNoModelHint: String
+    val llmLocalGemmaOnDeviceNote: String
+    val llmConfigBaseUrlLabel: String
+    val llmConfigBaseUrlSupportingText: String
+    val llmConfigNoApiKeyRequired: String
+    val llmConfigApiKeyLabel: String
+    val llmConfigApiKeyPlaceholder: String
+    val llmConfigUseTranscriptionKey: String
+    val llmConfigReuseKeyForTranscription: String
+    val llmConfigModelInfoDesc: String
+    val llmConfigUsageInfo: String
+    val llmConfigTestPostProcessing: String
+    val llmConfigTestRunningPlaceholder: String
+    val llmConfigDisabledNote: String
+
+    // Keyboard behavior section.
+    val keyboardBehaviorHistoryHeader: String
+    val keyboardBehaviorEnableHistoryDescription: String
+    val keyboardBehaviorUnlimitedHistoryTitle: String
+    val keyboardBehaviorUnlimitedHistoryDescription: String
+    val keyboardBehaviorClipboardAudioHeader: String
+    val keyboardBehaviorAutoCopyDescription: String
+    val keyboardBehaviorSaveAudioTitle: String
+    val keyboardBehaviorSaveAudioDescription: String
+    val keyboardBehaviorKeyboardHeader: String
+    val keyboardBehaviorShowSwitcherTitle: String
+    val keyboardBehaviorShowSwitcherDescription: String
+    val keyboardBehaviorPerAppLayoutTitle: String
+    val keyboardBehaviorPerAppLayoutDescription: String
+    val keyboardBehaviorCodingAgentsHeader: String
+    val keyboardBehaviorCodingAgentsDescription: String
+    val keyboardBehaviorAgentDescriptionPrefix: String  // "Quick-command keyboard for " (concatenated with displayName)
+    val keyboardBehaviorDeveloperHeader: String
+    val keyboardBehaviorTechieModeTitle: String
+    val keyboardBehaviorTechieModeDescription: String
+    val keyboardBehaviorMaxHistoryTitle: String
+    val keyboardBehaviorMaxHistoryRange: String
+
+    // Selectors (font, dark mode, UI language, model, LLM model, providers).
+    val selectorFontLabel: String
+    val selectorLanguageLabel: String
+    val selectorCustomModelTag: String
+    val selectorFilterModelsLabel: String
+    val selectorFreeFilterLabel: String
+    val selectorNoMatchingModels: String
+    val selectorLlmModelLabel: String
+    val selectorLlmProviderLabel: String
+    val selectorProviderLabel: String
+
+    // Transcription section — Cloud/Local pivot, test panel, field groups.
+    val transcriptionTabCloud: String
+    val transcriptionTabLocal: String
+    val transcriptionTestButton: String
+    val transcriptionTestingShort: String
+    val transcriptionPreparingTest: String
+    val transcriptionWorkingPlaceholder: String
+    val transcriptionTestSuccessLabel: String
+    val transcriptionTestFailedLabel: String
+    val transcriptionTestLogCopied: String
+    val transcriptionTestLogCopyDesc: String
+    val transcriptionTestLogDismissDesc: String
+    val transcriptionCloudActiveText: String
+    val transcriptionCloudInactiveText: String
+    val transcriptionSetCloudActive: String
+    val transcriptionFieldGroupModel: String
+    val transcriptionApiKeyRequiredHint: String
+    val transcriptionApiKeyOptionalHint: String
+    val transcriptionApiKeyHide: String
+    val transcriptionApiKeyShow: String
+    val transcriptionHowToGetKey: String
+    val transcriptionLanguagesHeader: String
+    val transcriptionInputLanguageLabel: String
+    val transcriptionInputLanguageSupporting: String
+    val transcriptionOutputLanguageLabel: String
+    val transcriptionOutputLanguageSupporting: String
+    val transcriptionApiEndpointLabel: String
+    val transcriptionRequiresApiKey: String
+    val transcriptionRequiresApiKeyDesc: String
+    val transcriptionLocalActivePrefix: String  // "On-device Whisper is active: " (concat with file name)
+    val transcriptionLocalInactiveText: String
+    val transcriptionStorageAccessRequired: String
+    val transcriptionStorageAccessDesc: String
+    val transcriptionGrantAccess: String
+    val transcriptionWhisperModelsHeader: String
+    val transcriptionNoModelsFound: String
+    val transcriptionRescan: String
+    val transcriptionRefreshAccess: String
+    val transcriptionPerformanceHeader: String
+    val transcriptionAutoDiscoverTitle: String
+    val transcriptionAutoDiscoverDesc: String
+    val transcriptionThreadsTitle: String
+    val transcriptionThreadsDesc: String
+    val transcriptionVerifyIntegrityDesc: String
+    val transcriptionUseThisModel: String
+    val transcriptionActiveBadge: String
+
+    // Voice mode dialogs — placeholders.
+    val dialogVoiceModeNamePlaceholder: String
+    val dialogVoiceModePromptPlaceholder: String
+
+    // Language info dialog body.
+    val dialogInputLanguageBody: String
+    val dialogInputLanguageBullet1: String
+    val dialogInputLanguageBullet2: String
+    val dialogInputLanguageBullet3: String
+    val dialogInputLanguageFooter: String
+
+    // Logs info dialog body.
+    val dialogLogsInfoBody: String
+    val dialogLogsInfoViewingHeader: String
+    val dialogLogsInfoViewing1: String
+    val dialogLogsInfoViewing2: String
+    val dialogLogsInfoViewing3: String
+    val dialogLogsInfoLoggedHeader: String
+    val dialogLogsInfoLogged1: String
+    val dialogLogsInfoLogged2: String
+    val dialogLogsInfoLogged3: String
+    val dialogLogsInfoLogged4: String
+    val dialogLogsInfoLogged5: String
+    val dialogLogsInfoNote: String
+
+    // Model info dialog — structural strings only.
+    val dialogModelInfoTitle: String
+    val dialogModelInfoProviderPrefix: String  // "Provider: "
+    val dialogModelInfoSelectedModelLabel: String
+    val dialogModelInfoAvailableModelsLabel: String
+
+    // Provider key instructions dialog — title + per-provider steps.
+    val dialogProviderKeyTitle: String
+    val providerKeyOpenaiStep1: String
+    val providerKeyOpenaiStep2: String
+    val providerKeyOpenaiStep3: String
+    val providerKeyDeepgramStep1: String
+    val providerKeyDeepgramStep2: String
+    val providerKeyDeepgramStep3: String
+    val providerKeyAssemblyStep1: String
+    val providerKeyAssemblyStep2: String
+    val providerKeyAssemblyStep3: String
+    val providerKeyGoogleCloudStep1: String
+    val providerKeyGoogleCloudStep2: String
+    val providerKeyGoogleCloudStep3: String
+    val providerKeyAwsStep1: String
+    val providerKeyAwsStep2: String
+    val providerKeyAwsStep3: String
+    val providerKeyAzureStep1: String
+    val providerKeyAzureStep2: String
+    val providerKeyAzureStep3: String
+    val providerKeyDeepseekStep1: String
+    val providerKeyDeepseekStep2: String
+    val providerKeyDeepseekStep3: String
+    val providerKeyMistralStep1: String
+    val providerKeyMistralStep2: String
+    val providerKeyMistralStep3: String
+    val providerKeyRevStep1: String
+    val providerKeyRevStep2: String
+    val providerKeyRevStep3: String
+    val providerKeyGroqStep1: String
+    val providerKeyGroqStep2: String
+    val providerKeyGroqStep3: String
+    val providerKeyOpenrouterStep1: String
+    val providerKeyOpenrouterStep2: String
+    val providerKeyOpenrouterStep3: String
+    val providerKeyGeminiStep1: String
+    val providerKeyGeminiStep2: String
+    val providerKeyGeminiStep3: String
+    val providerKeyAntigravityStep1: String
+    val providerKeyAntigravityStep2: String
+    val providerKeyAntigravityStep3: String
+    val providerKeyHuggingfaceStep1: String
+    val providerKeyHuggingfaceStep2: String
+    val providerKeyHuggingfaceStep3: String
+    val providerKeySelfhostedStep1: String
+    val providerKeySelfhostedStep2: String
+    val providerKeySelfhostedStep3: String
+    val providerKeyLocalStep1: String
+    val providerKeyLocalStep2: String
+    val providerKeyLocalStep3: String
+
+    // History reduction warning dialog.
+    val dialogHistoryReductionTitle: String
+    val dialogHistoryReductionBodyFormat: String  // "You are reducing... from %1$d to %2$d items."
+    val dialogHistoryReductionWarningFormat: String  // "%1$d history items including their audio files will be permanently deleted."
+    val dialogHistoryReductionUndoNote: String  // "This action cannot be undone."
+    val dialogHistoryReductionConfirmFormat: String  // "DELETE %1$d ITEMS"
+
+    // API call logs screen.
+    val apiCallLogsHeader: String
+    val apiCallLogsSubtitle: String
+    val apiCallLogsClearDesc: String
+    val apiCallLogsStatistics: String
+    val apiCallLogsStatTotal: String
+    val apiCallLogsStatSuccess: String
+    val apiCallLogsStatErrors: String
+    val apiCallLogsStatAvgTime: String
+    val apiCallLogsEmpty: String
+    val apiCallLogsErrorPrefix: String  // "Error: "
+    val apiCallLogsSuccessDesc: String  // accessibility
+    val apiCallLogsErrorDesc: String  // accessibility
+
+    // Language selector placeholder.
+    val languageSelectorSearchPlaceholder: String
+
+    // Keyboard shared — accessibility & top strip.
+    val keyboardDictationDesc: String
+    val keyboardBackspaceDesc: String
+    val keyboardEnterDesc: String
+    val keyboardSearchDesc: String
+    val keyboardClearDesc: String
+    val keyboardBackToVoiceDesc: String
+    val keyboardLogsDesc: String
+    val keyboardHelpDesc: String
+
+    // Emoji keyboard.
+    val emojiNoEmojisFound: String
+    val emojiRecentlyUsed: String
+    val emojiSearchPlaceholder: String
 }

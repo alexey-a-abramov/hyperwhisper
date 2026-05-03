@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +30,7 @@ fun ModelSelector(
     onModelSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
     var customModel by remember { mutableStateOf(selectedModel) }
     var filter by remember { mutableStateOf("") }
@@ -54,7 +56,7 @@ fun ModelSelector(
                 customModel = it
                 onModelSelected(it)
             },
-            label = { Text("Model ID") },
+            label = { Text(strings.modelId) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
@@ -63,7 +65,7 @@ fun ModelSelector(
             singleLine = true,
             supportingText = {
                 if (isCustomModel && selectedModel.isNotEmpty()) {
-                    Text("Custom model")
+                    Text(strings.selectorCustomModelTag)
                 }
             }
         )
@@ -75,7 +77,7 @@ fun ModelSelector(
             OutlinedTextField(
                 value = filter,
                 onValueChange = { filter = it },
-                label = { Text("Filter models") },
+                label = { Text(strings.selectorFilterModelsLabel) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -93,7 +95,7 @@ fun ModelSelector(
                         onCheckedChange = { freeOnly = it }
                     )
                     Text(
-                        text = "Free",
+                        text = strings.selectorFreeFilterLabel,
                         modifier = Modifier.padding(top = 14.dp)
                     )
                 }
@@ -111,7 +113,7 @@ fun ModelSelector(
             }
             if (filteredModels.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("No matching models") },
+                    text = { Text(strings.selectorNoMatchingModels) },
                     onClick = {}
                 )
             }

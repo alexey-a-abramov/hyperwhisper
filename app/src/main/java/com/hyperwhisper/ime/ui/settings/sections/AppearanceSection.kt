@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.AppearanceSettings
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.components.selectors.ColorSchemeSelector
 import com.hyperwhisper.ui.settings.components.selectors.DarkModeSelector
 import com.hyperwhisper.ui.settings.components.selectors.FontFamilySelector
@@ -37,6 +38,7 @@ fun AppearanceSection(
     onSettingsChange: (AppearanceSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var localSettings by remember(appearanceSettings) { mutableStateOf(appearanceSettings) }
 
     LaunchedEffect(appearanceSettings) {
@@ -49,7 +51,7 @@ fun AppearanceSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        GroupHeader("Color")
+        GroupHeader(strings.appearanceSectionColorHeader)
         ColorSchemeSelector(
             selectedScheme = localSettings.colorScheme,
             onSchemeSelected = { scheme ->
@@ -61,8 +63,8 @@ fun AppearanceSection(
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ToggleRow(
-                title = "Dynamic color",
-                description = "Match your wallpaper colors (Material You)",
+                title = strings.appearanceDynamicColorTitle,
+                description = strings.appearanceDynamicColorDescription,
                 checked = localSettings.useDynamicColor,
                 onChange = { enabled ->
                     val updated = localSettings.copy(useDynamicColor = enabled)
@@ -73,7 +75,7 @@ fun AppearanceSection(
         }
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Theme")
+        GroupHeader(strings.appearanceSectionThemeHeader)
         DarkModeSelector(
             selectedMode = localSettings.darkModePreference,
             onModeSelected = { mode ->
@@ -84,8 +86,8 @@ fun AppearanceSection(
         )
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Typography")
-        Text("Text size", style = MaterialTheme.typography.bodyLarge)
+        GroupHeader(strings.appearanceSectionTypographyHeader)
+        Text(strings.appearanceTextSizeLabel, style = MaterialTheme.typography.bodyLarge)
         UIScaleSelector(
             selectedScale = localSettings.uiScale,
             onScaleSelected = { scale ->
@@ -95,7 +97,7 @@ fun AppearanceSection(
             }
         )
         Spacer(Modifier.height(8.dp))
-        Text("Font family", style = MaterialTheme.typography.bodyLarge)
+        Text(strings.appearanceFontFamilyLabel, style = MaterialTheme.typography.bodyLarge)
         FontFamilySelector(
             selectedFont = localSettings.fontFamily,
             onFontSelected = { font ->
@@ -106,7 +108,7 @@ fun AppearanceSection(
         )
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Interface language")
+        GroupHeader(strings.appearanceSectionInterfaceLanguageHeader)
         UILanguageSelector(
             selectedLanguageCode = localSettings.uiLanguage,
             onLanguageSelected = { code ->

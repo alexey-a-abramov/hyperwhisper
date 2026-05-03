@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.LlmProvider
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,6 +23,7 @@ fun LlmProviderSelector(
     onProviderSelected: (LlmProvider) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
@@ -33,7 +35,7 @@ fun LlmProviderSelector(
             value = selectedProvider.displayName,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Post-Processing LLM Provider") },
+            label = { Text(strings.selectorLlmProviderLabel) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier

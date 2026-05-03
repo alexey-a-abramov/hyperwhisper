@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.FontFamilyOption
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +22,7 @@ fun FontFamilySelector(
     selectedFont: FontFamilyOption,
     onFontSelected: (FontFamilyOption) -> Unit
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
@@ -31,7 +33,7 @@ fun FontFamilySelector(
             value = selectedFont.displayName,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Font") },
+            label = { Text(strings.selectorFontLabel) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor().fillMaxWidth()

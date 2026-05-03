@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,11 +27,12 @@ fun CloudProviderSelector(
     onProviderSelected: (ApiProvider) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
         Text(
-            text = "Provider",
+            text = strings.provider,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
@@ -43,7 +45,7 @@ fun CloudProviderSelector(
                 value = selectedProvider.displayName,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Select Provider") },
+                label = { Text(strings.selectorProviderLabel) },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()

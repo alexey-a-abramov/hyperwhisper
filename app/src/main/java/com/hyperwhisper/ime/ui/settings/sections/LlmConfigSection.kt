@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.LlmProvider
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.ConnectionTestState
 import com.hyperwhisper.ui.settings.TestLogEntry
 import com.hyperwhisper.ui.settings.components.selectors.LlmProviderSelector
@@ -64,6 +65,7 @@ fun LlmConfigSection(
     localGemmaModelPath: String = "",
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     Column(modifier = modifier.fillMaxWidth()) {
     // LLM Provider selector
     LlmProviderSelector(
@@ -85,27 +87,24 @@ fun LlmConfigSection(
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "Local llama.cpp HTTP server",
+                    strings.llmLocalLlamacppHeader,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 Text(
-                    "Start the server in Termux first, then HyperWhisper hits it over HTTP. " +
-                        "Default URL assumes llama-server's zero-config 127.0.0.1:8080.",
+                    strings.llmLocalLlamacppDescription,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 Text(
-                    "Termux:  pkg install llama-cpp\n" +
-                        "         llama-server -m /sdcard/LLM/<model>.gguf",
+                    strings.llmLocalLlamacppCommands,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 Text(
-                    "Model ID below must match llama-server's reported model name " +
-                        "(usually the GGUF file stem, or whatever you pass to --alias).",
+                    strings.llmLocalLlamacppModelHint,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                 )
@@ -123,7 +122,7 @@ fun LlmConfigSection(
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "In-process MediaPipe LLM",
+                    strings.llmLocalGemmaHeader,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     color = if (active) MaterialTheme.colorScheme.onTertiaryContainer
@@ -131,15 +130,15 @@ fun LlmConfigSection(
                 )
                 Text(
                     if (active)
-                        "Model: ${java.io.File(localGemmaModelPath).name}"
+                        strings.llmLocalGemmaActiveModelPrefix + java.io.File(localGemmaModelPath).name
                     else
-                        "No Gemma model selected. Pick a MediaPipe-converted .bin (litert-community on HuggingFace) under Transcription → Local. GGUF files won't load.",
+                        strings.llmLocalGemmaNoModelHint,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (active) MaterialTheme.colorScheme.onTertiaryContainer
                         else MaterialTheme.colorScheme.onErrorContainer
                 )
                 Text(
-                    "Runs entirely on-device. No external server needed.",
+                    strings.llmLocalGemmaOnDeviceNote,
                     style = MaterialTheme.typography.labelSmall,
                     color = (if (active) MaterialTheme.colorScheme.onTertiaryContainer
                         else MaterialTheme.colorScheme.onErrorContainer).copy(alpha = 0.8f)
@@ -161,9 +160,9 @@ fun LlmConfigSection(
                 OutlinedTextField(
                     value = llmBaseUrl,
                     onValueChange = onLlmBaseUrlChange,
-                    label = { Text("LLM Base URL") },
+                    label = { Text(strings.llmConfigBaseUrlLabel) },
                     placeholder = { Text(llmProvider.defaultEndpoint) },
-                    supportingText = { Text("API endpoint for post-processing LLM") },
+                    supportingText = { Text(strings.llmConfigBaseUrlSupportingText) },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -171,7 +170,7 @@ fun LlmConfigSection(
                     onClick = onResetLlmDefaults,
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
-                    Text("RESET")
+                    Text(strings.reset)
                 }
             }
         }
@@ -188,7 +187,7 @@ fun LlmConfigSection(
                 onCheckedChange = { onLlmRequiresAuthChange(!it) }
             )
             Text(
-                text = "No API key required",
+                text = strings.llmConfigNoApiKeyRequired,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(start = 8.dp)
             )
@@ -201,8 +200,8 @@ fun LlmConfigSection(
             OutlinedTextField(
                 value = llmApiKey,
                 onValueChange = onLlmApiKeyChange,
-                label = { Text("LLM API Key") },
-                placeholder = { Text("Enter API key for LLM provider") },
+                label = { Text(strings.llmConfigApiKeyLabel) },
+                placeholder = { Text(strings.llmConfigApiKeyPlaceholder) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
@@ -218,7 +217,7 @@ fun LlmConfigSection(
                     onClick = onReuseLlmKeyForProvider,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Use this provider's key from Transcription")
+                    Text(strings.llmConfigUseTranscriptionKey)
                 }
             } else if (llmApiKey.isNotBlank() && providerApiKey.isBlank()) {
                 // Reverse direction: push LLM key into transcription side
@@ -229,7 +228,7 @@ fun LlmConfigSection(
                     onClick = onReuseLlmKeyForProvider,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Reuse this key for transcription provider")
+                    Text(strings.llmConfigReuseKeyForTranscription)
                 }
             }
 
@@ -253,7 +252,7 @@ fun LlmConfigSection(
             IconButton(onClick = onShowLlmInfo) {
                 Icon(
                     imageVector = Icons.Default.Info,
-                    contentDescription = "LLM Model Info",
+                    contentDescription = strings.llmConfigModelInfoDesc,
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -279,7 +278,7 @@ fun LlmConfigSection(
 
         // Info text
         Text(
-            text = "This LLM is used for post-processing (polite, casual, etc.) and translation. Not used in verbatim mode.",
+            text = strings.llmConfigUsageInfo,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 8.dp)
@@ -293,7 +292,7 @@ fun LlmConfigSection(
                 llmModelId.isNotBlank() &&
                 (!llmRequiresAuth || llmApiKey.isNotBlank())
         ) {
-            Text("Test post-processing with sample text")
+            Text(strings.llmConfigTestPostProcessing)
         }
 
         com.hyperwhisper.ui.settings.sections.TestLogPanel(
@@ -301,12 +300,12 @@ fun LlmConfigSection(
             state = postProcessingTestState,
             autoCloseOnSuccess = true,
             onDismiss = onResetPostProcessingTestState,
-            runningPlaceholder = "Sending sample text to LLM…"
+            runningPlaceholder = strings.llmConfigTestRunningPlaceholder
         )
     } else {
         // NONE selected - show info
         Text(
-            text = "Post-processing disabled. Only verbatim transcription will be available.",
+            text = strings.llmConfigDisabledNote,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 16.dp)

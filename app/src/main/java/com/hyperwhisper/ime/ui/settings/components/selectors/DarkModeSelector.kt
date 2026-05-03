@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.DarkModePreference
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +22,7 @@ fun DarkModeSelector(
     selectedMode: DarkModePreference,
     onModeSelected: (DarkModePreference) -> Unit
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
@@ -31,7 +33,7 @@ fun DarkModeSelector(
             value = selectedMode.displayName,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Dark Mode") },
+            label = { Text(strings.darkMode) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor().fillMaxWidth()

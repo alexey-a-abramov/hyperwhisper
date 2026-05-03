@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.AppearanceSettings
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.dialogs.HistoryReductionWarningDialog
 
 /**
@@ -35,25 +36,26 @@ fun KeyboardBehaviorSection(
     onSettingsChange: (AppearanceSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        GroupHeader("History")
+        GroupHeader(strings.keyboardBehaviorHistoryHeader)
 
         ToggleRow(
-            title = "Enable history panel",
-            description = "Long-press paste button to view recent transcriptions",
+            title = strings.enableHistoryPanel,
+            description = strings.keyboardBehaviorEnableHistoryDescription,
             checked = appearanceSettings.enableHistoryPanel,
             onChange = { onSettingsChange(appearanceSettings.copy(enableHistoryPanel = it)) }
         )
 
         if (appearanceSettings.enableHistoryPanel) {
             ToggleRow(
-                title = "Unlimited history",
-                description = "Keep all transcriptions (uses more storage)",
+                title = strings.keyboardBehaviorUnlimitedHistoryTitle,
+                description = strings.keyboardBehaviorUnlimitedHistoryDescription,
                 checked = appearanceSettings.unlimitedHistory,
                 onChange = { onSettingsChange(appearanceSettings.copy(unlimitedHistory = it)) }
             )
@@ -67,45 +69,44 @@ fun KeyboardBehaviorSection(
         }
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Clipboard & audio")
+        GroupHeader(strings.keyboardBehaviorClipboardAudioHeader)
 
         ToggleRow(
-            title = "Auto-copy to clipboard",
-            description = "Copy each transcription automatically",
+            title = strings.autoCopyToClipboard,
+            description = strings.keyboardBehaviorAutoCopyDescription,
             checked = appearanceSettings.autoCopyToClipboard,
             onChange = { onSettingsChange(appearanceSettings.copy(autoCopyToClipboard = it)) }
         )
 
         ToggleRow(
-            title = "Save original audio",
-            description = "Store recordings for playback and reprocessing",
+            title = strings.keyboardBehaviorSaveAudioTitle,
+            description = strings.keyboardBehaviorSaveAudioDescription,
             checked = appearanceSettings.saveOriginalAudioFiles,
             onChange = { onSettingsChange(appearanceSettings.copy(saveOriginalAudioFiles = it)) }
         )
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Keyboard")
+        GroupHeader(strings.keyboardBehaviorKeyboardHeader)
 
         ToggleRow(
-            title = "Show keyboard switcher",
-            description = "Button to switch input method, next to mode selector",
+            title = strings.keyboardBehaviorShowSwitcherTitle,
+            description = strings.keyboardBehaviorShowSwitcherDescription,
             checked = appearanceSettings.showKeyboardSwitcher,
             onChange = { onSettingsChange(appearanceSettings.copy(showKeyboardSwitcher = it)) }
         )
 
         ToggleRow(
-            title = "Per-app layout memory",
-            description = "Restore the last layout you used in each app (e.g. Code in Termux, Voice in WhatsApp)",
+            title = strings.keyboardBehaviorPerAppLayoutTitle,
+            description = strings.keyboardBehaviorPerAppLayoutDescription,
             checked = appearanceSettings.perAppLayoutMemoryEnabled,
             onChange = { onSettingsChange(appearanceSettings.copy(perAppLayoutMemoryEnabled = it)) }
         )
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Coding agents")
+        GroupHeader(strings.keyboardBehaviorCodingAgentsHeader)
 
         Text(
-            "Add quick-command keyboards for CLI agents. Each enabled agent " +
-                "appears as a separate mode in the keyboard's mode dropdown.",
+            strings.keyboardBehaviorCodingAgentsDescription,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -115,7 +116,7 @@ fun KeyboardBehaviorSection(
             val enabled = key in appearanceSettings.enabledAgentKeyboards
             ToggleRow(
                 title = mode.displayName,
-                description = "Quick-command keyboard for ${mode.displayName}",
+                description = strings.keyboardBehaviorAgentDescriptionPrefix + mode.displayName,
                 checked = enabled,
                 onChange = { isOn ->
                     val newSet = appearanceSettings.enabledAgentKeyboards.toMutableSet().apply {
@@ -127,11 +128,11 @@ fun KeyboardBehaviorSection(
         }
 
         Spacer(Modifier.height(4.dp))
-        GroupHeader("Developer")
+        GroupHeader(strings.keyboardBehaviorDeveloperHeader)
 
         ToggleRow(
-            title = "Techie mode",
-            description = "Show diagnostic info and logs button on the keyboard",
+            title = strings.keyboardBehaviorTechieModeTitle,
+            description = strings.keyboardBehaviorTechieModeDescription,
             checked = appearanceSettings.techieModeEnabled,
             onChange = { onSettingsChange(appearanceSettings.copy(techieModeEnabled = it)) }
         )
@@ -143,14 +144,15 @@ private fun MaxHistoryField(
     settings: AppearanceSettings,
     onChange: (AppearanceSettings) -> Unit
 ) {
+    val strings = LocalStrings.current
     var text by remember(settings.maxHistoryItems) { mutableStateOf(settings.maxHistoryItems.toString()) }
     var showWarning by remember { mutableStateOf(false) }
     var pendingValue by remember { mutableStateOf(0) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Maximum history items", style = MaterialTheme.typography.bodyLarge)
+        Text(strings.keyboardBehaviorMaxHistoryTitle, style = MaterialTheme.typography.bodyLarge)
         Text(
-            "Number to keep (1–100)",
+            strings.keyboardBehaviorMaxHistoryRange,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
