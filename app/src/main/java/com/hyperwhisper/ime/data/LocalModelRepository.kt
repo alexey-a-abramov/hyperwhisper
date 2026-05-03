@@ -25,25 +25,54 @@ class LocalModelRepository @Inject constructor(
         val WHISPER_EXTENSIONS = listOf(".bin")
         val GEMMA_EXTENSIONS = listOf(".bin", ".gguf")
         
+        // Note: do not list /data/data/<otherpkg>/... here — Android sandboxes
+        // each app's private dir, so HyperWhisper cannot read Termux's home
+        // even with MANAGE_EXTERNAL_STORAGE. Models must live under /sdcard.
         val SEARCH_PATHS = listOf(
             "/storage/emulated/0/Download",
             "/storage/emulated/0/Models",
             "/storage/emulated/0/Whisper",
-            "/storage/emulated/0/LLM",
-            "/data/data/com.termux/files/home/models"
+            "/storage/emulated/0/LLM"
         )
+
+        // Top-level dir names whose contents are searched recursively (1 level).
+        // Lets users organize like /sdcard/LLM/Whisper/ggml-base.en.bin.
+        private val RECURSIVE_DIR_NAMES = setOf("models", "whisper", "llm")
     }
 
     /**
      * Scan for local models in known locations
      */
+    /**
+     * True on Android 11+ when the user has granted MANAGE_EXTERNAL_STORAGE.
+     * Without this permission, [discoverModels] silently returns nothing
+     * because the SEARCH_PATHS under /sdcard are unreadable. UI should query
+     * this flag and prompt the user when it's false.
+     */
+    fun hasFullStorageAccess(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else true
+    }
+
     suspend fun discoverModels(): List<LocalModelInfo> = withContext(Dispatchers.IO) {
         val models = mutableListOf<LocalModelInfo>()
-        
-        // Log permission status
+
+        // Loud diagnostic: missing MANAGE_EXTERNAL_STORAGE silently returns
+        // an empty list, which has burned us. Make it obvious in logs.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             val hasManage = Environment.isExternalStorageManager()
-            Log.d(TAG, "Has MANAGE_EXTERNAL_STORAGE: $hasManage")
+            if (hasManage) {
+                Log.d(TAG, "MANAGE_EXTERNAL_STORAGE: GRANTED")
+            } else {
+                Log.w(TAG,
+                    "MANAGE_EXTERNAL_STORAGE NOT GRANTED — discovery will only " +
+                        "see files under filesDir. Models in /sdcard/LLM/Whisper/, " +
+                        "/sdcard/Models/, /sdcard/Download/ are invisible. " +
+                        "User must grant via Settings → Apps → HyperWhisper → " +
+                        "Permissions → Special access → All files."
+                )
+            }
         }
 
         // Search in app private directory
@@ -53,12 +82,8 @@ class LocalModelRepository @Inject constructor(
         SEARCH_PATHS.forEach { path ->
             val dir = File(path)
             if (dir.exists() && dir.isDirectory) {
-                // For specific model folders, search recursively (1 level)
-                if (dir.name.equals("Models", ignoreCase = true) || dir.name.equals("Whisper", ignoreCase = true)) {
-                    searchInDir(dir, models, recursive = true)
-                } else {
-                    searchInDir(dir, models, recursive = false)
-                }
+                val recursive = dir.name.lowercase() in RECURSIVE_DIR_NAMES
+                searchInDir(dir, models, recursive = recursive)
             }
         }
         

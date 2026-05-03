@@ -8,9 +8,16 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +33,7 @@ class ApiSettingsRepository @Inject constructor(
     private val gson: Gson
 ) {
     private val dataStore = context.apiDataStore
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private val API_PROVIDER_KEY = stringPreferencesKey("api_provider")
@@ -120,6 +128,25 @@ class ApiSettingsRepository @Inject constructor(
             llmConfig = llmConfig,
             localModelSettings = localModelSettings
         )
+    }
+
+    private val _apiSettingsState = MutableStateFlow(ApiSettings())
+
+    /**
+     * Synchronous, always-readable snapshot of the latest persisted settings.
+     * Populated from DataStore as soon as the first emission arrives (typically
+     * within milliseconds of app start). Used by interceptors and DI providers
+     * that cannot safely block on a Flow.
+     */
+    val apiSettingsState: StateFlow<ApiSettings> = _apiSettingsState.asStateFlow()
+
+    /** Synchronous accessor for the cached snapshot. Returns defaults until primed. */
+    fun snapshot(): ApiSettings = _apiSettingsState.value
+
+    init {
+        scope.launch {
+            apiSettings.collect { _apiSettingsState.value = it }
+        }
     }
 
     /**

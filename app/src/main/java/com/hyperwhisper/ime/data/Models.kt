@@ -166,7 +166,7 @@ enum class LlmProvider(
     OPENAI(
         displayName = "OpenAI",
         defaultEndpoint = "https://api.openai.com/v1/",
-        defaultModels = listOf("gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"),
+        defaultModels = listOf("gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"),
         requiresAuth = true
     ),
     DEEPSEEK(
@@ -178,13 +178,20 @@ enum class LlmProvider(
     GEMINI(
         displayName = "Google Gemini",
         defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
-        defaultModels = listOf("gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"),
+        defaultModels = listOf(
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemma-4-27b-it",
+            "gemma-4-9b-it",
+            "gemini-1.5-pro"
+        ),
         requiresAuth = true
     ),
     ANTHROPIC(
         displayName = "Anthropic Claude",
         defaultEndpoint = "https://api.anthropic.com/v1/",
-        defaultModels = listOf("claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"),
+        defaultModels = listOf("claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"),
         requiresAuth = true
     ),
     MISTRAL(
@@ -196,13 +203,17 @@ enum class LlmProvider(
     GROQ(
         displayName = "Groq",
         defaultEndpoint = "https://api.groq.com/openai/v1/",
-        defaultModels = listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"),
+        defaultModels = listOf("llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"),
         requiresAuth = true
     ),
     OPENROUTER(
         displayName = "OpenRouter",
         defaultEndpoint = "https://openrouter.ai/api/v1/",
-        defaultModels = listOf("google/gemini-2.0-flash-exp:free", "meta-llama/llama-3.1-8b-instruct:free", "qwen/qwen-2-7b-instruct:free"),
+        defaultModels = listOf(
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "deepseek/deepseek-chat:free"
+        ),
         requiresAuth = true
     ),
     OPENAI_COMPATIBLE(
@@ -214,7 +225,13 @@ enum class LlmProvider(
     LOCAL_GEMMA(
         displayName = "Local Gemma",
         defaultEndpoint = "http://127.0.0.1:8081/v1/",
-        defaultModels = listOf("gemma-3n-E2B-it", "google/gemma-2-9b-it", "gemma-2-9b-it"),
+        defaultModels = listOf(
+            "gemma-4-2b-it",
+            "gemma-4-9b-it",
+            "gemma-4-27b-it",
+            "gemma-3n-E2B-it",
+            "google/gemma-2-9b-it"
+        ),
         requiresAuth = false
     )
 }
@@ -241,13 +258,13 @@ enum class ApiProvider(
     OPENAI(
         displayName = "OpenAI Whisper",
         defaultEndpoint = "https://api.openai.com/v1/",
-        defaultModels = listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "base", "small", "medium", "large", "large-v2", "large-v3"),
+        defaultModels = listOf("gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"),
         requiresAuth = true
     ),
     DEEPGRAM(
         displayName = "Deepgram",
         defaultEndpoint = "https://api.deepgram.com/v1/",
-        defaultModels = listOf("nova-2", "nova-3", "nova", "whisper", "base", "enhanced"),
+        defaultModels = listOf("nova-3", "nova-2", "whisper-large"),
         requiresAuth = true
     ),
     ASSEMBLYAI(
@@ -281,9 +298,9 @@ enum class ApiProvider(
         requiresAuth = true
     ),
     MISTRAL(
-        displayName = "Mistral AI",
+        displayName = "Mistral Voxtral",
         defaultEndpoint = "https://api.mistral.ai/v1/",
-        defaultModels = listOf("mistral-large-latest", "mistral-small-latest", "open-mistral-nemo"),
+        defaultModels = listOf("voxtral-mini-latest", "voxtral-small-latest"),
         requiresAuth = true
     ),
     REVAI(
@@ -301,25 +318,28 @@ enum class ApiProvider(
     OPENROUTER(
         displayName = "OpenRouter",
         defaultEndpoint = "https://openrouter.ai/api/v1/",
-        defaultModels = listOf("whisper-1", "whisper-large-v3"),
+        // OpenRouter routes transcription via /chat/completions with input_audio,
+        // not the OpenAI multipart /audio/transcriptions endpoint. Voxtral is
+        // currently the only audio-capable model in their catalog.
+        defaultModels = listOf("mistralai/voxtral-small-24b-2507"),
         requiresAuth = true
     ),
     GEMINI(
         displayName = "Google Gemini",
         defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/",
-        defaultModels = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"),
+        defaultModels = listOf("gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"),
         requiresAuth = true
     ),
     ANTIGRAVITY(
         displayName = "Google Antigravity (OAuth)",
         defaultEndpoint = "https://generativelanguage.googleapis.com/v1beta/openai/",
-        defaultModels = listOf("gemini-2.0-flash-exp", "gemini-1.5-flash"),
+        defaultModels = listOf("gemini-2.5-flash", "gemini-2.0-flash"),
         requiresAuth = false
     ),
     HUGGINGFACE(
         displayName = "Hugging Face",
-        defaultEndpoint = "https://api-inai.endpoints.huggingface.cloud/v1/",
-        defaultModels = listOf("meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3", "google/gemma-2-9b-it"),
+        defaultEndpoint = "https://api-inference.huggingface.co/",
+        defaultModels = listOf("openai/whisper-large-v3", "openai/whisper-large-v3-turbo", "openai/whisper-medium"),
         requiresAuth = true
     ),
     SELFHOSTED_WHISPER(
@@ -333,7 +353,18 @@ enum class ApiProvider(
         defaultEndpoint = "local",
         defaultModels = listOf("tiny.en", "tiny", "base.en", "base", "small.en", "small"),
         requiresAuth = false
-    )
+    );
+
+    /**
+     * True when the provider requires us to dispatch transcription via
+     * /chat/completions with an `input_audio` content block instead of the
+     * OpenAI multipart `/audio/transcriptions` endpoint. Keeps the test path
+     * (SettingsViewModel) and production strategy (VoiceRepository) aligned.
+     */
+    fun usesChatAudioForTranscription(): Boolean = when (this) {
+        OPENROUTER, GEMINI, ANTIGRAVITY -> true
+        else -> false
+    }
 }
 
 /**
@@ -567,14 +598,52 @@ enum class DarkModePreference(val displayName: String) {
 }
 
 // Keyboard input mode options
+//
+// 4-mode design (post v1.267): DICTATION + QWERTY + CODE + EMOJI.
+//
+// SPECIAL_CHARS / SYSTEM_KEYS / VIBE_CODING / NUMPAD are kept as enum values
+// for backward-compatibility with serialized settings. The render layer maps
+// them onto CODE via [normalize], so existing user prefs migrate transparently
+// without forcing a one-shot DataStore migration.
 enum class KeyboardInputMode(val displayName: String) {
-    DICTATION("Voice Input"),
-    QWERTY("ABC Keyboard"),
+    DICTATION("Voice"),
+    QWERTY("Text"),
+    CODE("Code"),
+    EMOJI("Emoji"),
+
+    // Coding-agent quick-command modes. Hidden by default; user enables
+    // individual agents in settings. Each renders the same AgentKeyboard
+    // composable parameterized by [com.hyperwhisper.data.AgentCommands].
+    AGENT_CLAUDE_CODE("Claude Code"),
+    AGENT_OPENCODE("OpenCode"),
+    AGENT_GEMINI("Gemini CLI"),
+    AGENT_CODEX("Codex CLI"),
+
+    // --- Legacy values, transparently rerouted. Kept so old DataStore values
+    // still parse. ---
     SPECIAL_CHARS("Symbols"),
     SYSTEM_KEYS("System Keys"),
     VIBE_CODING("Vibe Coding"),
-    NUMPAD("Numpad"),
-    EMOJI("Emoji")
+    NUMPAD("Numpad");
+
+    val isAgent: Boolean get() = this in agentModes
+
+    companion object {
+        val agentModes: Set<KeyboardInputMode> = setOf(
+            AGENT_CLAUDE_CODE, AGENT_OPENCODE, AGENT_GEMINI, AGENT_CODEX
+        )
+    }
+
+    /**
+     * Normalize a stored or in-flight mode to one of the 4 modes the new UI
+     * actually exposes. SPECIAL_CHARS folds back into QWERTY (it was the
+     * shifted layer); the rest collapse into CODE.
+     */
+    fun normalize(): KeyboardInputMode = when (this) {
+        SPECIAL_CHARS -> QWERTY
+        SYSTEM_KEYS, VIBE_CODING, NUMPAD -> CODE
+        else -> this
+    }
 }
 
 // Keyboard layout options (language-specific)
@@ -602,6 +671,12 @@ data class AppearanceSettings(
     val autoCopyToClipboard: Boolean = false,
     val enableHistoryPanel: Boolean = true,
     val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
+    /**
+     * Set of coding-agent keyboard modes the user has enabled. Empty by
+     * default (agent modes hidden). Keys are stored as [KeyboardInputMode]
+     * names (string) for forward-compat across enum value changes.
+     */
+    val enabledAgentKeyboards: Set<String> = emptySet(),
     val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
     val saveOriginalAudioFiles: Boolean = false, // Save audio files for playback/reprocessing from history
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
