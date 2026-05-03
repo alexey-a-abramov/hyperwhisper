@@ -41,6 +41,7 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
         private val APPEARANCE_LAST_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_last_keyboard_mode")
         private val APPEARANCE_ENABLED_AGENTS_KEY = stringSetPreferencesKey("appearance_enabled_agents")
+        private val APPEARANCE_PER_APP_LAYOUT_KEY = booleanPreferencesKey("appearance_per_app_layout_memory")
     }
 
     /**
@@ -93,7 +94,8 @@ class AppearanceRepository @Inject constructor(
                     KeyboardInputMode.DICTATION
                 }
             } ?: KeyboardInputMode.DICTATION,
-            enabledAgentKeyboards = preferences[APPEARANCE_ENABLED_AGENTS_KEY] ?: emptySet()
+            enabledAgentKeyboards = preferences[APPEARANCE_ENABLED_AGENTS_KEY] ?: emptySet(),
+            perAppLayoutMemoryEnabled = preferences[APPEARANCE_PER_APP_LAYOUT_KEY] ?: true
         )
     }
 
@@ -117,6 +119,7 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
             preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY] = settings.lastKeyboardInputMode.name
             preferences[APPEARANCE_ENABLED_AGENTS_KEY] = settings.enabledAgentKeyboards
+            preferences[APPEARANCE_PER_APP_LAYOUT_KEY] = settings.perAppLayoutMemoryEnabled
         }
     }
 }

@@ -697,7 +697,8 @@ data class AppearanceSettings(
     val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION, // Remember last keyboard mode
     val currentKeyboardLayout: KeyboardLayout = KeyboardLayout.ENGLISH, // Current active layout
     val enabledKeyboardLayouts: Set<KeyboardLayout> = setOf(KeyboardLayout.ENGLISH), // Enabled layouts (EN enabled by default)
-    val recentEmojis: List<String> = emptyList() // Last 10 recently used emojis
+    val recentEmojis: List<String> = emptyList(), // Last 10 recently used emojis
+    val perAppLayoutMemoryEnabled: Boolean = true // Auto-restore last used layout per foreground app
 )
 
 /**

@@ -641,6 +641,17 @@ class VoiceInputMethodService : InputMethodService(),
         TraceLogger.lifecycle("IME", "onStartInputView", "restarting=$restarting")
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         viewModel.syncRecordingState()
+
+        // Notify the view model which app we're attached to so it can
+        // (a) recall the user's last layout for that package and dispatch a
+        //     layout-switch request, and
+        // (b) tag subsequent layout writes from KeyboardScreen with the
+        //     right packageName.
+        // currentInputEditorInfo is preferred over the [info] parameter
+        // because some IME contexts deliver null here even when the
+        // service has a valid editor attached.
+        val pkg = (info?.packageName ?: currentInputEditorInfo?.packageName)
+        viewModel.onEditorAttached(pkg)
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

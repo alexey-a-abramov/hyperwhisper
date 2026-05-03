@@ -93,6 +93,13 @@ fun KeyboardBehaviorSection(
             onChange = { onSettingsChange(appearanceSettings.copy(showKeyboardSwitcher = it)) }
         )
 
+        ToggleRow(
+            title = "Per-app layout memory",
+            description = "Restore the last layout you used in each app (e.g. Code in Termux, Voice in WhatsApp)",
+            checked = appearanceSettings.perAppLayoutMemoryEnabled,
+            onChange = { onSettingsChange(appearanceSettings.copy(perAppLayoutMemoryEnabled = it)) }
+        )
+
         Spacer(Modifier.height(4.dp))
         GroupHeader("Coding agents")
 

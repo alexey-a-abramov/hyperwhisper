@@ -297,11 +297,29 @@ fun KeyboardScreen(
     // Get clipboard manager
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
-    // Save keyboard input mode to settings whenever it changes
+    // Save keyboard input mode to settings whenever it changes.
+    // Two writes happen here:
+    //  1. Global lastKeyboardInputMode — fallback for apps we've never seen.
+    //  2. Per-app memory — so reopening the same app restores this layout.
+    // The view model gates the per-app write on the master toggle.
     LaunchedEffect(keyboardInputMode) {
         if (keyboardInputMode != appearanceSettings.lastKeyboardInputMode) {
             val updatedSettings = appearanceSettings.copy(lastKeyboardInputMode = keyboardInputMode)
             viewModel.saveKeyboardInputMode(updatedSettings)
+        }
+        viewModel.recordLayoutForCurrentApp(keyboardInputMode)
+    }
+
+    // Apply layout-switch requests from outside the Compose tree (the IME
+    // service emits one in onStartInputView when per-app memory has a hit).
+    // Normalize against the legacy enum collapse just like the in-line guard
+    // below does for stored values.
+    LaunchedEffect(viewModel) {
+        viewModel.requestedLayout.collect { requested ->
+            val normalized = requested.normalize()
+            if (normalized != keyboardInputMode) {
+                keyboardInputMode = normalized
+            }
         }
     }
 
