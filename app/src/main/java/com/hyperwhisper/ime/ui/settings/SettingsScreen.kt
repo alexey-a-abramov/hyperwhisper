@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.LlmConfig
 import com.hyperwhisper.data.LlmProvider
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.about.AboutActivity
 import com.hyperwhisper.ui.settings.dialogs.AddModeDialog
 import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
@@ -132,7 +133,9 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     val current = route
-                    val title = if (current is SettingsRoute.Detail) current.category.title else "Settings"
+                    val strings = LocalStrings.current
+                    val title = if (current is SettingsRoute.Detail) current.category.localizedTitle()
+                        else strings.settings
                     val subtitle: String? = when {
                         current is SettingsRoute.Detail &&
                             current.category == SettingsCategory.TRANSCRIPTION ->
@@ -300,6 +303,26 @@ fun SettingsScreen(
                                 onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() }
                             )
 
+                            SettingsCategory.LOCAL_MODELS -> {
+                                val gemmaStates by viewModel.gemmaDownloadStates.collectAsState()
+                                com.hyperwhisper.ui.settings.sections.LocalModelsSection(
+                                    whisperStates = whisperDownloadStates,
+                                    gemmaStates = gemmaStates,
+                                    activeWhisperPath = apiSettings.localModelSettings.whisperModelPath,
+                                    activeGemmaPath = apiSettings.localModelSettings.gemmaModelPath,
+                                    useLocalWhisper = apiSettings.localModelSettings.useLocalWhisper,
+                                    useLocalGemma = apiSettings.localModelSettings.useLocalGemma,
+                                    onStartWhisperDownload = { viewModel.startWhisperDownload(it) },
+                                    onCancelWhisperDownload = { viewModel.cancelWhisperDownload(it) },
+                                    onDeleteWhisperDownload = { viewModel.deleteDownloadedWhisperModel(it) },
+                                    onSetActiveWhisper = { viewModel.setActiveLocalWhisperModel(it) },
+                                    onStartGemmaDownload = { viewModel.startGemmaDownload(it) },
+                                    onCancelGemmaDownload = { viewModel.cancelGemmaDownload(it) },
+                                    onDeleteGemmaDownload = { viewModel.deleteDownloadedGemmaModel(it) },
+                                    onSetActiveGemma = { viewModel.setActiveGemmaModel(it) }
+                                )
+                            }
+
                             SettingsCategory.VOICE_MODES -> Box(modifier = Modifier.padding(16.dp)) {
                                 androidx.compose.foundation.layout.Column {
                                     VoiceModesSection(
@@ -320,13 +343,6 @@ fun SettingsScreen(
                                 appearanceSettings = appearanceSettings,
                                 onSettingsChange = { viewModel.saveAppearanceSettings(it) }
                             )
-
-                            SettingsCategory.UPDATES -> Box(modifier = Modifier.padding(16.dp)) {
-                                AppUpdateSection(
-                                    updateManager = updateManager,
-                                    onShowUpdateDialog = onShowUpdateDialog
-                                )
-                            }
 
                             SettingsCategory.ADVANCED -> AdvancedDetail(
                                 onOpenApiLogs = { showApiCallLogs = true },

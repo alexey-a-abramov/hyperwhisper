@@ -92,9 +92,12 @@ class SettingsRepository @Inject constructor(
         inputTokens: Int,
         outputTokens: Int,
         totalTokens: Int,
-        audioDurationSeconds: Double
+        audioDurationSeconds: Double,
+        outputCharacters: Long = 0L,
+        outputBytes: Long = 0L
     ) = usageStatisticsRepository.recordUsage(
-        modelId, inputTokens, outputTokens, totalTokens, audioDurationSeconds
+        modelId, inputTokens, outputTokens, totalTokens, audioDurationSeconds,
+        outputCharacters, outputBytes
     )
 
     suspend fun clearStatistics() =

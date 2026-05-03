@@ -229,16 +229,31 @@ class VoiceRepository @Inject constructor(
                         }
                         Log.d(TAG, "============================")
 
-                        // Record usage statistics
+                        // Record usage statistics. Single-step path → final output is
+                        // result.data; count its chars/bytes once here.
+                        val outputChars = result.data.length.toLong()
+                        val outputBytes = result.data.toByteArray(Charsets.UTF_8).size.toLong()
                         result.processingInfo?.transcriptionTokens?.let { tokens ->
                             settingsRepository.recordUsage(
                                 modelId = apiSettings.modelId,
                                 inputTokens = tokens.promptTokens ?: 0,
                                 outputTokens = tokens.completionTokens ?: 0,
                                 totalTokens = tokens.totalTokens ?: 0,
-                                audioDurationSeconds = audioDurationSeconds
+                                audioDurationSeconds = audioDurationSeconds,
+                                outputCharacters = outputChars,
+                                outputBytes = outputBytes
                             )
-                        }
+                        } ?: settingsRepository.recordUsage(
+                            // Provider returned no token usage info; still record chars
+                            // so the totals are accurate.
+                            modelId = apiSettings.modelId,
+                            inputTokens = 0,
+                            outputTokens = 0,
+                            totalTokens = 0,
+                            audioDurationSeconds = audioDurationSeconds,
+                            outputCharacters = outputChars,
+                            outputBytes = outputBytes
+                        )
 
                         // Log API call
                         apiCallLogRepository.addLog(
@@ -447,6 +462,21 @@ class VoiceRepository @Inject constructor(
                 val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
                 val totalProcessingTimeMs = System.currentTimeMillis() - processingStartTime
                 Log.d(TAG, "Local Gemma post-processing done in ${postProcessTimeMs}ms")
+
+                // Record stats for the in-process Gemma session. No tokens (MediaPipe
+                // doesn't surface them), but audio duration + final-output chars/bytes
+                // belong on the books just like the HTTP two-step path.
+                val finalText = rewritten.ifBlank { transcribedText }
+                settingsRepository.recordUsage(
+                    modelId = "LocalGemma:${java.io.File(localPath).name}",
+                    inputTokens = 0,
+                    outputTokens = 0,
+                    totalTokens = 0,
+                    audioDurationSeconds = audioDurationSeconds,
+                    outputCharacters = finalText.length.toLong(),
+                    outputBytes = finalText.toByteArray(Charsets.UTF_8).size.toLong()
+                )
+
                 val info = ProcessingInfo(
                     processingMode = "two-step",
                     strategy = "transcription + Local Gemma (in-proc)",
@@ -537,7 +567,9 @@ class VoiceRepository @Inject constructor(
                         timestamp = processingStartTime
                     )
 
-                    // Record usage statistics for both models
+                    // Two-step path: only the post-processing leg's output is the
+                    // user-visible final text, so chars/bytes get counted there.
+                    // Transcription leg records audio duration + tokens only.
                     transcriptionTokens?.let { tokens ->
                         settingsRepository.recordUsage(
                             modelId = transcriptionModel,
@@ -548,15 +580,28 @@ class VoiceRepository @Inject constructor(
                         )
                     }
 
+                    val finalChars = processedText.length.toLong()
+                    val finalBytes = processedText.toByteArray(Charsets.UTF_8).size.toLong()
                     postProcessingTokens?.let { tokens ->
                         settingsRepository.recordUsage(
                             modelId = postProcessModel,
                             inputTokens = tokens.promptTokens ?: 0,
                             outputTokens = tokens.completionTokens ?: 0,
                             totalTokens = tokens.totalTokens ?: 0,
-                            audioDurationSeconds = 0.0 // Don't double-count audio duration
+                            audioDurationSeconds = 0.0, // Don't double-count audio duration
+                            outputCharacters = finalChars,
+                            outputBytes = finalBytes
                         )
-                    }
+                    } ?: settingsRepository.recordUsage(
+                        // No token info from LLM provider; still record the chars.
+                        modelId = postProcessModel,
+                        inputTokens = 0,
+                        outputTokens = 0,
+                        totalTokens = 0,
+                        audioDurationSeconds = 0.0,
+                        outputCharacters = finalChars,
+                        outputBytes = finalBytes
+                    )
 
                     ApiResult.Success(processedText, processingInfo)
                 } else {

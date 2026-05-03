@@ -130,13 +130,13 @@ fun TranscriptionSection(
     modifier: Modifier = Modifier
 ) {
     val useLocal = apiSettings.localModelSettings.useLocalWhisper
-    var selectedTab by remember { mutableStateOf(if (useLocal) TranscriptionTab.LOCAL else TranscriptionTab.CLOUD) }
-    // Keep tab in sync if useLocal changes externally (e.g. another screen toggles it),
-    // but only if we're not currently parked on Tools.
+    var selectedTab by remember {
+        mutableStateOf(if (useLocal) TranscriptionTab.LOCAL else TranscriptionTab.CLOUD)
+    }
+    // Keep tab in sync if useLocal flips elsewhere (e.g. via a "Set active"
+    // tap from Local Models or a voice command).
     LaunchedEffect(useLocal) {
-        if (selectedTab != TranscriptionTab.TOOLS) {
-            selectedTab = if (useLocal) TranscriptionTab.LOCAL else TranscriptionTab.CLOUD
-        }
+        selectedTab = if (useLocal) TranscriptionTab.LOCAL else TranscriptionTab.CLOUD
     }
 
     Column(
@@ -156,7 +156,7 @@ fun TranscriptionSection(
                     TranscriptionTab.LOCAL -> if (!useLocal) {
                         onUpdateLocalSettings(apiSettings.localModelSettings.copy(useLocalWhisper = true))
                     }
-                    TranscriptionTab.TOOLS -> { /* view-only, doesn't change persisted source */ }
+                    TranscriptionTab.TOOLS -> Unit // TODO: wire Tools panel
                 }
             }
         )
@@ -180,20 +180,38 @@ fun TranscriptionSection(
                 openRouterError = openRouterError,
                 onRefreshOpenRouterModels = onRefreshOpenRouterModels
             )
-            TranscriptionTab.TOOLS -> ToolsPanel(
-                apiSettings = apiSettings,
-                connectionTestState = connectionTestState,
-                logEntries = transcriptionTestLog,
-                whisperDownloadStates = whisperDownloadStates,
-                onTestTranscription = onTestConnection,
-                onShowApiCallLogs = onShowApiCallLogs,
-                onResetConnectionState = onResetConnectionState,
-                onStartWhisperDownload = onStartWhisperDownload,
-                onCancelWhisperDownload = onCancelWhisperDownload,
-                onDeleteDownloadedWhisper = onDeleteDownloadedWhisper,
-                onSetActiveLocalModel = onSetActiveLocalModel
+            TranscriptionTab.TOOLS -> Text(
+                "Tools — coming soon.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        // Common test panel — visible from BOTH tabs. Tests whatever is
+        // currently the active source: cloud (whichever provider/model is
+        // configured) or on-device (whichever Whisper model is selected).
+        // Replaces the standalone Tools tab.
+        Button(
+            onClick = onTestConnection,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = connectionTestState !is ConnectionTestState.Testing
+        ) {
+            Text(
+                if (connectionTestState is ConnectionTestState.Testing) "Testing…"
+                else "Test transcription"
+            )
+        }
+        OutlinedButton(
+            onClick = onShowApiCallLogs,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("View API logs") }
+        TestLogPanel(
+            entries = transcriptionTestLog,
+            state = connectionTestState,
+            autoCloseOnSuccess = false,
+            onDismiss = onResetConnectionState,
+            runningPlaceholder = "Preparing test…"
+        )
     }
 }
 
@@ -443,426 +461,6 @@ private fun CloudPanel(
 }
 
 // endregion
-
-// region Tools panel
-
-@Composable
-private fun ToolsPanel(
-    apiSettings: ApiSettings,
-    connectionTestState: ConnectionTestState,
-    logEntries: List<TestLogEntry>,
-    whisperDownloadStates: Map<String, WhisperDownloadState>,
-    onTestTranscription: () -> Unit,
-    onShowApiCallLogs: () -> Unit,
-    onResetConnectionState: () -> Unit,
-    onStartWhisperDownload: (String) -> Unit,
-    onCancelWhisperDownload: (String) -> Unit,
-    onDeleteDownloadedWhisper: (String) -> Unit,
-    onSetActiveLocalModel: (String) -> Unit
-) {
-    val local = apiSettings.localModelSettings
-    val isLocalActive = local.useLocalWhisper
-    val provider = apiSettings.provider
-    val requiresAuth = apiSettings.getCurrentRequiresAuth()
-    val key = apiSettings.getCurrentApiKey()
-    val baseUrl = apiSettings.getCurrentBaseUrl()
-    val canTestCloud = (!requiresAuth || key.isNotBlank()) && baseUrl.isNotBlank() &&
-        apiSettings.modelId.isNotBlank()
-    val canTestLocal = local.whisperModelPath.isNotBlank()
-    val canTest = if (isLocalActive) canTestLocal else canTestCloud
-
-    val isRunning = connectionTestState is ConnectionTestState.Testing
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Diagnostics", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (isLocalActive)
-                        "Test the on-device Whisper model with the bundled audio sample, or open the API call log."
-                    else
-                        "Test the configured cloud provider with a bundled audio sample, or open the API call log.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (isLocalActive) {
-                    val modelName = local.whisperModelPath.substringAfterLast('/').ifBlank { "—" }
-                    Text(
-                        "Active: On-device  ·  Model: $modelName",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        "Active: ${provider.displayName}  ·  Model: ${apiSettings.modelId.ifBlank { "—" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = onTestTranscription,
-                modifier = Modifier.weight(1f),
-                enabled = canTest && !isRunning
-            ) { Text(if (isRunning) "Testing…" else "Test transcription") }
-            OutlinedButton(
-                onClick = onShowApiCallLogs,
-                modifier = Modifier.weight(1f)
-            ) { Text("View API logs") }
-        }
-
-        if (!canTest) {
-            Text(
-                buildString {
-                    append("Test disabled: ")
-                    if (isLocalActive) {
-                        append("no on-device model selected. Pick one in Local, or download via the section below.")
-                    } else when {
-                        baseUrl.isBlank() -> append("base URL is empty.")
-                        apiSettings.modelId.isBlank() -> append("model ID is empty.")
-                        requiresAuth && key.isBlank() -> append("API key is missing.")
-                        else -> append("configuration incomplete.")
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-
-        TestLogPanel(
-            entries = logEntries,
-            state = connectionTestState,
-            autoCloseOnSuccess = false,
-            onDismiss = onResetConnectionState,
-            runningPlaceholder = "Preparing test…"
-        )
-
-        WhisperDownloadCenter(
-            states = whisperDownloadStates,
-            activePath = apiSettings.localModelSettings.whisperModelPath,
-            useLocal = apiSettings.localModelSettings.useLocalWhisper,
-            onDownload = onStartWhisperDownload,
-            onCancel = onCancelWhisperDownload,
-            onDelete = onDeleteDownloadedWhisper,
-            onSetActive = onSetActiveLocalModel
-        )
-    }
-}
-
-@Composable
-private fun WhisperDownloadCenter(
-    states: Map<String, WhisperDownloadState>,
-    activePath: String,
-    useLocal: Boolean,
-    onDownload: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onDelete: (String) -> Unit,
-    onSetActive: (String) -> Unit
-) {
-    var multilingualOnly by remember { mutableStateOf(false) }
-    var englishOnly by remember { mutableStateOf(false) }
-    val entries = remember(multilingualOnly, englishOnly) {
-        WhisperModelCatalog.ALL.filter {
-            (!multilingualOnly || it.multilingual) && (!englishOnly || !it.multilingual)
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                "Whisper model downloader",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                "Pre-built ggml models from huggingface.co/ggerganov/whisper.cpp. Files save to /sdcard/LLM/Whisper/.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilterChipToggle(
-                    label = "Multilingual only",
-                    checked = multilingualOnly,
-                    onChange = {
-                        multilingualOnly = it
-                        if (it) englishOnly = false
-                    }
-                )
-                FilterChipToggle(
-                    label = "English only",
-                    checked = englishOnly,
-                    onChange = {
-                        englishOnly = it
-                        if (it) multilingualOnly = false
-                    }
-                )
-            }
-
-            entries.forEach { entry ->
-                WhisperDownloadRow(
-                    entry = entry,
-                    state = states[entry.id] ?: WhisperDownloadState.Idle,
-                    isActive = useLocal && activePath.endsWith("/${entry.fileName}"),
-                    onDownload = { onDownload(entry.id) },
-                    onCancel = { onCancel(entry.id) },
-                    onDelete = { onDelete(entry.id) },
-                    onSetActive = { onSetActive(it) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FilterChipToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Surface(
-        onClick = { onChange(!checked) },
-        shape = MaterialTheme.shapes.small,
-        color = if (checked) MaterialTheme.colorScheme.primary else Color.Transparent,
-        contentColor = if (checked) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-        )
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun WhisperDownloadRow(
-    entry: WhisperModelEntry,
-    state: WhisperDownloadState,
-    isActive: Boolean,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-    onDelete: () -> Unit,
-    onSetActive: (String) -> Unit
-) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(entry.displayName, fontWeight = FontWeight.SemiBold)
-                        if (isActive) {
-                            Spacer(Modifier.width(8.dp))
-                            ActiveBadge()
-                        }
-                    }
-                    Text(
-                        text = buildString {
-                            append(formatBytes(entry.sizeBytes))
-                            append(" · ")
-                            append(if (entry.multilingual) "Multilingual" else "English-only")
-                            entry.notes?.let { append(" · "); append(it) }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            when (state) {
-                is WhisperDownloadState.Downloading -> {
-                    val frac = if (state.totalBytes > 0)
-                        (state.downloadedBytes.toFloat() / state.totalBytes).coerceIn(0f, 1f)
-                    else 0f
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = frac,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        text = buildString {
-                            append("${(frac * 100).toInt()}%  ")
-                            append(formatBytes(state.downloadedBytes))
-                            append(" / ")
-                            append(formatBytes(state.totalBytes))
-                            if (state.bytesPerSec > 0) {
-                                append("  ·  ")
-                                append(formatBytes(state.bytesPerSec))
-                                append("/s")
-                            }
-                            if (state.etaSeconds > 0) {
-                                append("  ·  ETA ")
-                                append(formatEta(state.etaSeconds))
-                            }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                is WhisperDownloadState.Queued -> {
-                    androidx.compose.material3.LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text("Queued…", style = MaterialTheme.typography.labelSmall)
-                }
-                is WhisperDownloadState.Failed -> {
-                    Text(
-                        buildString {
-                            append("Failed: ${state.message}")
-                            if (state.resumableBytes > 0) {
-                                append("  ·  ${formatBytes(state.resumableBytes)} saved — Retry resumes.")
-                            }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                is WhisperDownloadState.Paused -> {
-                    val frac = if (entry.sizeBytes > 0)
-                        (state.resumableBytes.toFloat() / entry.sizeBytes).coerceIn(0f, 1f)
-                    else 0f
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = frac,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "Paused at ${formatBytes(state.resumableBytes)} — Resume to continue.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                is WhisperDownloadState.Retrying -> {
-                    val frac = if (entry.sizeBytes > 0)
-                        (state.resumableBytes.toFloat() / entry.sizeBytes).coerceIn(0f, 1f)
-                    else 0f
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = frac,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "Retrying ${state.attempt}/${state.maxAttempts} in ${state.backoffSeconds}s — ${state.lastError}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                is WhisperDownloadState.Cancelled -> {
-                    Text(
-                        "Cancelled",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                is WhisperDownloadState.Completed -> {
-                    Text(
-                        "Installed at ${state.path.substringBeforeLast('/')}/",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                else -> {}
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (state) {
-                    is WhisperDownloadState.Downloading,
-                    is WhisperDownloadState.Queued,
-                    is WhisperDownloadState.Retrying -> {
-                        OutlinedButton(
-                            onClick = onCancel,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Cancel") }
-                    }
-                    is WhisperDownloadState.Completed -> {
-                        if (!isActive) {
-                            Button(
-                                onClick = { onSetActive(state.path) },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Set active") }
-                        }
-                        OutlinedButton(
-                            onClick = onDelete,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Delete") }
-                    }
-                    is WhisperDownloadState.Paused -> {
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Resume") }
-                        OutlinedButton(
-                            onClick = onDelete,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Discard") }
-                    }
-                    is WhisperDownloadState.Failed -> {
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier.weight(1f)
-                        ) { Text(if (state.resumableBytes > 0) "Resume" else "Retry") }
-                        if (state.resumableBytes > 0) {
-                            OutlinedButton(
-                                onClick = onDelete,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Discard") }
-                        }
-                    }
-                    else -> {
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Download") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun formatBytes(b: Long): String {
-    if (b <= 0L) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    var v = b.toDouble()
-    var idx = 0
-    while (v >= 1024.0 && idx < units.lastIndex) {
-        v /= 1024.0
-        idx++
-    }
-    return if (idx <= 1) "${v.toInt()} ${units[idx]}"
-    else "%.1f %s".format(v, units[idx])
-}
-
-private fun formatEta(seconds: Int): String {
-    if (seconds < 60) return "${seconds}s"
-    val m = seconds / 60
-    val s = seconds % 60
-    if (m < 60) return "${m}m ${s}s"
-    val h = m / 60
-    val mm = m % 60
-    return "${h}h ${mm}m"
-}
 
 // endregion
 

@@ -255,4 +255,28 @@ interface Strings {
     val deleteButtonLongHold: String
     val languageSelectionTitle: String
     val languageSelectionDesc: String
+
+    // Settings home — category tile titles and subtitles. Surfaced in
+    // SettingsHomeScreen + the Settings detail TopAppBar.
+    val categoryTranscriptionTitle: String
+    val categoryTranscriptionSubtitle: String
+    val categoryPostProcessingTitle: String
+    val categoryPostProcessingSubtitle: String
+    val categoryLocalModelsTitle: String
+    val categoryLocalModelsSubtitle: String
+    val categoryVoiceModesTitle: String
+    val categoryVoiceModesSubtitle: String
+    val categoryKeyboardBehaviorTitle: String
+    val categoryKeyboardBehaviorSubtitle: String
+    val categoryAppearanceTitle: String
+    val categoryAppearanceSubtitle: String
+    val categoryAdvancedTitle: String
+    val categoryAdvancedSubtitle: String
+    val categoryAboutTitle: String
+    val categoryAboutSubtitle: String
+
+    // About — new stats labels (audio + text + typing-time-saved).
+    val statsAudioTranscribedLabel: String
+    val statsTextWrittenLabel: String
+    val statsTypingTimeSavedLabel: String
 }

@@ -198,6 +198,9 @@ fun PeriodKeyWithPopup(
     }
 }
 
+// Gboard-style English period popup: comma + sentence-enders + common
+// programmer punctuation, with "." centered so a plain tap-and-release still
+// types a literal period.
 private val DEFAULT_PERIOD_CHARS = listOf(
-    ",", "?", "!", "-", ".", "/", "@", "'", "\""
+    ",", "#", "!", "?", "-", ".", "/", "@", "'", "\"", ";"
 )

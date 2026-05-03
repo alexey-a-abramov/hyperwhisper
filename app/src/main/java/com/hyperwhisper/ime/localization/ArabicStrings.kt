@@ -246,4 +246,27 @@ object ArabicStrings : Strings {
     override val deleteButtonLongHold = "ضغط 5 ثوانٍ - حذف كل النص (يتحول الزر إلى أحمر)"
     override val languageSelectionTitle = "اختيار اللغة"
     override val languageSelectionDesc = "استخدم وضع التكوين لتغيير اللغات بدون استخدام اليدين، أو انقر على أزرار اللغات أسفل الميكروفون للاختيار من القائمة."
+
+    // Settings categories
+    override val categoryTranscriptionTitle = "النسخ النصي"
+    override val categoryTranscriptionSubtitle = "المزود، النموذج، اللغات"
+    override val categoryPostProcessingTitle = "المعالجة اللاحقة"
+    override val categoryPostProcessingSubtitle = "LLM للتحويلات والترجمة"
+    override val categoryLocalModelsTitle = "النماذج المحلية"
+    override val categoryLocalModelsSubtitle = "تنزيل نماذج Whisper + Gemma على الجهاز"
+    override val categoryVoiceModesTitle = "أوضاع الصوت"
+    override val categoryVoiceModesSubtitle = "موجهات مخصصة للنسخ النصي"
+    override val categoryKeyboardBehaviorTitle = "لوحة المفاتيح والسلوك"
+    override val categoryKeyboardBehaviorSubtitle = "السجل، الحافظة، ملفات الصوت"
+    override val categoryAppearanceTitle = "المظهر"
+    override val categoryAppearanceSubtitle = "السمة، الخطوط، لغة الواجهة"
+    override val categoryAdvancedTitle = "متقدم"
+    override val categoryAdvancedSubtitle = "السجلات، التكاملات، التشخيص"
+    override val categoryAboutTitle = "حول"
+    override val categoryAboutSubtitle = "الاعتمادات، الترخيص، الإصدار"
+
+    // About stats
+    override val statsAudioTranscribedLabel = "الصوت المنسوخ"
+    override val statsTextWrittenLabel = "النص المكتوب"
+    override val statsTypingTimeSavedLabel = "وقت الكتابة الموفر تقريباً عند 200 حرفاً/الدقيقة"
 }

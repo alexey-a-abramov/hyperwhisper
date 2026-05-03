@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.ime.update.UpdateProbeDetails
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.settings.sections.AppUpdateSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,6 +135,15 @@ fun AboutScreen(
                 }
             }
 
+            // App update — moved here from the (now removed) Settings → Updates
+            // tile so version and "check for updates" live next to each other.
+            if (updateManager != null) {
+                AppUpdateSection(
+                    updateManager = updateManager,
+                    onShowUpdateDialog = onShowUpdateDialog
+                )
+            }
+
             Text(
                 text = strings.description,
                 fontSize = 14.sp,
@@ -215,7 +225,10 @@ ${strings.languageSelectionDesc}""",
                 color = MaterialTheme.colorScheme.secondary
             )
 
-            if (usageStatistics.modelUsage.isEmpty() && usageStatistics.totalAudioSeconds == 0.0) {
+            val hasAnyData = usageStatistics.modelUsage.isNotEmpty() ||
+                usageStatistics.totalAudioSeconds > 0.0 ||
+                usageStatistics.totalCharacters > 0L
+            if (!hasAnyData) {
                 Text(
                     text = strings.noUsageDataYet,
                     fontSize = 14.sp,
@@ -237,13 +250,37 @@ ${strings.languageSelectionDesc}""",
                         val audioMinutes = (usageStatistics.totalAudioSeconds / 60).toInt()
                         val audioSeconds = (usageStatistics.totalAudioSeconds % 60).toInt()
                         Text(
-                            text = "${strings.totalAudio}: $audioMinutes${strings.minutes} $audioSeconds${strings.seconds}",
+                            text = "${strings.statsAudioTranscribedLabel}: ${audioMinutes}m ${audioSeconds}s",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
+
+                        // Output volume — characters and UTF-8 bytes
+                        if (usageStatistics.totalCharacters > 0L) {
+                            Text(
+                                text = "${strings.statsTextWrittenLabel}: ${formatCharCount(usageStatistics.totalCharacters)}" +
+                                    " · ${formatByteSize(usageStatistics.totalBytes)}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Approx typing time saved at 200 cpm. Framing matters:
+                            // this is the headline "look how much time voice saved"
+                            // stat, not raw chars.
+                            Text(
+                                text = "${strings.statsTypingTimeSavedLabel}: " +
+                                    formatTypingTime(usageStatistics.totalCharacters),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
                         // Total cost calculation
                         var totalCost = 0.0
@@ -399,6 +436,42 @@ ${strings.languageSelectionDesc}""",
  */
 private fun formatNumber(number: Long): String {
     return "%,d".format(number)
+}
+
+/**
+ * Format character count: switch to thousands ("12.3K chars") past 10k so the
+ * number stays readable at a glance.
+ */
+private fun formatCharCount(chars: Long): String = when {
+    chars < 10_000L -> "%,d chars".format(chars)
+    chars < 1_000_000L -> "%.1fK chars".format(chars / 1_000.0)
+    else -> "%.2fM chars".format(chars / 1_000_000.0)
+}
+
+/**
+ * UTF-8 byte size in B/KB/MB. Tracks separately from char count because
+ * non-Latin scripts use 2-3 bytes/char.
+ */
+private fun formatByteSize(bytes: Long): String = when {
+    bytes < 1_024L -> "$bytes B"
+    bytes < 1_024L * 1_024L -> "%.1f KB".format(bytes / 1024.0)
+    else -> "%.2f MB".format(bytes / (1024.0 * 1024.0))
+}
+
+/**
+ * Approx time to type [chars] at 200 cpm. Returns "Xh Ym" past 60 minutes.
+ */
+private fun formatTypingTime(chars: Long): String {
+    val minutes = chars / 200.0
+    return when {
+        minutes < 1.0 -> "%.0f sec".format(minutes * 60)
+        minutes < 60.0 -> "%.0f min".format(minutes)
+        else -> {
+            val hours = (minutes / 60).toInt()
+            val rem = (minutes % 60).toInt()
+            "${hours}h ${rem}m"
+        }
+    }
 }
 
 /**

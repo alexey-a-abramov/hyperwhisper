@@ -55,7 +55,9 @@ class UsageStatisticsRepository @Inject constructor(
         inputTokens: Int,
         outputTokens: Int,
         totalTokens: Int,
-        audioDurationSeconds: Double
+        audioDurationSeconds: Double,
+        outputCharacters: Long = 0L,
+        outputBytes: Long = 0L
     ) {
         dataStore.edit { preferences ->
             val currentStatsJson = preferences[USAGE_STATISTICS_KEY]
@@ -80,10 +82,11 @@ class UsageStatisticsRepository @Inject constructor(
             val updatedModelUsage = currentStats.modelUsage.toMutableMap()
             updatedModelUsage[modelId] = newModelUsage
 
-            // Update total audio seconds
             val updatedStats = UsageStatistics(
                 modelUsage = updatedModelUsage,
-                totalAudioSeconds = currentStats.totalAudioSeconds + audioDurationSeconds
+                totalAudioSeconds = currentStats.totalAudioSeconds + audioDurationSeconds,
+                totalCharacters = currentStats.totalCharacters + outputCharacters,
+                totalBytes = currentStats.totalBytes + outputBytes
             )
 
             preferences[USAGE_STATISTICS_KEY] = gson.toJson(updatedStats)

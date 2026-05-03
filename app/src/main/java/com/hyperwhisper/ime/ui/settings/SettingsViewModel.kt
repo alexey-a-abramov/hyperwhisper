@@ -81,6 +81,7 @@ class SettingsViewModel @Inject constructor(
     private val chatCompletionApiService: ChatCompletionApiService,
     private val gson: Gson,
     private val whisperDownloader: WhisperModelDownloader,
+    private val gemmaDownloader: com.hyperwhisper.data.GemmaModelDownloader,
     private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -120,6 +121,26 @@ class SettingsViewModel @Inject constructor(
     val discoveredModels: StateFlow<List<com.hyperwhisper.data.LocalModelInfo>> = _discoveredModels.asStateFlow()
 
     val whisperDownloadStates: StateFlow<Map<String, WhisperDownloadState>> = whisperDownloader.states
+    val gemmaDownloadStates: StateFlow<Map<String, com.hyperwhisper.data.GemmaDownloadState>> =
+        gemmaDownloader.states
+
+    fun startGemmaDownload(modelId: String) {
+        val entry = com.hyperwhisper.data.GemmaModelCatalog.byId(modelId) ?: return
+        gemmaDownloader.start(entry)
+    }
+    fun cancelGemmaDownload(modelId: String) = gemmaDownloader.cancel(modelId)
+    fun deleteDownloadedGemmaModel(modelId: String) {
+        val entry = com.hyperwhisper.data.GemmaModelCatalog.byId(modelId) ?: return
+        gemmaDownloader.delete(entry)
+    }
+    fun setActiveGemmaModel(path: String) {
+        viewModelScope.launch {
+            val s = apiSettings.value.localModelSettings
+            settingsRepository.updateLocalModelSettings(
+                s.copy(gemmaModelPath = path, useLocalGemma = true)
+            )
+        }
+    }
 
     private val _openRouterModels = MutableStateFlow<List<OpenRouterModelInfo>>(emptyList())
     val openRouterModels: StateFlow<List<OpenRouterModelInfo>> = _openRouterModels.asStateFlow()

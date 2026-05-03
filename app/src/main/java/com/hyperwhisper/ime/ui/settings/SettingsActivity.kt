@@ -86,76 +86,16 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
 
-            // Update dialog
-            updateInfo?.let { info ->
-                val currentVersion = updateManager.getCurrentVersion().second
-                val isLocalBuild = info.apkUrl.startsWith("/") || info.buildTimestamp > 0
-
-                UpdateDialog(
-                    updateInfo = info,
-                    currentVersion = currentVersion,
-                    onDismiss = { showUpdateDialog = false },
-                    onSkip = {
-                        // Skip by build timestamp for local builds, version code for remote
-                        if (info.buildTimestamp > 0) {
-                            updateManager.skipBuildTimestamp(info.buildTimestamp)
-                        } else {
-                            updateManager.skipVersion(info.versionCode)
-                        }
-                        showUpdateDialog = false
-                    },
-                    onUpdate = { progressCallback, onComplete, onError ->
-                        lifecycleScope.launch {
-                            try {
-                                if (isLocalBuild && updateManager.isLocalPath(info.apkUrl)) {
-                                    // For local builds, install directly without copying
-                                    val sourceFile = File(info.apkUrl)
-                                    if (!sourceFile.exists()) {
-                                        onError("Local APK file not found: ${info.apkUrl}")
-                                        Toast.makeText(
-                                            this@SettingsActivity,
-                                            "Local APK not found: ${info.apkUrl}",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        return@launch
-                                    }
-
-                                    // Quick progress for local install
-                                    progressCallback(100)
-                                    onComplete()
-
-                                    // Install directly from local path
-                                    updateManager.installApk(info.apkUrl)
-                                } else {
-                                    // For remote updates, download normally
-                                    when (val result = updateManager.downloadApk(info.apkUrl, progressCallback)) {
-                                        is com.hyperwhisper.ime.update.DownloadResult.Success -> {
-                                            onComplete()
-                                            updateManager.installApk()
-                                        }
-                                        is com.hyperwhisper.ime.update.DownloadResult.Error -> {
-                                            onError(result.message)
-                                            Toast.makeText(
-                                                this@SettingsActivity,
-                                                "Download failed: ${result.message}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-                                        else -> {}
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                onError(e.message ?: "Unknown error")
-                                Toast.makeText(
-                                    this@SettingsActivity,
-                                    "Update failed: ${e.message}",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
-                )
-            }
+            // Update dialog — flow extracted to UpdateDialogHost so AboutActivity
+            // can host the same dialog without duplicating the download/install glue.
+            com.hyperwhisper.ime.update.UpdateDialogHost(
+                updateInfo = updateInfo,
+                updateManager = updateManager,
+                onDismiss = {
+                    updateInfo = null
+                    showUpdateDialog = false
+                }
+            )
         }
     }
 

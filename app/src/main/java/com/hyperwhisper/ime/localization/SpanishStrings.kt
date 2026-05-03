@@ -246,4 +246,27 @@ object SpanishStrings : Strings {
     override val deleteButtonLongHold = "Mantener 5 segundos - Eliminar TODO el texto (el botón se pone rojo)"
     override val languageSelectionTitle = "Selección de idioma"
     override val languageSelectionDesc = "Usa el modo de configuración para cambiar idiomas sin usar las manos, o toca los botones de idioma debajo del micrófono para seleccionar de la lista."
+
+    // Settings categories
+    override val categoryTranscriptionTitle = "Transcripción"
+    override val categoryTranscriptionSubtitle = "Proveedor, modelo, idiomas"
+    override val categoryPostProcessingTitle = "Post-procesamiento"
+    override val categoryPostProcessingSubtitle = "LLM para transformaciones y traducción"
+    override val categoryLocalModelsTitle = "Modelos locales"
+    override val categoryLocalModelsSubtitle = "Descargar modelos Whisper + Gemma en el dispositivo"
+    override val categoryVoiceModesTitle = "Modos de voz"
+    override val categoryVoiceModesSubtitle = "Indicaciones personalizadas para transcripciones"
+    override val categoryKeyboardBehaviorTitle = "Teclado y comportamiento"
+    override val categoryKeyboardBehaviorSubtitle = "Historial, portapapeles, archivos de audio"
+    override val categoryAppearanceTitle = "Apariencia"
+    override val categoryAppearanceSubtitle = "Tema, fuentes, idioma de la interfaz"
+    override val categoryAdvancedTitle = "Avanzado"
+    override val categoryAdvancedSubtitle = "Registros, integraciones, diagnóstico"
+    override val categoryAboutTitle = "Acerca de"
+    override val categoryAboutSubtitle = "Créditos, licencia, versión"
+
+    // About stats
+    override val statsAudioTranscribedLabel = "Audio transcrito"
+    override val statsTextWrittenLabel = "Texto escrito"
+    override val statsTypingTimeSavedLabel = "Tiempo de escritura ahorrado aprox. a 200 cpm"
 }

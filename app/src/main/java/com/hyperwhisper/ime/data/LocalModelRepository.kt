@@ -21,10 +21,7 @@ class LocalModelRepository @Inject constructor(
 ) {
     companion object {
         private const val TAG = "LocalModelRepository"
-        
-        val WHISPER_EXTENSIONS = listOf(".bin")
-        val GEMMA_EXTENSIONS = listOf(".bin", ".gguf")
-        
+
         // Note: do not list /data/data/<otherpkg>/... here — Android sandboxes
         // each app's private dir, so HyperWhisper cannot read Termux's home
         // even with MANAGE_EXTERNAL_STORAGE. Models must live under /sdcard.

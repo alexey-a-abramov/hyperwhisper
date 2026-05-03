@@ -20,6 +20,8 @@ import androidx.lifecycle.lifecycleScope
 import com.hyperwhisper.BuildConfig
 import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.data.SettingsRepository
+import com.hyperwhisper.ime.update.UpdateDialogHost
+import com.hyperwhisper.ime.update.UpdateInfo
 import com.hyperwhisper.ime.update.UpdateManager
 import com.hyperwhisper.ime.update.UpdateProbeDetails
 import com.hyperwhisper.ui.settings.SettingsActivity
@@ -62,6 +64,7 @@ class AboutActivity : ComponentActivity() {
             var updateProbeDetails by remember { mutableStateOf<UpdateProbeDetails?>(null) }
             var integrationResults by remember { mutableStateOf<List<ProviderIntegrationResult>>(emptyList()) }
             var runningIntegration by remember { mutableStateOf(false) }
+            var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
             // Load probe details on first composition
             LaunchedEffect(Unit) {
@@ -84,6 +87,8 @@ class AboutActivity : ComponentActivity() {
                         integrationResults = integrationResults,
                         integrationRunning = runningIntegration,
                         updateProbeDetails = updateProbeDetails,
+                        updateManager = updateManager,
+                        onShowUpdateDialog = { info -> updateInfo = info },
                         onClearStatistics = {
                             lifecycleScope.launch {
                                 settingsRepository.clearStatistics()
@@ -114,6 +119,12 @@ class AboutActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    )
+
+                    UpdateDialogHost(
+                        updateInfo = updateInfo,
+                        updateManager = updateManager,
+                        onDismiss = { updateInfo = null }
                     )
                 }
             }

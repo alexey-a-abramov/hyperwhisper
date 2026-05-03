@@ -741,7 +741,14 @@ data class ModelUsage(
  */
 data class UsageStatistics(
     val modelUsage: Map<String, ModelUsage> = emptyMap(), // modelId -> usage
-    val totalAudioSeconds: Double = 0.0
+    val totalAudioSeconds: Double = 0.0,
+    // Final user-visible output characters across all sessions. For two-step
+    // (transcription + post-processing) flows, only the post-processing leg
+    // counts so we don't double-count the intermediate transcription text.
+    val totalCharacters: Long = 0L,
+    // UTF-8 byte count of the same final output. Tracked separately from chars
+    // because non-Latin scripts run ~2-3 bytes/char.
+    val totalBytes: Long = 0L
 )
 
 /**

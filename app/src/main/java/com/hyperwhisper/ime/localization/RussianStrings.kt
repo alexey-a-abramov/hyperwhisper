@@ -246,4 +246,27 @@ object RussianStrings : Strings {
     override val deleteButtonLongHold = "Удержание 5 секунд — Удалить ВЕСЬ текст (кнопка станет красной)"
     override val languageSelectionTitle = "Выбор языка"
     override val languageSelectionDesc = "Используйте режим конфигурации для смены языков без рук, или нажмите на кнопки языков под микрофоном для выбора из списка."
+
+    // Settings categories
+    override val categoryTranscriptionTitle = "Распознавание"
+    override val categoryTranscriptionSubtitle = "Провайдер, модель, языки"
+    override val categoryPostProcessingTitle = "Постобработка"
+    override val categoryPostProcessingSubtitle = "LLM для преобразований и перевода"
+    override val categoryLocalModelsTitle = "Локальные модели"
+    override val categoryLocalModelsSubtitle = "Загрузка моделей Whisper + Gemma на устройство"
+    override val categoryVoiceModesTitle = "Режимы голоса"
+    override val categoryVoiceModesSubtitle = "Пользовательские подсказки для расшифровок"
+    override val categoryKeyboardBehaviorTitle = "Клавиатура и поведение"
+    override val categoryKeyboardBehaviorSubtitle = "История, буфер обмена, аудиофайлы"
+    override val categoryAppearanceTitle = "Внешний вид"
+    override val categoryAppearanceSubtitle = "Тема, шрифты, язык интерфейса"
+    override val categoryAdvancedTitle = "Дополнительно"
+    override val categoryAdvancedSubtitle = "Логи, интеграции, диагностика"
+    override val categoryAboutTitle = "О приложении"
+    override val categoryAboutSubtitle = "Авторы, лицензия, версия"
+
+    // About stats
+    override val statsAudioTranscribedLabel = "Распознано аудио"
+    override val statsTextWrittenLabel = "Написано текста"
+    override val statsTypingTimeSavedLabel = "Примерно сэкономлено времени набора при 200 зн/мин"
 }
