@@ -28,6 +28,7 @@ import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.ui.buttons.InputLanguageButton
 import com.hyperwhisper.ui.buttons.OutputLanguageButton
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Language and model info row
@@ -146,7 +147,7 @@ fun LanguageModelRow(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     val isLocal = apiSettings.localModelSettings.useLocalWhisper
-                    val primary = if (isLocal) "Local Whisper" else apiSettings.provider.displayName
+                    val primary = if (isLocal) "Local Whisper" else apiSettings.provider.localizedDisplayName()
                     val secondary = if (isLocal) {
                         apiSettings.localModelSettings.whisperModelPath
                             .substringAfterLast('/')

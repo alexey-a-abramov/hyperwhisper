@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 import com.hyperwhisper.ui.util.repeatOnHold
 
 @Composable
@@ -316,7 +317,7 @@ private fun CategoryTab(
                 fontSize = 20.sp
             )
             Text(
-                text = category.displayName.take(3),
+                text = category.localizedDisplayName().take(3),
                 fontSize = 8.sp,
                 color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f)
             )

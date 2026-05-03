@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ProcessingStage
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @Composable
 fun ProcessingIndicator(
@@ -134,7 +135,7 @@ fun ProcessingIndicator(
         // Show processing stage text below file info
         processingStage?.let { stage ->
             Text(
-                text = stage.displayName,
+                text = stage.localizedDisplayName(),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary,

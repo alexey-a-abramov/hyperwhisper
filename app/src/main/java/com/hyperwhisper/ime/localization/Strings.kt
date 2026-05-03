@@ -528,4 +528,112 @@ interface Strings {
     val emojiNoEmojisFound: String
     val emojiRecentlyUsed: String
     val emojiSearchPlaceholder: String
+
+    // Enum: LlmProvider displayName
+    val providerLlmNone: String
+    val providerLlmOpenai: String
+    val providerLlmDeepseek: String
+    val providerLlmGemini: String
+    val providerLlmAnthropic: String
+    val providerLlmMistral: String
+    val providerLlmGroq: String
+    val providerLlmOpenrouter: String
+    val providerLlmOpenaiCompatible: String
+    val providerLlmLocalGemma: String
+    val providerLlmLocalLlamacpp: String
+
+    // Enum: ApiProvider displayName
+    val providerApiOpenai: String
+    val providerApiDeepgram: String
+    val providerApiAssemblyai: String
+    val providerApiGoogleCloud: String
+    val providerApiAwsTranscribe: String
+    val providerApiAzureSpeech: String
+    val providerApiDeepseek: String
+    val providerApiMistral: String
+    val providerApiRevai: String
+    val providerApiGroq: String
+    val providerApiOpenrouter: String
+    val providerApiGemini: String
+    val providerApiAntigravity: String
+    val providerApiHuggingface: String
+    val providerApiSelfhostedWhisper: String
+    val providerApiLocalWhisper: String
+
+    // Enum: ProcessingStage displayName
+    val processingStagePreparing: String
+    val processingStageConvertingAudio: String
+    val processingStageLoadingModel: String
+    val processingStageTranscribing: String
+    val processingStagePostProcessing: String
+    val processingStageUploading: String
+    val processingStageWaitingApi: String
+    val processingStageFinishing: String
+
+    // Enum: ColorSchemeOption displayName
+    val themeTerminalDark: String
+    val themeOceanDeep: String
+    val themeForestNight: String
+    val themeSunsetHorizon: String
+    val themeArcticFrost: String
+    val themeDesertStorm: String
+    val themeNeonCity: String
+    val themeCherryBlossom: String
+    val themeMidnightSky: String
+    val themeLavaFlow: String
+    val themeMistyMountain: String
+    val themeAutumnLeaves: String
+    val themeProfessionalBlue: String
+    val themeWarmEarth: String
+    val themeCoolSlate: String
+    val themeVibrantPurple: String
+    val themeEmeraldGreen: String
+    val themeRubyRed: String
+
+    // Enum: UIScaleOption displayName
+    val uiScaleVerySmall: String
+    val uiScaleSmall: String
+    val uiScaleMedium: String
+    val uiScaleLarge: String
+    val uiScaleVeryLarge: String
+
+    // Enum: FontFamilyOption displayName
+    val fontFamilyDefault: String
+    val fontFamilySerif: String
+    val fontFamilySansSerif: String
+    val fontFamilyMonospace: String
+    val fontFamilyCursive: String
+
+    // Enum: KeyboardInputMode displayName
+    val keyboardModeDictation: String
+    val keyboardModeQwerty: String
+    val keyboardModeCode: String
+    val keyboardModeEmoji: String
+    val keyboardModeAgentClaudeCode: String
+    val keyboardModeAgentOpencode: String
+    val keyboardModeAgentGemini: String
+    val keyboardModeAgentCodex: String
+    val keyboardModeSpecialChars: String
+    val keyboardModeSystemKeys: String
+    val keyboardModeVibeCoding: String
+    val keyboardModeNumpad: String
+
+    // Enum: KeyboardLayout displayName
+    val keyboardLayoutEnglish: String
+    val keyboardLayoutRussian: String
+    val keyboardLayoutSpanish: String
+    val keyboardLayoutFrench: String
+    val keyboardLayoutGerman: String
+    val keyboardLayoutArabic: String
+
+    // Enum: EmojiCategory displayName
+    val emojiCategorySmileys: String
+    val emojiCategoryPeople: String
+    val emojiCategoryAnimals: String
+    val emojiCategoryFood: String
+    val emojiCategoryActivities: String
+    val emojiCategoryTravel: String
+    val emojiCategoryObjects: String
+    val emojiCategorySymbols: String
+    val emojiCategoryFlags: String
 }

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
@@ -114,7 +115,7 @@ fun UniversalKeyboardTopStrip(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        normalized.displayName,
+                        normalized.localizedDisplayName(),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

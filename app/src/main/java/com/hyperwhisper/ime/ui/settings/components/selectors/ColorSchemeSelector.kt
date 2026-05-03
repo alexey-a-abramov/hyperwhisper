@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ColorSchemeOption
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @Composable
 fun ColorSchemeSelector(
@@ -149,7 +150,7 @@ fun ColorSchemeSelector(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = option.displayName,
+                            text = option.localizedDisplayName(),
                             fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) {

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Close
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ProviderModelSelection
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,7 +154,7 @@ fun ProviderModelSelectorDialog(
                         },
                         label = {
                             Text(
-                                text = "${selection.provider.displayName}: ${selection.modelId}",
+                                text = "${selection.provider.localizedDisplayName()}: ${selection.modelId}",
                                 maxLines = 1
                             )
                         }
@@ -187,7 +188,7 @@ fun ProviderModelSelectorDialog(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = provider.displayName,
+                                text = provider.localizedDisplayName(),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (provider == currentProvider) {
@@ -277,7 +278,7 @@ fun ProviderModelSelectorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Select model · ${provider.displayName}",
+                        text = "Select model · ${provider.localizedDisplayName()}",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.AppearanceSettings
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.dialogs.HistoryReductionWarningDialog
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Behavior settings extracted from Appearance: history, clipboard, audio files,
@@ -115,8 +116,8 @@ fun KeyboardBehaviorSection(
             val key = mode.name
             val enabled = key in appearanceSettings.enabledAgentKeyboards
             ToggleRow(
-                title = mode.displayName,
-                description = strings.keyboardBehaviorAgentDescriptionPrefix + mode.displayName,
+                title = mode.localizedDisplayName(),
+                description = strings.keyboardBehaviorAgentDescriptionPrefix + mode.localizedDisplayName(),
                 checked = enabled,
                 onChange = { isOn ->
                     val newSet = appearanceSettings.enabledAgentKeyboards.toMutableSet().apply {

@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.LlmProvider
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +33,7 @@ fun LlmProviderSelector(
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = selectedProvider.displayName,
+            value = selectedProvider.localizedDisplayName(),
             onValueChange = {},
             readOnly = true,
             label = { Text(strings.selectorLlmProviderLabel) },
@@ -49,7 +50,7 @@ fun LlmProviderSelector(
         ) {
             LlmProvider.values().forEach { provider ->
                 DropdownMenuItem(
-                    text = { Text(provider.displayName) },
+                    text = { Text(provider.localizedDisplayName()) },
                     onClick = {
                         onProviderSelected(provider)
                         expanded = false

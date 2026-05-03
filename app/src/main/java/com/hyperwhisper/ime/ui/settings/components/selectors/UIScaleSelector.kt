@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.UIScaleOption
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @Composable
 fun UIScaleSelector(
@@ -35,7 +36,7 @@ fun UIScaleSelector(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = option.displayName,
+                    text = option.localizedDisplayName(),
                     fontSize = (16.sp.value * option.scale).sp,
                     fontWeight = if (option == selectedScale) FontWeight.Bold else FontWeight.Normal
                 )

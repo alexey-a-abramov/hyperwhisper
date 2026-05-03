@@ -38,6 +38,7 @@ import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Inline panel for selecting new settings for reprocessing audio
@@ -115,7 +116,7 @@ fun ReprocessSettingsDialog(
                             selected = selectedProvider == provider,
                             onClick = { selectedProvider = provider },
                             label = {
-                                Text(provider.displayName, fontSize = 10.sp)
+                                Text(provider.localizedDisplayName(), fontSize = 10.sp)
                             },
                             modifier = Modifier.height(28.dp)
                         )

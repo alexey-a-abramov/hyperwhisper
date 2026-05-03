@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +43,7 @@ fun CloudProviderSelector(
             onExpandedChange = { expanded = it }
         ) {
             OutlinedTextField(
-                value = selectedProvider.displayName,
+                value = selectedProvider.localizedDisplayName(),
                 onValueChange = {},
                 readOnly = true,
                 label = { Text(strings.selectorProviderLabel) },
@@ -58,7 +59,7 @@ fun CloudProviderSelector(
             ) {
                 ApiProvider.entries.forEach { provider ->
                     DropdownMenuItem(
-                        text = { Text(provider.displayName) },
+                        text = { Text(provider.localizedDisplayName()) },
                         onClick = {
                             onProviderSelected(provider)
                             expanded = false

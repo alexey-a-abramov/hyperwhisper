@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Configuration info overlay
@@ -94,7 +95,7 @@ fun ConfigInfoDialog(
                     // Provider
                     ConfigInfoItem(
                         label = strings.provider,
-                        value = apiSettings.provider.displayName
+                        value = apiSettings.provider.localizedDisplayName()
                     )
 
                     // Transcription Model

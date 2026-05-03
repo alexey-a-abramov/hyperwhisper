@@ -35,6 +35,7 @@ import com.hyperwhisper.data.GemmaModelEntry
 import com.hyperwhisper.data.WhisperDownloadState
 import com.hyperwhisper.data.WhisperModelCatalog
 import com.hyperwhisper.data.WhisperModelEntry
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Top-level "Local models" settings tab. Hosts both Whisper (transcription)
@@ -218,7 +219,7 @@ private fun IntegrationRow(
             modifier = Modifier.padding(end = 6.dp)
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(result.provider.displayName, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(result.provider.localizedDisplayName(), fontSize = 12.sp, fontWeight = FontWeight.Medium)
             val detail = buildString {
                 result.statusCode?.let { append("HTTP ").append(it).append(" · ") }
                 if (result.configured) append(result.durationMs).append(" ms · ")

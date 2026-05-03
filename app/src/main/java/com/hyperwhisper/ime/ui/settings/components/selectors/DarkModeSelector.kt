@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.DarkModePreference
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,7 +31,7 @@ fun DarkModeSelector(
         onExpandedChange = { expanded = it }
     ) {
         OutlinedTextField(
-            value = selectedMode.displayName,
+            value = selectedMode.localizedDisplayName(),
             onValueChange = {},
             readOnly = true,
             label = { Text(strings.darkMode) },
@@ -45,7 +46,7 @@ fun DarkModeSelector(
         ) {
             DarkModePreference.values().forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option.displayName) },
+                    text = { Text(option.localizedDisplayName()) },
                     onClick = {
                         onModeSelected(option)
                         expanded = false

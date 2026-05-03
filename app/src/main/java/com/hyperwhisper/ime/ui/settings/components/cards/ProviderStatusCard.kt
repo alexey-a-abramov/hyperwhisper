@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @Composable
 fun ProviderStatusCard(
@@ -48,7 +49,7 @@ fun ProviderStatusCard(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
                 Text(
-                    text = provider.displayName,
+                    text = provider.localizedDisplayName(),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer

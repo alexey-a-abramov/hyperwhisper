@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @Composable
 fun ModelInfoDialog(
@@ -53,7 +54,7 @@ fun ModelInfoDialog(
             ) {
                 // Provider name
                 Text(
-                    text = "${strings.dialogModelInfoProviderPrefix}${provider.displayName}",
+                    text = "${strings.dialogModelInfoProviderPrefix}${provider.localizedDisplayName()}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )

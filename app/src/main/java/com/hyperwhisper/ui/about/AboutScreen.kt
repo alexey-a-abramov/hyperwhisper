@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.ime.update.UpdateProbeDetails
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.sections.AppUpdateSection
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -932,7 +933,7 @@ private fun DenseResultRow(
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = result.provider.displayName,
+                text = result.provider.localizedDisplayName(),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )

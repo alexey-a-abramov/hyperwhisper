@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hyperwhisper.data.FontFamilyOption
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,7 +31,7 @@ fun FontFamilySelector(
         onExpandedChange = { expanded = it }
     ) {
         OutlinedTextField(
-            value = selectedFont.displayName,
+            value = selectedFont.localizedDisplayName(),
             onValueChange = {},
             readOnly = true,
             label = { Text(strings.selectorFontLabel) },
@@ -47,7 +48,7 @@ fun FontFamilySelector(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = option.displayName,
+                            text = option.localizedDisplayName(),
                             fontFamily = option.fontFamily
                         )
                     },
