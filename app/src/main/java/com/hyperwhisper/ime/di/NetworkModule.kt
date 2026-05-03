@@ -10,8 +10,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -121,9 +119,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideLocalProcessingStrategy(
-        settingsRepository: SettingsRepository
+        settingsRepository: SettingsRepository,
+        whisperCache: com.hyperwhisper.ime.whisper.WhisperContextCache,
+        gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine
     ): com.hyperwhisper.network.LocalProcessingStrategy {
-        return com.hyperwhisper.network.LocalProcessingStrategy(settingsRepository)
+        return com.hyperwhisper.network.LocalProcessingStrategy(settingsRepository, whisperCache, gemma)
     }
 
     @Provides
@@ -137,21 +137,20 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAuthInterceptor(
-        settingsRepository: SettingsRepository
+        apiSettingsRepository: ApiSettingsRepository
     ): Interceptor {
         return Interceptor { chain ->
-            val apiSettings = runBlocking { settingsRepository.apiSettings.first() }
+            // Read from cached snapshot — no blocking. The snapshot is kept current
+            // by an internal coroutine in ApiSettingsRepository.
+            val apiSettings = apiSettingsRepository.snapshot()
             val requestBuilder = chain.request().newBuilder()
 
-            // Only add Authorization header if provider requires authentication
-            // Uses per-provider auth setting if configured, otherwise uses provider default
             if (apiSettings.getCurrentRequiresAuth()) {
                 requestBuilder.addHeader("Authorization", "Bearer ${apiSettings.getCurrentApiKey()}")
             }
 
             requestBuilder.addHeader("Content-Type", "application/json")
-            val request = requestBuilder.build()
-            chain.proceed(request)
+            chain.proceed(requestBuilder.build())
         }
     }
 
@@ -201,13 +200,11 @@ object NetworkModule {
     fun provideTranscriptionRetrofit(
         okHttpClient: OkHttpClient,
         gson: Gson,
-        settingsRepository: SettingsRepository
+        apiSettingsRepository: ApiSettingsRepository
     ): Retrofit {
-        val baseUrl = runBlocking {
-            val settings = settingsRepository.apiSettings.first()
-            settings.getCurrentBaseUrl()
-        }
-        return createRetrofit(okHttpClient, gson, baseUrl)
+        // Use cached snapshot — non-blocking. Falls back to provider default
+        // until the first DataStore emission lands.
+        return createRetrofit(okHttpClient, gson, apiSettingsRepository.snapshot().getCurrentBaseUrl())
     }
 
     @Provides
@@ -216,13 +213,9 @@ object NetworkModule {
     fun provideChatCompletionRetrofit(
         okHttpClient: OkHttpClient,
         gson: Gson,
-        settingsRepository: SettingsRepository
+        apiSettingsRepository: ApiSettingsRepository
     ): Retrofit {
-        val baseUrl = runBlocking {
-            val settings = settingsRepository.apiSettings.first()
-            settings.getCurrentBaseUrl()
-        }
-        return createRetrofit(okHttpClient, gson, baseUrl)
+        return createRetrofit(okHttpClient, gson, apiSettingsRepository.snapshot().getCurrentBaseUrl())
     }
 
     @Provides

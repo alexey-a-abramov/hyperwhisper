@@ -39,7 +39,26 @@ android {
         // Also store human-readable build date for display
         val buildDateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date(buildTime))
         buildConfigField("String", "BUILD_DATE", "\"$buildDateStr\"")
+
+        // Local-dev-only file logging (writes to /sdcard/apk-logs/HyperWhisper/).
+        // Off by default. Enable locally with -PdevLogs=true or `devLogs=true` in
+        // ~/.gradle/gradle.properties. Never commit `devLogs=true` to the repo.
+        // Combined with BuildConfig.DEBUG at the call site so release builds are no-ops.
+        val devLogsProp = (project.findProperty("devLogs") ?: "false").toString()
+        buildConfigField("boolean", "DEV_LOGS_ENABLED", devLogsProp)
+
+        // arm64-v8a only on the first whisper.cpp pass — see vendoring notes.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
+
+    // libwhisper.so is built out-of-band by app/scripts/build-whisper-so.sh
+    // using Termux's on-device clang (NDK r29, aarch64 host). The resulting
+    // .so is dropped at app/src/main/jniLibs/arm64-v8a/ and AGP just packs it.
+    // Why not externalNativeBuild + CMake? Google ships NDK only for x86_64
+    // hosts; on this aarch64 device the SDK clang can't run, but Termux clang
+    // (same NDK r29, native aarch64 build) targets Android and works fine.
 
     packaging {
         resources {
@@ -137,6 +156,12 @@ dependencies {
 
     // Gson
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // MediaPipe LLM Inference — Gemma on-device.
+    // Loads .bin / .task models converted for MediaPipe (e.g.
+    // huggingface.co/litert-community/Gemma2-2B-it). GPU acceleration on
+    // supported devices, CPU fallback otherwise.
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")
 
     // Accompanist (for permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
