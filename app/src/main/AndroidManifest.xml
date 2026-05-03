@@ -12,6 +12,12 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Foreground service for Whisper-model downloads. Without it the
+         download process is reclaimed when the IME closes / app backgrounds. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".HyperWhisperApplication"
         android:allowBackup="true"
@@ -75,6 +81,13 @@
             android:taskAffinity=""
             android:excludeFromRecents="true"
             android:process=":crash" />
+
+        <!-- Model-download foreground service. Started by WhisperModelDownloader
+             on the first active download; stops itself when the queue empties. -->
+        <service
+            android:name=".data.ModelDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- FileProvider for APK installation -->
         <provider
