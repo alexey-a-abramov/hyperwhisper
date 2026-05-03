@@ -21,13 +21,11 @@ import androidx.compose.foundation.shape.CircleShape
 import android.widget.Toast
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -93,7 +91,7 @@ import java.util.Locale
  * Unified Transcription detail screen.
  * Top-level pivot: Cloud ↔ On-device. Sub-panel renders accordingly.
  */
-private enum class TranscriptionTab { CLOUD, LOCAL, TOOLS }
+private enum class TranscriptionTab { CLOUD, LOCAL }
 
 @Composable
 fun TranscriptionSection(
@@ -156,7 +154,6 @@ fun TranscriptionSection(
                     TranscriptionTab.LOCAL -> if (!useLocal) {
                         onUpdateLocalSettings(apiSettings.localModelSettings.copy(useLocalWhisper = true))
                     }
-                    TranscriptionTab.TOOLS -> Unit // TODO: wire Tools panel
                 }
             }
         )
@@ -168,7 +165,12 @@ fun TranscriptionSection(
                 onUpdate = onUpdateLocalSettings,
                 onDiscover = onDiscoverModels,
                 onVerify = onVerifyModel,
-                onSetActiveLocalModel = onSetActiveLocalModel
+                onSetActiveLocalModel = onSetActiveLocalModel,
+                connectionTestState = connectionTestState,
+                transcriptionTestLog = transcriptionTestLog,
+                onTestConnection = onTestConnection,
+                onResetConnectionState = onResetConnectionState,
+                onShowApiCallLogs = onShowApiCallLogs
             )
             TranscriptionTab.CLOUD -> CloudPanel(
                 apiSettings = apiSettings,
@@ -178,41 +180,47 @@ fun TranscriptionSection(
                 openRouterModels = openRouterModels,
                 openRouterRefreshing = openRouterRefreshing,
                 openRouterError = openRouterError,
-                onRefreshOpenRouterModels = onRefreshOpenRouterModels
-            )
-            TranscriptionTab.TOOLS -> Text(
-                "Tools — coming soon.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                onRefreshOpenRouterModels = onRefreshOpenRouterModels,
+                connectionTestState = connectionTestState,
+                transcriptionTestLog = transcriptionTestLog,
+                onTestConnection = onTestConnection,
+                onResetConnectionState = onResetConnectionState,
+                onShowApiCallLogs = onShowApiCallLogs
             )
         }
+    }
+}
 
-        // Common test panel — visible from BOTH tabs. Tests whatever is
-        // currently the active source: cloud (whichever provider/model is
-        // configured) or on-device (whichever Whisper model is selected).
-        // Replaces the standalone Tools tab.
-        Button(
-            onClick = onTestConnection,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = connectionTestState !is ConnectionTestState.Testing
-        ) {
-            Text(
-                if (connectionTestState is ConnectionTestState.Testing) "Testing…"
-                else "Test transcription"
-            )
-        }
-        OutlinedButton(
-            onClick = onShowApiCallLogs,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("View API logs") }
-        TestLogPanel(
-            entries = transcriptionTestLog,
-            state = connectionTestState,
-            autoCloseOnSuccess = false,
-            onDismiss = onResetConnectionState,
-            runningPlaceholder = "Preparing test…"
+@Composable
+private fun TestSectionInline(
+    connectionTestState: ConnectionTestState,
+    transcriptionTestLog: List<TestLogEntry>,
+    onTestConnection: () -> Unit,
+    onResetConnectionState: () -> Unit,
+    onShowApiCallLogs: () -> Unit
+) {
+    Spacer(Modifier.height(8.dp))
+    Button(
+        onClick = onTestConnection,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = connectionTestState !is ConnectionTestState.Testing
+    ) {
+        Text(
+            if (connectionTestState is ConnectionTestState.Testing) "Testing…"
+            else "Test transcription"
         )
     }
+    OutlinedButton(
+        onClick = onShowApiCallLogs,
+        modifier = Modifier.fillMaxWidth()
+    ) { Text("View API logs") }
+    TestLogPanel(
+        entries = transcriptionTestLog,
+        state = connectionTestState,
+        autoCloseOnSuccess = false,
+        onDismiss = onResetConnectionState,
+        runningPlaceholder = "Preparing test…"
+    )
 }
 
 @Composable
@@ -238,13 +246,6 @@ private fun SourcePivot(
                 label = "Local",
                 icon = Icons.Outlined.PhoneAndroid,
                 onClick = { onSelect(TranscriptionTab.LOCAL) },
-                modifier = Modifier.weight(1f)
-            )
-            PivotChip(
-                selected = selected == TranscriptionTab.TOOLS,
-                label = "Tools",
-                icon = Icons.Outlined.Build,
-                onClick = { onSelect(TranscriptionTab.TOOLS) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -289,7 +290,12 @@ private fun CloudPanel(
     openRouterModels: List<OpenRouterModelInfo> = emptyList(),
     openRouterRefreshing: Boolean = false,
     openRouterError: String? = null,
-    onRefreshOpenRouterModels: () -> Unit = {}
+    onRefreshOpenRouterModels: () -> Unit = {},
+    connectionTestState: ConnectionTestState = ConnectionTestState.Idle,
+    transcriptionTestLog: List<TestLogEntry> = emptyList(),
+    onTestConnection: () -> Unit = {},
+    onResetConnectionState: () -> Unit = {},
+    onShowApiCallLogs: () -> Unit = {}
 ) {
     var provider by remember(apiSettings.provider) { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember(apiSettings) { mutableStateOf(apiSettings.getCurrentBaseUrl()) }
@@ -458,10 +464,18 @@ private fun CloudPanel(
             }
         }
 
+        // Per-tab test affordance — same place across Cloud and Local. Tests
+        // whatever this panel's config represents (the active source when
+        // useLocalWhisper matches the panel's role).
+        TestSectionInline(
+            connectionTestState = connectionTestState,
+            transcriptionTestLog = transcriptionTestLog,
+            onTestConnection = onTestConnection,
+            onResetConnectionState = onResetConnectionState,
+            onShowApiCallLogs = onShowApiCallLogs
+        )
     }
 }
-
-// endregion
 
 // endregion
 
@@ -475,96 +489,117 @@ fun TestLogPanel(
     onDismiss: () -> Unit,
     runningPlaceholder: String = "Working…"
 ) {
-    val visible = state !is ConnectionTestState.Idle || entries.isNotEmpty()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = when (state) {
-                    is ConnectionTestState.Success -> MaterialTheme.colorScheme.tertiaryContainer
-                    is ConnectionTestState.Error -> MaterialTheme.colorScheme.errorContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-            )
-        ) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    when (state) {
-                        is ConnectionTestState.Testing -> {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(runningPlaceholder, fontWeight = FontWeight.SemiBold)
-                        }
-                        is ConnectionTestState.Success -> {
-                            Icon(
-                                Icons.Outlined.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Success",
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        }
-                        is ConnectionTestState.Error -> {
-                            Icon(
-                                Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Failed",
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                        else -> {}
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (entries.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                val text = buildTestLogText(state, entries)
-                                clipboard.setText(AnnotatedString(text))
-                                Toast.makeText(context, "Test log copied", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.ContentCopy,
-                                contentDescription = "Copy log",
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
-                    }
-                }
+    // Reset expansion whenever the state transitions (e.g. a new test begins).
+    var expanded by remember(state::class) { mutableStateOf(false) }
 
+    val containerColor = when (state) {
+        is ConnectionTestState.Success -> MaterialTheme.colorScheme.tertiaryContainer
+        is ConnectionTestState.Error -> MaterialTheme.colorScheme.errorContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val onContainerColor = when (state) {
+        is ConnectionTestState.Success -> MaterialTheme.colorScheme.onTertiaryContainer
+        is ConnectionTestState.Error -> MaterialTheme.colorScheme.onErrorContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val statusLabel = when (state) {
+        is ConnectionTestState.Testing -> runningPlaceholder
+        is ConnectionTestState.Success -> "Success"
+        is ConnectionTestState.Error -> "Failed"
+        else -> "Ready"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when (state) {
+                    is ConnectionTestState.Testing ->
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    is ConnectionTestState.Success ->
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = onContainerColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    is ConnectionTestState.Error ->
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = onContainerColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    else ->
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = onContainerColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    statusLabel,
+                    fontWeight = FontWeight.SemiBold,
+                    color = onContainerColor
+                )
+                Spacer(Modifier.weight(1f))
+                if (expanded && entries.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            val text = buildTestLogText(state, entries)
+                            clipboard.setText(AnnotatedString(text))
+                            Toast.makeText(context, "Test log copied", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.ContentCopy,
+                            contentDescription = "Copy log",
+                            tint = onContainerColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
                 if (entries.isNotEmpty()) {
-                    SelectionContainer {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            entries.takeLast(40).forEach { entry ->
-                                TestLogRow(entry)
-                            }
+                    IconButton(
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Collapse logs" else "Expand logs",
+                            tint = onContainerColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = expanded && entries.isNotEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        entries.takeLast(40).forEach { entry ->
+                            TestLogRow(entry)
                         }
                     }
                 }
             }
         }
-        if (autoCloseOnSuccess && state is ConnectionTestState.Success) {
-            LaunchedEffect(state) {
-                delay(4000)
-                onDismiss()
-            }
+    }
+    if (autoCloseOnSuccess && state is ConnectionTestState.Success) {
+        LaunchedEffect(state) {
+            delay(4000)
+            onDismiss()
         }
     }
 }
@@ -645,7 +680,12 @@ private fun LocalWhisperPanel(
     onUpdate: (LocalModelSettings) -> Unit,
     onDiscover: () -> Unit,
     onVerify: (String) -> Unit,
-    onSetActiveLocalModel: (String) -> Unit
+    onSetActiveLocalModel: (String) -> Unit,
+    connectionTestState: ConnectionTestState = ConnectionTestState.Idle,
+    transcriptionTestLog: List<TestLogEntry> = emptyList(),
+    onTestConnection: () -> Unit = {},
+    onResetConnectionState: () -> Unit = {},
+    onShowApiCallLogs: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var hasFullStorageAccess by remember {
@@ -804,6 +844,14 @@ private fun LocalWhisperPanel(
                 )
             }
         }
+
+        TestSectionInline(
+            connectionTestState = connectionTestState,
+            transcriptionTestLog = transcriptionTestLog,
+            onTestConnection = onTestConnection,
+            onResetConnectionState = onResetConnectionState,
+            onShowApiCallLogs = onShowApiCallLogs
+        )
     }
 }
 
