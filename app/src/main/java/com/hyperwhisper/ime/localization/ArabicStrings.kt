@@ -635,4 +635,11 @@ object ArabicStrings : Strings {
     override val errorRateLimit = "تم تجاوز حد الطلبات — حاول مرة أخرى قريباً."
     override val errorUnknown = "خطأ غير معروف"
     override val errorProcessingFailedFormat = "فشل المعالجة: %1\$s: %2\$s"
+
+    // Local processing
+    override val errorLocalWhisperPathMissing = "لم يتم تكوين مسار نموذج Whisper المحلي."
+    override val errorLocalWhisperModelNotFoundFormat = "لم يتم العثور على نموذج Whisper المحلي في: %s"
+    override val errorLocalWhisperEmptyResult = "لم يُعد Whisper المحلي أي نص. جرب نموذجاً مختلفاً أو صوتاً أعلى."
+    override val errorLocalProcessingFailedFormat = "فشلت المعالجة المحلية: %1\$s: %2\$s"
+    override val errorLocalInferenceFailedFormat = "فشل الاستدلال المحلي: %1\$s: %2\$s"
 }

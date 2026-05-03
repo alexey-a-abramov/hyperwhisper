@@ -2,6 +2,7 @@ package com.hyperwhisper.network
 
 import android.util.Log
 import com.hyperwhisper.data.*
+import com.hyperwhisper.localization.stringsFor
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -33,18 +34,24 @@ class LocalProcessingStrategy(
         voiceMode: VoiceMode,
         modelId: String
     ): ApiResult<String> {
+        val strings = stringsFor(
+            settingsRepository.appearanceSettings.first().uiLanguage
+        )
         return try {
             Log.d(TAG, "========== LOCAL PROCESSING REQUEST ==========")
             val settings = settingsRepository.apiSettings.first()
             val localSettings = settings.localModelSettings
 
             if (localSettings.whisperModelPath.isEmpty()) {
-                return ApiResult.Error("Local Whisper model path is not configured.")
+                return ApiResult.Error(strings.errorLocalWhisperPathMissing)
             }
             val whisperModel = File(localSettings.whisperModelPath)
             if (!whisperModel.exists()) {
                 return ApiResult.Error(
-                    "Local Whisper model not found at: ${localSettings.whisperModelPath}"
+                    String.format(
+                        strings.errorLocalWhisperModelNotFoundFormat,
+                        localSettings.whisperModelPath
+                    )
                 )
             }
 
@@ -75,9 +82,7 @@ class LocalProcessingStrategy(
             Log.d(TAG, "whisper_full done in ${transcriptionTime} ms; len=${rawText.length}")
 
             if (rawText.isEmpty()) {
-                return ApiResult.Error(
-                    "On-device Whisper returned no text. Try a different model or louder audio."
-                )
+                return ApiResult.Error(strings.errorLocalWhisperEmptyResult)
             }
 
             // Local LLM post-processing — Gemma rewrites the raw transcription
@@ -139,7 +144,11 @@ class LocalProcessingStrategy(
         } catch (e: Exception) {
             TraceLogger.error(TAG, "Error in local processing", e)
             ApiResult.Error(
-                "Local processing failed: ${e.javaClass.simpleName}: ${e.message ?: "no message"}",
+                String.format(
+                    strings.errorLocalProcessingFailedFormat,
+                    e.javaClass.simpleName,
+                    e.message ?: strings.errorUnknown
+                ),
                 e
             )
         } catch (t: Throwable) {
@@ -148,7 +157,11 @@ class LocalProcessingStrategy(
             // IME doesn't crash on misconfigured local models.
             TraceLogger.error(TAG, "Fatal error in local inference — converted to ApiResult.Error", t)
             ApiResult.Error(
-                "Local inference failed: ${t.javaClass.simpleName}: ${t.message ?: "no message"}"
+                String.format(
+                    strings.errorLocalInferenceFailedFormat,
+                    t.javaClass.simpleName,
+                    t.message ?: strings.errorUnknown
+                )
             )
         }
     }

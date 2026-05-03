@@ -635,4 +635,11 @@ object SpanishStrings : Strings {
     override val errorRateLimit = "Límite de solicitudes excedido — inténtalo de nuevo en breve."
     override val errorUnknown = "Error desconocido"
     override val errorProcessingFailedFormat = "Error de procesamiento: %1\$s: %2\$s"
+
+    // Local processing
+    override val errorLocalWhisperPathMissing = "La ruta del modelo Whisper local no está configurada."
+    override val errorLocalWhisperModelNotFoundFormat = "Modelo Whisper local no encontrado en: %s"
+    override val errorLocalWhisperEmptyResult = "Whisper local no devolvió texto. Prueba con otro modelo o con audio más alto."
+    override val errorLocalProcessingFailedFormat = "Procesamiento local fallido: %1\$s: %2\$s"
+    override val errorLocalInferenceFailedFormat = "Inferencia local fallida: %1\$s: %2\$s"
 }

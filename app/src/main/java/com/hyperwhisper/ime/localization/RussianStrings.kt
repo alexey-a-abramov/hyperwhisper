@@ -635,4 +635,11 @@ object RussianStrings : Strings {
     override val errorRateLimit = "Превышен лимит запросов — повторите попытку позже."
     override val errorUnknown = "Неизвестная ошибка"
     override val errorProcessingFailedFormat = "Ошибка обработки: %1\$s: %2\$s"
+
+    // Local processing
+    override val errorLocalWhisperPathMissing = "Путь к локальной модели Whisper не настроен."
+    override val errorLocalWhisperModelNotFoundFormat = "Локальная модель Whisper не найдена: %s"
+    override val errorLocalWhisperEmptyResult = "Локальный Whisper не вернул текст. Попробуйте другую модель или более громкое аудио."
+    override val errorLocalProcessingFailedFormat = "Сбой локальной обработки: %1\$s: %2\$s"
+    override val errorLocalInferenceFailedFormat = "Сбой локального вывода: %1\$s: %2\$s"
 }

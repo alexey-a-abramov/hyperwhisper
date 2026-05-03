@@ -647,4 +647,11 @@ interface Strings {
     val errorRateLimit: String                     // "Rate limit exceeded — try again shortly."
     val errorUnknown: String                       // "Unknown error"
     val errorProcessingFailedFormat: String        // "Processing failed: %1$s: %2$s"
+
+    // On-device transcription / inference errors.
+    val errorLocalWhisperPathMissing: String                 // "Local Whisper model path is not configured."
+    val errorLocalWhisperModelNotFoundFormat: String         // "Local Whisper model not found at: %s"
+    val errorLocalWhisperEmptyResult: String                 // "On-device Whisper returned no text. ..."
+    val errorLocalProcessingFailedFormat: String             // "Local processing failed: %1$s: %2$s"
+    val errorLocalInferenceFailedFormat: String              // "Local inference failed: %1$s: %2$s"
 }
