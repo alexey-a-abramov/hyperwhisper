@@ -81,6 +81,7 @@ class SettingsViewModel @Inject constructor(
     private val chatCompletionApiService: ChatCompletionApiService,
     private val gson: Gson,
     private val whisperDownloader: WhisperModelDownloader,
+    private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -841,13 +842,25 @@ class SettingsViewModel @Inject constructor(
                     "Provider: ${llm.provider.displayName}",
                     "model=${llm.modelId}"
                 )
-                appendPostProcessingLog(TestLogLevel.INFO, "Endpoint: ${llm.getBaseUrl()}")
-                appendPostProcessingLog(TestLogLevel.INFO, "Voice mode: ${voiceMode.name}")
 
                 val sampleText = "um so like, i was thinking we should maybe add some logging to the inference path?"
                 val systemPrompt = voiceMode.systemPrompt.ifBlank {
                     "Rewrite the user's text to be clearer and more grammatical. Return only the rewritten text."
                 }
+
+                // LOCAL_GEMMA → in-process MediaPipe path. Bypasses HTTP entirely;
+                // no separate llama.cpp / ollama server needed.
+                if (llm.provider == LlmProvider.LOCAL_GEMMA) {
+                    runLocalGemmaPostProcessingTest(
+                        modelPath = settings.localModelSettings.gemmaModelPath,
+                        systemPrompt = systemPrompt,
+                        sampleText = sampleText
+                    )
+                    return@launch
+                }
+
+                appendPostProcessingLog(TestLogLevel.INFO, "Endpoint: ${llm.getBaseUrl()}")
+                appendPostProcessingLog(TestLogLevel.INFO, "Voice mode: ${voiceMode.name}")
                 appendPostProcessingLog(TestLogLevel.INFO, "Sample input", sampleText)
 
                 val request = ChatCompletionRequest(
@@ -896,6 +909,77 @@ class SettingsViewModel @Inject constructor(
                 _postProcessingTestState.value = ConnectionTestState.Error(prettifyError(e))
                 Log.e(TAG, "Post-processing test failed", e)
             }
+        }
+    }
+
+    /**
+     * In-process Gemma post-processing test. Loads the user's MediaPipe-
+     * converted .bin via [GemmaInferenceEngine] and runs the sample text
+     * through it. No HTTP server required.
+     */
+    private suspend fun runLocalGemmaPostProcessingTest(
+        modelPath: String,
+        systemPrompt: String,
+        sampleText: String
+    ) {
+        if (modelPath.isBlank()) {
+            appendPostProcessingLog(
+                TestLogLevel.FAIL,
+                "No Gemma model path",
+                "Set one in Transcription → Local → Gemma. Expected a MediaPipe-converted .bin (litert-community on HF), not a GGUF file."
+            )
+            _postProcessingTestState.value = ConnectionTestState.Error(
+                "No Gemma model selected. Pick one under Transcription → Local."
+            )
+            return
+        }
+        val file = java.io.File(modelPath)
+        if (!file.exists()) {
+            appendPostProcessingLog(TestLogLevel.FAIL, "Model file missing", modelPath)
+            _postProcessingTestState.value = ConnectionTestState.Error(
+                "Configured Gemma model file not found on disk."
+            )
+            return
+        }
+        appendPostProcessingLog(
+            TestLogLevel.INFO,
+            "Engine: MediaPipe LLM (in-process)",
+            "${file.length() / 1024 / 1024} MB · ${file.name}"
+        )
+        appendPostProcessingLog(TestLogLevel.INFO, "Sample input", sampleText)
+        appendPostProcessingLog(TestLogLevel.RUNNING, "Running in-process Gemma")
+
+        val started = System.nanoTime()
+        try {
+            val out = withContext(Dispatchers.IO) {
+                gemma.rewrite(
+                    modelPath = modelPath,
+                    systemPrompt = systemPrompt,
+                    userText = sampleText
+                )
+            }
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            appendPostProcessingLog(TestLogLevel.OK, "Inference complete", "${elapsedMs} ms")
+            if (out.isBlank()) {
+                appendPostProcessingLog(TestLogLevel.FAIL, "Empty output")
+                _postProcessingTestState.value = ConnectionTestState.Error(
+                    "Gemma returned empty text. Model may be incompatible with MediaPipe — confirm it's a litert-community .bin."
+                )
+                return
+            }
+            val preview = "“${out.take(160)}${if (out.length > 160) "…" else ""}”"
+            appendPostProcessingLog(TestLogLevel.INFO, preview)
+            _postProcessingTestState.value = ConnectionTestState.Success("Sample → $preview")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Local Gemma test failed", t)
+            appendPostProcessingLog(
+                TestLogLevel.FAIL,
+                t.javaClass.simpleName,
+                t.message ?: "no message"
+            )
+            _postProcessingTestState.value = ConnectionTestState.Error(
+                t.message ?: "Local Gemma inference failed."
+            )
         }
     }
 

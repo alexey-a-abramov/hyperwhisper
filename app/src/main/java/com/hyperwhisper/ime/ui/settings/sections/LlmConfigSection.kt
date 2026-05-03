@@ -61,6 +61,7 @@ fun LlmConfigSection(
     openRouterRefreshing: Boolean = false,
     openRouterError: String? = null,
     onRefreshOpenRouterModels: () -> Unit = {},
+    localGemmaModelPath: String = "",
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -71,28 +72,72 @@ fun LlmConfigSection(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
     )
 
+    // Local Gemma in-process explainer. Hides the now-misleading base URL
+    // field and tells the user where the model file is configured.
+    if (llmProvider == LlmProvider.NONE) {
+        // No-op
+    } else if (llmProvider == LlmProvider.LOCAL_GEMMA) {
+        val active = localGemmaModelPath.isNotBlank() &&
+            java.io.File(localGemmaModelPath).exists()
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = if (active) MaterialTheme.colorScheme.tertiaryContainer
+                    else MaterialTheme.colorScheme.errorContainer
+            )
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "In-process MediaPipe LLM",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = if (active) MaterialTheme.colorScheme.onTertiaryContainer
+                        else MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    if (active)
+                        "Model: ${java.io.File(localGemmaModelPath).name}"
+                    else
+                        "No Gemma model selected. Pick a MediaPipe-converted .bin (litert-community on HuggingFace) under Transcription → Local. GGUF files won't load.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (active) MaterialTheme.colorScheme.onTertiaryContainer
+                        else MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    "Runs entirely on-device. No external server needed.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = (if (active) MaterialTheme.colorScheme.onTertiaryContainer
+                        else MaterialTheme.colorScheme.onErrorContainer).copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+
     // Only show configuration if not NONE
     if (llmProvider != LlmProvider.NONE) {
-        // Base URL with reset button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            OutlinedTextField(
-                value = llmBaseUrl,
-                onValueChange = onLlmBaseUrlChange,
-                label = { Text("LLM Base URL") },
-                placeholder = { Text(llmProvider.defaultEndpoint) },
-                supportingText = { Text("API endpoint for post-processing LLM") },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            OutlinedButton(
-                onClick = onResetLlmDefaults,
-                modifier = Modifier.padding(top = 8.dp)
+        // Base URL with reset button — hidden for in-process providers since
+        // they don't use HTTP at all.
+        if (llmProvider != LlmProvider.LOCAL_GEMMA) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Text("RESET")
+                OutlinedTextField(
+                    value = llmBaseUrl,
+                    onValueChange = onLlmBaseUrlChange,
+                    label = { Text("LLM Base URL") },
+                    placeholder = { Text(llmProvider.defaultEndpoint) },
+                    supportingText = { Text("API endpoint for post-processing LLM") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+                OutlinedButton(
+                    onClick = onResetLlmDefaults,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("RESET")
+                }
             }
         }
 

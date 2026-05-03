@@ -497,7 +497,8 @@ private fun PostProcessingDetail(
             openRouterModels = openRouterModels,
             openRouterRefreshing = openRouterRefreshing,
             openRouterError = openRouterError,
-            onRefreshOpenRouterModels = onRefreshOpenRouterModels
+            onRefreshOpenRouterModels = onRefreshOpenRouterModels,
+            localGemmaModelPath = apiSettings.localModelSettings.gemmaModelPath
         )
     }
 }

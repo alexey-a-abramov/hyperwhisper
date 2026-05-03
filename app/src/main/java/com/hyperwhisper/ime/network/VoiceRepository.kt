@@ -22,6 +22,7 @@ class VoiceRepository @Inject constructor(
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
     private val localProcessingStrategy: LocalProcessingStrategy,
+    private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
     private val settingsRepository: SettingsRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
     private val gson: Gson
@@ -422,6 +423,49 @@ class VoiceRepository @Inject constructor(
             Log.d(TAG, "LLM endpoint: ${llmConfig.getBaseUrl()}")
             if (apiSettings.outputLanguage.isNotEmpty()) {
                 Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
+            }
+
+            // LOCAL_GEMMA → in-process MediaPipe path. Bypass the HTTP client
+            // entirely; no separate llama.cpp / ollama server required.
+            if (llmConfig.provider == com.hyperwhisper.data.LlmProvider.LOCAL_GEMMA) {
+                val localPath = apiSettings.localModelSettings.gemmaModelPath
+                if (localPath.isBlank() || !java.io.File(localPath).exists()) {
+                    Log.w(TAG, "Local Gemma path missing or file not found: '$localPath' — falling back to raw transcription")
+                    return ApiResult.Success(transcribedText)
+                }
+                val postProcessStartTime = System.currentTimeMillis()
+                val rewritten = try {
+                    gemma.rewrite(
+                        modelPath = localPath,
+                        systemPrompt = systemPrompt,
+                        userText = transcribedText
+                    )
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Local Gemma post-processing failed; returning raw transcription", t)
+                    return ApiResult.Success(transcribedText)
+                }
+                val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
+                val totalProcessingTimeMs = System.currentTimeMillis() - processingStartTime
+                Log.d(TAG, "Local Gemma post-processing done in ${postProcessTimeMs}ms")
+                val info = ProcessingInfo(
+                    processingMode = "two-step",
+                    strategy = "transcription + Local Gemma (in-proc)",
+                    transcriptionModel = transcriptionModel,
+                    postProcessingModel = "LocalGemma:${java.io.File(localPath).name}",
+                    translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
+                    translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                    originalTranscription = transcribedText,
+                    voiceModeName = voiceMode.name,
+                    systemPrompt = systemPrompt,
+                    audioDurationSeconds = audioDurationSeconds,
+                    transcriptionTokens = transcriptionTokens,
+                    postProcessingTokens = null,
+                    processingTimeMs = totalProcessingTimeMs,
+                    transcriptionTimeMs = transcriptionTimeMs,
+                    postProcessingTimeMs = postProcessTimeMs,
+                    audioFileSizeBytes = audioFileSizeBytes
+                )
+                return ApiResult.Success(rewritten.ifBlank { transcribedText }, info)
             }
 
             // Create text-only chat completion request

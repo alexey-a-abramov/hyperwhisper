@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -39,6 +40,7 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_MAX_HISTORY_ITEMS_KEY = stringPreferencesKey("appearance_max_history_items")
         private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
         private val APPEARANCE_LAST_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_last_keyboard_mode")
+        private val APPEARANCE_ENABLED_AGENTS_KEY = stringSetPreferencesKey("appearance_enabled_agents")
     }
 
     /**
@@ -90,7 +92,8 @@ class AppearanceRepository @Inject constructor(
                 } catch (e: Exception) {
                     KeyboardInputMode.DICTATION
                 }
-            } ?: KeyboardInputMode.DICTATION
+            } ?: KeyboardInputMode.DICTATION,
+            enabledAgentKeyboards = preferences[APPEARANCE_ENABLED_AGENTS_KEY] ?: emptySet()
         )
     }
 
@@ -113,6 +116,7 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY] = settings.maxHistoryItems.toString()
             preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
             preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY] = settings.lastKeyboardInputMode.name
+            preferences[APPEARANCE_ENABLED_AGENTS_KEY] = settings.enabledAgentKeyboards
         }
     }
 }
