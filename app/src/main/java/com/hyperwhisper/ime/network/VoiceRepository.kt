@@ -3,7 +3,9 @@ package com.hyperwhisper.network
 import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
+import com.hyperwhisper.localization.stringsFor
 import com.hyperwhisper.utils.TraceLogger
+import kotlinx.coroutines.flow.first
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -234,12 +236,20 @@ class VoiceRepository @Inject constructor(
                 )
             )
 
-            ApiResult.Error(ErrorMessageFormatter.friendlyMessage(e), e)
+            val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
+            ApiResult.Error(ErrorMessageFormatter.friendlyMessage(e, strings), e)
         } catch (t: Throwable) {
             // Catches OOM/UnsatisfiedLinkError etc. from local model inference paths.
             // We log and convert to a graceful error rather than letting it crash the IME.
             TraceLogger.error(TAG, "Fatal error in audio processing — converted to ApiResult.Error", t)
-            ApiResult.Error("Inference failed: ${t.javaClass.simpleName}: ${t.message ?: "no message"}")
+            val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
+            ApiResult.Error(
+                String.format(
+                    strings.errorProcessingFailedFormat,
+                    t.javaClass.simpleName,
+                    t.message ?: strings.errorUnknown
+                )
+            )
         }
     }
 

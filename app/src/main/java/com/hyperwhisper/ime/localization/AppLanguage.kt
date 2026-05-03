@@ -74,3 +74,14 @@ fun getLanguageByCode(code: String): AppLanguage {
  * Usage in Composables: val strings = LocalStrings.current
  */
 val LocalStrings = compositionLocalOf<Strings> { EnglishStrings }
+
+/**
+ * Resolve [Strings] from the user-selected UI language code stored in
+ * AppearanceSettings. Used by non-Composable code paths (repositories,
+ * services, ViewModels) that need to surface a localized message but can't
+ * read [LocalStrings.current] from a Compose composition.
+ *
+ * Call sites typically obtain the language code via
+ * `settingsRepository.appearanceSettings.first().uiLanguage`.
+ */
+fun stringsFor(languageCode: String): Strings = getLanguageByCode(languageCode).getStrings()

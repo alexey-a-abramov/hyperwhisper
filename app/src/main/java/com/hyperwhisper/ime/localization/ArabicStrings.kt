@@ -629,4 +629,10 @@ object ArabicStrings : Strings {
 
     // Processing indicator
     override val processingEstimatedTimeFormat = "تقريباً: ~%d ث"
+
+    // Network errors
+    override val errorForbidden = "ممنوع — تحقق من صلاحيات المفتاح."
+    override val errorRateLimit = "تم تجاوز حد الطلبات — حاول مرة أخرى قريباً."
+    override val errorUnknown = "خطأ غير معروف"
+    override val errorProcessingFailedFormat = "فشل المعالجة: %1\$s: %2\$s"
 }

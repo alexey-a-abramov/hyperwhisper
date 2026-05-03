@@ -774,17 +774,20 @@ class ConnectionTester @Inject constructor(
             .create(ChatCompletionApiService::class.java)
     }
 
-    private fun prettifyError(e: Throwable): String {
+    private suspend fun prettifyError(e: Throwable): String {
+        val strings = com.hyperwhisper.localization.stringsFor(
+            settingsRepository.appearanceSettings.first().uiLanguage
+        )
         val msg = e.message.orEmpty()
         return when {
-            "401" in msg -> "Authentication failed — check API key."
-            "403" in msg -> "Forbidden — verify key permissions."
-            "404" in msg -> "Endpoint not found — check base URL and model ID."
-            "429" in msg -> "Rate limit exceeded — try again shortly."
-            "timeout" in msg -> "Timeout — server didn't respond in time."
-            "SSL" in msg || "certificate" in msg -> "SSL/TLS error — check HTTPS configuration."
-            "Unable to resolve host" in msg -> "Cannot reach server — check internet connection."
-            else -> msg.ifBlank { "Unknown error" }
+            "401" in msg -> strings.authenticationFailed
+            "403" in msg -> strings.errorForbidden
+            "404" in msg -> strings.endpointNotFound
+            "429" in msg -> strings.errorRateLimit
+            "timeout" in msg -> strings.connectionTimeout
+            "SSL" in msg || "certificate" in msg -> strings.sslError
+            "Unable to resolve host" in msg -> strings.errorNetworkFailed
+            else -> msg.ifBlank { strings.errorUnknown }
         }
     }
 }

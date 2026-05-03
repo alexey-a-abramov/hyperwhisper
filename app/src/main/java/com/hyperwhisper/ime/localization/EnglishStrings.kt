@@ -629,4 +629,10 @@ object EnglishStrings : Strings {
 
     // Processing indicator
     override val processingEstimatedTimeFormat = "Est: ~%ds"
+
+    // Network errors
+    override val errorForbidden = "Forbidden — verify key permissions."
+    override val errorRateLimit = "Rate limit exceeded — try again shortly."
+    override val errorUnknown = "Unknown error"
+    override val errorProcessingFailedFormat = "Processing failed: %1\$s: %2\$s"
 }

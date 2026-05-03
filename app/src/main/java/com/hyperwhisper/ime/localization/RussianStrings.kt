@@ -629,4 +629,10 @@ object RussianStrings : Strings {
 
     // Processing indicator
     override val processingEstimatedTimeFormat = "Прибл: ~%d с"
+
+    // Network errors
+    override val errorForbidden = "Запрещено — проверьте права ключа."
+    override val errorRateLimit = "Превышен лимит запросов — повторите попытку позже."
+    override val errorUnknown = "Неизвестная ошибка"
+    override val errorProcessingFailedFormat = "Ошибка обработки: %1\$s: %2\$s"
 }

@@ -640,4 +640,11 @@ interface Strings {
     // Processing indicator hint shown next to the spinner during transcription.
     // Format string: %d is the estimated remaining seconds.
     val processingEstimatedTimeFormat: String  // "Est: ~%ds"
+
+    // Network error messages — surfaced to the user from non-Composable code
+    // (VoiceRepository, ConnectionTester) via stringsFor(languageCode).
+    val errorForbidden: String                     // "Forbidden — verify key permissions."
+    val errorRateLimit: String                     // "Rate limit exceeded — try again shortly."
+    val errorUnknown: String                       // "Unknown error"
+    val errorProcessingFailedFormat: String        // "Processing failed: %1$s: %2$s"
 }
