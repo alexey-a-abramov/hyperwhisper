@@ -66,11 +66,18 @@ data class TestLogEntry(
     val detail: String? = null
 )
 
+/** Light-weight model summary fetched from openrouter.ai/api/v1/models. */
 data class OpenRouterModelInfo(
     val id: String,
     val displayName: String,
     val isFree: Boolean,
+    /** True when the model accepts audio input. Used by the transcription
+     *  Cloud panel's "Audio-capable only" pre-filter. */
     val supportsAudio: Boolean,
+    /** True when the model accepts text input. Used by the post-processing
+     *  panel's "Text-capable only" pre-filter — defaults to true since most
+     *  chat models accept text; rare audio-only models will filter out. */
+    val acceptsText: Boolean,
     val contextLength: Long
 )
 
@@ -1176,11 +1183,17 @@ class SettingsViewModel @Inject constructor(
                         id.contains("whisper", ignoreCase = true) ||
                         id.contains("transcribe", ignoreCase = true) ||
                         id.contains("voxtral", ignoreCase = true)
+                    // Default to true when the catalog doesn't list modalities
+                    // — empty/missing input_modalities is overwhelmingly chat
+                    // models on OpenRouter.
+                    val acceptsText = inputModalities.isEmpty() ||
+                        "text" in inputModalities
                     OpenRouterModelInfo(
                         id = id,
                         displayName = name,
                         isFree = free,
                         supportsAudio = supportsAudio,
+                        acceptsText = acceptsText,
                         contextLength = ctx
                     )
                 }.getOrNull()

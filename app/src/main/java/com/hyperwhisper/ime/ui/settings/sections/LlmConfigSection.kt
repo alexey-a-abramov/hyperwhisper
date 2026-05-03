@@ -272,10 +272,7 @@ fun LlmConfigSection(
                 selectedModelId = llmModelId,
                 onRefresh = onRefreshOpenRouterModels,
                 onSelect = onLlmModelIdChange,
-                audioFilterDefault = false,
-                audioFilterLabel = "Audio-capable only",
-                descriptionText = "Browse the OpenRouter catalog. Filter for " +
-                    "free models; tap any row to use it for post-processing."
+                panelMode = OpenRouterPanelMode.POST_PROCESSING
             )
             Spacer(Modifier.padding(vertical = 8.dp))
         }

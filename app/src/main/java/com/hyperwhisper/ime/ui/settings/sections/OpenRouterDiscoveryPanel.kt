@@ -40,6 +40,13 @@ import com.hyperwhisper.ui.settings.OpenRouterModelInfo
  * The catalog itself is fetched in [com.hyperwhisper.ui.settings.SettingsViewModel.refreshOpenRouterModels]
  * — the same StateFlow feeds both call-sites.
  */
+/** Which side of the IME hosts this panel. Drives the pre-filter semantics:
+ *   - [TRANSCRIPTION] filters by `supportsAudio` (Cloud transcription needs
+ *     audio-capable models — whisper/voxtral/etc.).
+ *   - [POST_PROCESSING] filters by `acceptsText` (LLM rewrite needs models
+ *     that accept text — the vast majority of chat models). */
+enum class OpenRouterPanelMode { TRANSCRIPTION, POST_PROCESSING }
+
 @Composable
 fun OpenRouterDiscoveryPanel(
     models: List<OpenRouterModelInfo>,
@@ -48,19 +55,36 @@ fun OpenRouterDiscoveryPanel(
     selectedModelId: String,
     onRefresh: () -> Unit,
     onSelect: (String) -> Unit,
-    audioFilterDefault: Boolean = true,
-    audioFilterLabel: String = "Transcription-capable only",
-    descriptionText: String =
-        "Auto-fetched from openrouter.ai/api/v1/models. Filter for free " +
-            "models and audio-capable ones (whisper / voxtral / models reporting audio input)."
+    panelMode: OpenRouterPanelMode = OpenRouterPanelMode.TRANSCRIPTION,
+    descriptionText: String? = null
 ) {
     var freeOnly by remember { mutableStateOf(true) }
-    var audioOnly by remember { mutableStateOf(audioFilterDefault) }
+    var preFilterOn by remember { mutableStateOf(true) }
 
-    val filtered = remember(models, freeOnly, audioOnly) {
+    val preFilterLabel = when (panelMode) {
+        OpenRouterPanelMode.TRANSCRIPTION -> "Audio-capable only"
+        OpenRouterPanelMode.POST_PROCESSING -> "Text-capable only"
+    }
+    val effectiveDescription = descriptionText ?: when (panelMode) {
+        OpenRouterPanelMode.TRANSCRIPTION ->
+            "Browse openrouter.ai/api/v1/models. The pre-filter limits to " +
+                "audio-capable routes (whisper / voxtral / models reporting " +
+                "audio input)."
+        OpenRouterPanelMode.POST_PROCESSING ->
+            "Browse openrouter.ai/api/v1/models. The pre-filter limits to " +
+                "text-capable models — the vast majority of chat models. " +
+                "Tap any row to use it for post-processing."
+    }
+
+    val filtered = remember(models, freeOnly, preFilterOn, panelMode) {
         models.asSequence()
             .filter { !freeOnly || it.isFree }
-            .filter { !audioOnly || it.supportsAudio }
+            .filter {
+                !preFilterOn || when (panelMode) {
+                    OpenRouterPanelMode.TRANSCRIPTION -> it.supportsAudio
+                    OpenRouterPanelMode.POST_PROCESSING -> it.acceptsText
+                }
+            }
             .sortedWith(compareByDescending<OpenRouterModelInfo> { it.isFree }.thenBy { it.id })
             .toList()
     }
@@ -90,7 +114,7 @@ fun OpenRouterDiscoveryPanel(
                 }
             }
             Text(
-                descriptionText,
+                effectiveDescription,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -99,8 +123,8 @@ fun OpenRouterDiscoveryPanel(
                 Checkbox(checked = freeOnly, onCheckedChange = { freeOnly = it })
                 Text("Free only", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.width(12.dp))
-                Checkbox(checked = audioOnly, onCheckedChange = { audioOnly = it })
-                Text(audioFilterLabel, style = MaterialTheme.typography.bodyMedium)
+                Checkbox(checked = preFilterOn, onCheckedChange = { preFilterOn = it })
+                Text(preFilterLabel, style = MaterialTheme.typography.bodyMedium)
             }
 
             if (error != null) {

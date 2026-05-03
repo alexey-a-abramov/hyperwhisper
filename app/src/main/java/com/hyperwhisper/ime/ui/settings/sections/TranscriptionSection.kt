@@ -357,7 +357,8 @@ private fun CloudPanel(
                 onSelect = {
                     modelId = it
                     persist()
-                }
+                },
+                panelMode = OpenRouterPanelMode.TRANSCRIPTION
             )
         }
 
