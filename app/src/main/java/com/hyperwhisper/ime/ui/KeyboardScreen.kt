@@ -57,6 +57,7 @@ import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.buttons.InputLanguageButton
 import com.hyperwhisper.ui.buttons.OutputLanguageButton
+import com.hyperwhisper.ui.util.repeatOnHold
 import com.hyperwhisper.ui.components.InputFieldInfo
 import com.hyperwhisper.ui.indicators.RecordingTimer
 import com.hyperwhisper.ui.overlays.ConfigInfoDialog
@@ -1743,9 +1744,9 @@ private fun TextKeyboardSectionNew(
                             height = keyHeight
                         )
                         Spacer(modifier = Modifier.weight(0.5f))
-                        KeyboardActionButton(
+                        RepeatingActionButton(
                             icon = Icons.Default.Backspace,
-                            onClick = onDelete,
+                            onAction = onDelete,
                             modifier = Modifier.weight(1.2f),
                             style = KeyboardActionStyle.BACKSPACE,
                             height = keyHeight
@@ -1980,12 +1981,22 @@ private fun TextKeyboardSectionNew(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 listOf(",", "_", "@", "#", "$", "€", "£", "¥", "§", "⌫").forEach { key ->
-                                    KeyboardKeyButton(
-                                        label = key,
-                                        onClick = { if (key == "⌫") onDelete() else onKeyPress(key) },
-                                        modifier = Modifier.weight(1f),
-                                        height = keyHeight
-                                    )
+                                    if (key == "⌫") {
+                                        RepeatingActionButton(
+                                            icon = Icons.Default.Backspace,
+                                            onAction = onDelete,
+                                            style = KeyboardActionStyle.BACKSPACE,
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    } else {
+                                        KeyboardKeyButton(
+                                            label = key,
+                                            onClick = { onKeyPress(key) },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    }
                                 }
                             }
                         } else {
@@ -2022,9 +2033,9 @@ private fun TextKeyboardSectionNew(
                                         height = keyHeight
                                     )
                                 }
-                                KeyboardActionButton(
+                                RepeatingActionButton(
                                     icon = Icons.Default.Backspace,
-                                    onClick = onDelete,
+                                    onAction = onDelete,
                                     modifier = Modifier.weight(1.5f),
                                     style = KeyboardActionStyle.BACKSPACE,
                                     height = keyHeight
@@ -2112,25 +2123,16 @@ private fun KeyboardKeyButton(
 
 @Composable
 private fun RepeatingActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     onAction: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    label: String? = null,
     style: KeyboardActionStyle = KeyboardActionStyle.NORMAL,
     modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp? = null,
     initialDelayMs: Long = 500L,
     repeatDelayMs: Long = 50L
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var isPressed by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isPressed) {
-        if (isPressed) {
-            delay(initialDelayMs)
-            while (isPressed) {
-                onAction()
-                delay(repeatDelayMs)
-            }
-        }
-    }
+    require(icon != null || label != null) { "RepeatingActionButton needs icon or label" }
 
     val backgroundColor = when (style) {
         KeyboardActionStyle.NORMAL -> KeyboardKeyColor
@@ -2143,18 +2145,13 @@ private fun RepeatingActionButton(
         else -> KeyboardSpecialTextColor
     }
 
+    val sized = if (height != null) modifier.height(height) else modifier
     Surface(
-        modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onPress = {
-                    isPressed = true
-                    onAction() // Fire immediately on press
-                    tryAwaitRelease()
-                    isPressed = false
-                },
-                onTap = { } // Already handled in onPress
-            )
-        },
+        modifier = sized.repeatOnHold(
+            initialDelayMs = initialDelayMs,
+            repeatIntervalMs = repeatDelayMs,
+            onTrigger = onAction
+        ),
         shape = RoundedCornerShape(10.dp),
         color = backgroundColor,
         tonalElevation = 1.dp
@@ -2163,11 +2160,20 @@ private fun RepeatingActionButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = "repeating action",
-                tint = contentColor
-            )
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label ?: "repeating action",
+                    tint = contentColor
+                )
+            } else {
+                Text(
+                    text = label!!,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = contentColor
+                )
+            }
         }
     }
 }

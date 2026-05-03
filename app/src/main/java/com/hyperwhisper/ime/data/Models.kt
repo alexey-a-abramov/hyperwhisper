@@ -233,6 +233,19 @@ enum class LlmProvider(
             "google/gemma-2-9b-it"
         ),
         requiresAuth = false
+    ),
+    LOCAL_LLAMACPP(
+        displayName = "Local llama.cpp Server",
+        // llama-server's zero-config default is 127.0.0.1:8080. Editable in UI.
+        defaultEndpoint = "http://127.0.0.1:8080/v1/",
+        // Model IDs match the typical GGUF filename stems users see in
+        // /sdcard/LLM/. The actual ID accepted depends on llama-server's
+        // --alias flag (defaults to the file stem). Editable in UI.
+        defaultModels = listOf(
+            "qwen2.5-14b-instruct-q4_k_m",
+            "llama-3.1-8b-instruct-q6_k"
+        ),
+        requiresAuth = false
     )
 }
 

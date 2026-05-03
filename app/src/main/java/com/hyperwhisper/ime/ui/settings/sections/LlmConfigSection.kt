@@ -76,6 +76,41 @@ fun LlmConfigSection(
     // field and tells the user where the model file is configured.
     if (llmProvider == LlmProvider.NONE) {
         // No-op
+    } else if (llmProvider == LlmProvider.LOCAL_LLAMACPP) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Local llama.cpp HTTP server",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    "Start the server in Termux first, then HyperWhisper hits it over HTTP. " +
+                        "Default URL assumes llama-server's zero-config 127.0.0.1:8080.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    "Termux:  pkg install llama-cpp\n" +
+                        "         llama-server -m /sdcard/LLM/<model>.gguf",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    "Model ID below must match llama-server's reported model name " +
+                        "(usually the GGUF file stem, or whatever you pass to --alias).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        }
     } else if (llmProvider == LlmProvider.LOCAL_GEMMA) {
         val active = localGemmaModelPath.isNotBlank() &&
             java.io.File(localGemmaModelPath).exists()

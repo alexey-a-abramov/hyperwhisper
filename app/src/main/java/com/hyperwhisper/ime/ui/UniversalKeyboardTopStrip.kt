@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
+import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
  * Universal top strip rendered above every non-DICTATION keyboard layout.
@@ -145,7 +146,8 @@ fun UniversalKeyboardTopStrip(
             ChipButton(
                 onClick = onBackspace,
                 bg = MaterialTheme.colorScheme.errorContainer,
-                fg = MaterialTheme.colorScheme.onErrorContainer
+                fg = MaterialTheme.colorScheme.onErrorContainer,
+                repeatOnHold = true
             ) {
                 Icon(
                     imageVector = Icons.Default.Backspace,
@@ -183,21 +185,38 @@ private fun ChipButton(
     onClick: () -> Unit,
     bg: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceVariant,
     fg: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    repeatOnHold: Boolean = false,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        color = bg,
-        contentColor = fg,
-        shape = RoundedCornerShape(6.dp),
-        modifier = Modifier
-            .fillMaxHeight()
-            .padding(vertical = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            content = content
-        )
+    val baseModifier = Modifier
+        .fillMaxHeight()
+        .padding(vertical = 2.dp)
+    if (repeatOnHold) {
+        Surface(
+            color = bg,
+            contentColor = fg,
+            shape = RoundedCornerShape(6.dp),
+            modifier = baseModifier.repeatOnHold(onTrigger = onClick)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = content
+            )
+        }
+    } else {
+        Surface(
+            onClick = onClick,
+            color = bg,
+            contentColor = fg,
+            shape = RoundedCornerShape(6.dp),
+            modifier = baseModifier
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = content
+            )
+        }
     }
 }

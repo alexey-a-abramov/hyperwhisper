@@ -34,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ProviderModelSelection
 import com.hyperwhisper.localization.LocalStrings
@@ -254,62 +257,106 @@ fun ProviderModelSelectorDialog(
                 matchesText && matchesFree
             }
         }
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { modelPickerProvider = null },
-            title = { Text("Select model for ${provider.displayName}") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+        // IMEs can't host real Android Dialogs (BadTokenException — the
+        // service has no Activity token). Render as a full-screen Surface
+        // overlay instead. Also denser: smaller paddings, bigger model list,
+        // tap-to-pick rows instead of TextButtons.
+        androidx.activity.compose.BackHandler(onBack = { modelPickerProvider = null })
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = modelFilter,
-                        onValueChange = { modelFilter = it },
-                        label = { Text("Filter models") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    Text(
+                        text = "Select model · ${provider.displayName}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
                     )
-                    if (showFreeFilter) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            Checkbox(
-                                checked = freeOnly,
-                                onCheckedChange = { freeOnly = it }
-                            )
-                            Text(
-                                text = "Free",
-                                modifier = Modifier.padding(top = 14.dp)
-                            )
-                        }
-                    }
-                    filteredModels.forEach { model ->
-                        TextButton(
-                            onClick = {
-                                onProviderModelSelected(provider, model)
-                                modelPickerProvider = null
-                                modelFilter = ""
-                                freeOnly = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(model)
-                        }
-                    }
-                    if (filteredModels.isEmpty()) {
-                        Text(
-                            text = "No matching models",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    androidx.compose.material3.IconButton(
+                        onClick = { modelPickerProvider = null },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { modelPickerProvider = null }) {
-                    Text(strings.cancel.uppercase())
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = modelFilter,
+                    onValueChange = { modelFilter = it },
+                    placeholder = { Text("Filter models", fontSize = 12.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                )
+                if (showFreeFilter) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = freeOnly,
+                            onCheckedChange = { freeOnly = it },
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text("Free models only", fontSize = 12.sp)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (filteredModels.isEmpty()) {
+                    Text(
+                        text = "No matching models",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(filteredModels) { model ->
+                            Surface(
+                                onClick = {
+                                    onProviderModelSelected(provider, model)
+                                    modelPickerProvider = null
+                                    modelFilter = ""
+                                    freeOnly = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (model == currentModelId) MaterialTheme.colorScheme.primaryContainer
+                                    else androidx.compose.ui.graphics.Color.Transparent,
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = model,
+                                    fontSize = 12.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    color = if (model == currentModelId)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }

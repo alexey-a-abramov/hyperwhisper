@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.AgentCommand
+import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
  * Generic agent quick-command keyboard. Renders a list of [AgentCommand] as
@@ -107,7 +108,8 @@ fun AgentKeyboard(
                     weight = 1f,
                     bg = KeyboardBackspaceColor,
                     fg = Color.White,
-                    onClick = onDelete
+                    onClick = onDelete,
+                    repeatOnHold = true
                 )
             }
         }
@@ -175,16 +177,30 @@ private fun androidx.compose.foundation.layout.RowScope.ActionIconKey(
     weight: Float,
     bg: Color,
     fg: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    repeatOnHold: Boolean = false
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = bg,
-        modifier = Modifier.weight(weight).fillMaxHeight()
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = desc, tint = fg, modifier = Modifier.size(18.dp))
+    val baseModifier = Modifier.weight(weight).fillMaxHeight()
+    if (repeatOnHold) {
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = bg,
+            modifier = baseModifier.repeatOnHold(onTrigger = onClick)
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = desc, tint = fg, modifier = Modifier.size(18.dp))
+            }
+        }
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(6.dp),
+            color = bg,
+            modifier = baseModifier
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = desc, tint = fg, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }

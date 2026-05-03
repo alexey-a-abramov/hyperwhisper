@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.ui.util.repeatOnHold
 
 @Composable
 fun EmojiKeyboard(
@@ -158,8 +159,10 @@ fun EmojiKeyboard(
 
             // Backspace
             Surface(
-                onClick = onBackspace,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .repeatOnHold(onTrigger = onBackspace),
                 shape = RoundedCornerShape(8.dp),
                 color = Color(0xFFD32F2F)
             ) {
