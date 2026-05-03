@@ -30,8 +30,89 @@ class KeyboardViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val soundManager: SoundManager,
     private val audioRecorderManager: AudioRecorderManager,
-    val modifierKeyState: com.hyperwhisper.ime.keyboard.ModifierKeyState
+    val modifierKeyState: com.hyperwhisper.ime.keyboard.ModifierKeyState,
+    private val perAppLayoutMemory: PerAppLayoutMemory
 ) : ViewModel() {
+
+    // ============================================================================
+    // Per-app layout memory
+    // ============================================================================
+
+    /**
+     * Package name of the editor the IME is currently attached to. The
+     * service updates this on every onStartInputView before requesting a
+     * layout recall, so writes from KeyboardScreen target the right app.
+     * Null when the IME has no editor info (e.g. picker).
+     */
+    private val _currentPackage = MutableStateFlow<String?>(null)
+    val currentPackage: StateFlow<String?> = _currentPackage.asStateFlow()
+
+    /**
+     * One-shot bus for "switch to this layout" commands originating outside
+     * the Compose tree (i.e. the IME service's onStartInputView). replay=1
+     * so a recall that completes before KeyboardScreen attaches its
+     * collector still lands on the first composition. extraBufferCapacity=1
+     * keeps tryEmit non-suspending if multiple recalls race.
+     */
+    private val _requestedLayout = MutableSharedFlow<KeyboardInputMode>(
+        replay = 1,
+        extraBufferCapacity = 1
+    )
+    val requestedLayout: SharedFlow<KeyboardInputMode> = _requestedLayout.asSharedFlow()
+
+    init {
+        // Pipe voice-command "switch to code" requests into the same channel
+        // KeyboardScreen already consumes for per-app layout recalls. The IME
+        // only has one apply-layout path, so consolidating sources keeps it
+        // simple — voice commands and per-app memory both compete for the
+        // same SharedFlow.replay slot.
+        viewModelScope.launch {
+            voiceCommandProcessor.keyboardModeRequest.collect { mode ->
+                _requestedLayout.emit(mode)
+            }
+        }
+    }
+
+    /**
+     * Called by VoiceInputMethodService.onStartInputView. Updates the
+     * current package for subsequent record calls, and — if per-app memory
+     * is enabled and we have a stored mode — emits it for KeyboardScreen
+     * to apply. No emit on null/miss; the existing global lastKeyboardInputMode
+     * default in KeyboardScreen handles unknown apps.
+     */
+    fun onEditorAttached(packageName: String?) {
+        _currentPackage.value = packageName
+        if (packageName.isNullOrBlank()) return
+        viewModelScope.launch {
+            try {
+                val enabled = settingsRepository.appearanceSettings.first().perAppLayoutMemoryEnabled
+                if (!enabled) return@launch
+                val mode = perAppLayoutMemory.recall(packageName) ?: return@launch
+                _requestedLayout.emit(mode)
+            } catch (e: Exception) {
+                Log.w(TAG, "Per-app layout recall failed for $packageName", e)
+            }
+        }
+    }
+
+    /**
+     * Called by KeyboardScreen on every keyboardInputMode change so the
+     * current app's per-app memory stays in sync. Gated on the master
+     * toggle so disabling stops new writes too.
+     */
+    fun recordLayoutForCurrentApp(mode: KeyboardInputMode) {
+        val pkg = _currentPackage.value ?: return
+        if (pkg.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val enabled = settingsRepository.appearanceSettings.first().perAppLayoutMemoryEnabled
+                if (!enabled) return@launch
+                perAppLayoutMemory.remember(pkg, mode)
+            } catch (e: Exception) {
+                Log.w(TAG, "Per-app layout record failed for $pkg", e)
+            }
+        }
+    }
 
     // Create specialized ViewModels internally
     private val recordingViewModel: RecordingViewModel = RecordingViewModel(voiceRepository)

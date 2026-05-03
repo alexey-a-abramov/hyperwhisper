@@ -24,6 +24,9 @@ enum class SettingType {
     THEME,
     ENABLE_TECHIE_MODE,
     ENABLE_CONFIGURATION_MODE,
+    /** Switch keyboard layout — value is one of voice/text/code/emoji
+     *  or an enabled coding-agent name (claude_code, opencode, gemini, codex). */
+    KEYBOARD_MODE,
     UNKNOWN
 }
 
@@ -110,7 +113,29 @@ data class VoiceCommand(
             "theme", "darkmode", "lightmode" -> SettingType.THEME
             "enabletechiemode", "techiemode", "developermode", "devmode", "debug" -> SettingType.ENABLE_TECHIE_MODE
             "enableconfigurationmode", "configurationmode", "commandmode" -> SettingType.ENABLE_CONFIGURATION_MODE
+            "keyboardmode", "keyboard", "layout", "keyboardlayout" -> SettingType.KEYBOARD_MODE
             else -> SettingType.UNKNOWN
+        }
+    }
+
+    /**
+     * Resolve a free-form value to a [KeyboardInputMode]. Accepts user-friendly
+     * synonyms ("voice"/"dictation"/"mic", "text"/"abc"/"qwerty", etc.) plus
+     * the agent ids (claude_code / opencode / gemini / codex). Returns null
+     * for unrecognized strings — the processor surfaces a Toast in that case.
+     */
+    fun getKeyboardMode(): KeyboardInputMode? {
+        return when (value.lowercase().replace("_", "").replace("-", "").replace(" ", "")) {
+            "voice", "dictation", "mic", "voiceinput" -> KeyboardInputMode.DICTATION
+            "text", "abc", "qwerty", "letters", "alphabet" -> KeyboardInputMode.QWERTY
+            "code", "coding", "programmer", "vibecoding", "numpad", "systemkeys" ->
+                KeyboardInputMode.CODE
+            "emoji", "emojis", "emoticon", "emoticons" -> KeyboardInputMode.EMOJI
+            "claudecode", "claude" -> KeyboardInputMode.AGENT_CLAUDE_CODE
+            "opencode" -> KeyboardInputMode.AGENT_OPENCODE
+            "gemini", "geminicli" -> KeyboardInputMode.AGENT_GEMINI
+            "codex", "codexcli" -> KeyboardInputMode.AGENT_CODEX
+            else -> null
         }
     }
 

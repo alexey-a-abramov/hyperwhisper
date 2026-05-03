@@ -23,6 +23,19 @@ class VoiceCommandProcessor @Inject constructor(
     }
 
     /**
+     * Emits a [KeyboardInputMode] when the user issues a voice command like
+     * "switch to code". KeyboardScreen collects this and applies the change
+     * via the same path as a manual mode-pill tap.
+     */
+    private val _keyboardModeRequest =
+        kotlinx.coroutines.flow.MutableSharedFlow<KeyboardInputMode>(
+            replay = 0,
+            extraBufferCapacity = 4
+        )
+    val keyboardModeRequest: kotlinx.coroutines.flow.SharedFlow<KeyboardInputMode> =
+        _keyboardModeRequest
+
+    /**
      * Execute a voice command
      */
     suspend fun executeCommand(
@@ -65,11 +78,32 @@ class VoiceCommandProcessor @Inject constructor(
             SettingType.THEME -> changeTheme(command.getThemeOption())
             SettingType.ENABLE_TECHIE_MODE -> changeTechieModeEnabled(command.getBooleanValue())
             SettingType.ENABLE_CONFIGURATION_MODE -> changeConfigurationModeEnabled(command.getBooleanValue())
+            SettingType.KEYBOARD_MODE -> changeKeyboardMode(command)
             SettingType.UNKNOWN -> VoiceCommandResult(
                 success = false,
                 message = "Unknown setting: ${command.setting}"
             )
         }
+    }
+
+    /**
+     * Switch the keyboard layout. Emits on [keyboardModeRequest]; the IME's
+     * KeyboardScreen collects the flow and applies. Returns success even if
+     * the resolved mode is an agent that the user hasn't enabled yet — the
+     * UI will silently no-op in that case rather than erroring.
+     */
+    private suspend fun changeKeyboardMode(command: VoiceCommand): VoiceCommandResult {
+        val mode = command.getKeyboardMode() ?: return VoiceCommandResult(
+            success = false,
+            message = "Unknown keyboard mode: ${command.value}. Try voice / text / code / emoji."
+        )
+        _keyboardModeRequest.emit(mode)
+        return VoiceCommandResult(
+            success = true,
+            message = "Switched to ${mode.displayName}",
+            settingChanged = "keyboard_mode",
+            newValue = mode.displayName
+        )
     }
 
     /**
