@@ -35,7 +35,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Check
@@ -57,6 +60,7 @@ import com.hyperwhisper.data.SUPPORTED_LANGUAGES
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.buttons.InputLanguageButton
 import com.hyperwhisper.ui.buttons.OutputLanguageButton
+import com.hyperwhisper.ui.buttons.PeriodKeyWithPopup
 import com.hyperwhisper.ui.util.repeatOnHold
 import com.hyperwhisper.ui.components.InputFieldInfo
 import com.hyperwhisper.ui.indicators.RecordingTimer
@@ -1997,6 +2001,20 @@ private fun TextKeyboardSectionNew(
                                     if (key.isEmpty()) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     } else {
+                                        // Number-row long-press → shifted symbol.
+                                        val altSymbol: String? = if (!isSpecialChars) when (key) {
+                                            "1" -> "!"
+                                            "2" -> "@"
+                                            "3" -> "#"
+                                            "4" -> "$"
+                                            "5" -> "%"
+                                            "6" -> "^"
+                                            "7" -> "&"
+                                            "8" -> "*"
+                                            "9" -> "("
+                                            "0" -> ")"
+                                            else -> null
+                                        } else null
                                         KeyboardKeyButton(
                                             label = if (isSpecialChars) key else letterCase(key),
                                             onClick = {
@@ -2006,6 +2024,8 @@ private fun TextKeyboardSectionNew(
                                                     shiftEnabled = false
                                                 }
                                             },
+                                            longPressLabel = altSymbol,
+                                            onLongPress = altSymbol?.let { sym -> { onKeyPress(sym) } },
                                             modifier = Modifier.weight(1f),
                                             height = keyHeight
                                         )
@@ -2108,10 +2128,9 @@ private fun TextKeyboardSectionNew(
                                 height = keyHeight,
                                 longPressThreshold = 800L
                             )
-                            // Period
-                            KeyboardKeyButton(
-                                label = ".",
-                                onClick = { onKeyPress(".") },
+                            // Period — long-press shows Gboard-style char popup.
+                            PeriodKeyWithPopup(
+                                onKeyPress = onKeyPress,
                                 modifier = Modifier.weight(0.7f),
                                 height = keyHeight
                             )
@@ -2134,24 +2153,57 @@ private fun TextKeyboardSectionNew(
 }
 
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun KeyboardKeyButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = 36.dp
+    height: androidx.compose.ui.unit.Dp = 36.dp,
+    /**
+     * If non-null, holding this key inserts [longPressLabel] instead of [label].
+     * Surfaced as a small superscript hint on the key. Used for QWERTY's
+     * number row (1→!, 2→@, etc.) and any future Gboard-style chord keys.
+     */
+    longPressLabel: String? = null,
+    onLongPress: (() -> Unit)? = null
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(height),
-        shape = RoundedCornerShape(8.dp),
-        color = KeyboardKeyColor,
-        tonalElevation = 1.dp
+    val baseModifier = modifier
+        .height(height)
+        .clip(RoundedCornerShape(8.dp))
+        .background(KeyboardKeyColor)
+    val tappableMod = if (onLongPress != null) {
+        baseModifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongPress
+        )
+    } else {
+        baseModifier.clickable(onClick = onClick)
+    }
+    Box(
+        modifier = tappableMod,
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        if (longPressLabel != null) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Text(
+                    text = longPressLabel,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = KeyboardKeyTextColor.copy(alpha = 0.55f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 2.dp, end = 4.dp)
+                )
+                Text(
+                    text = label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = KeyboardKeyTextColor,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        } else {
             Text(
                 text = label,
                 fontSize = 14.sp,
