@@ -6,7 +6,6 @@ import android.inputmethodservice.InputMethodService
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.collectAsState
@@ -91,8 +90,17 @@ class VoiceInputMethodService : InputMethodService(),
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
-    private var currentEditorInfo: EditorInfo? = null
+    internal var currentEditorInfo: EditorInfo? = null
     private val currentEditorInfoFlow = MutableStateFlow<EditorInfo?>(null)
+
+    /**
+     * Lazy-initialized so it's available the first time the input view is
+     * created (which is also the first time any of these helpers can be
+     * called from Compose).
+     */
+    private val controller: InputConnectionController by lazy {
+        InputConnectionController(this)
+    }
 
     // Lifecycle for Compose integration
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -219,58 +227,58 @@ class VoiceInputMethodService : InputMethodService(),
                 viewModel = viewModel,
                 editorInfo = editorInfo,
                 onTextCommit = { text ->
-                    commitText(text)
+                    controller.commitText(text)
                 },
                 onDelete = {
-                    deleteSelectedText() // Prioritize deleting selected text
+                    controller.deleteSelected() // Prioritize deleting selected text
                 },
                 onDeleteAll = {
-                    deleteAllText()
+                    controller.deleteAll()
                 },
                 onSpace = {
-                    commitText(" ")
+                    controller.commitText(" ")
                 },
                 onEnter = {
-                    handleEnter()
+                    controller.handleEnter()
                 },
                 onMoveCursorLeft = {
-                    moveCursorLeft()
+                    controller.moveCursorLeft()
                 },
                 onMoveCursorRight = {
-                    moveCursorRight()
+                    controller.moveCursorRight()
                 },
                 onMoveCursorUp = {
-                    moveCursorUp()
+                    controller.moveCursorUp()
                 },
                 onMoveCursorDown = {
-                    moveCursorDown()
+                    controller.moveCursorDown()
                 },
                 onPageUp = {
-                    pageUp()
+                    controller.pageUp()
                 },
                 onPageDown = {
-                    pageDown()
+                    controller.pageDown()
                 },
                 onHome = {
-                    moveToHome()
+                    controller.moveToHome()
                 },
                 onEnd = {
-                    moveToEnd()
+                    controller.moveToEnd()
                 },
                 onInsert = {
-                    sendInsert()
+                    controller.sendInsert()
                 },
                 onForwardDelete = {
-                    sendForwardDelete()
+                    controller.sendForwardDelete()
                 },
                 onEscape = {
-                    sendEscape()
+                    controller.sendEscape()
                 },
                 onTab = {
-                    sendTab()
+                    controller.sendTab()
                 },
                 onInsertClipboard = {
-                    insertClipboard()
+                    controller.insertClipboard()
                 },
                 onSwitchKeyboard = {
                     switchToTextKeyboard()
@@ -280,144 +288,11 @@ class VoiceInputMethodService : InputMethodService(),
     }
 
     /**
-     * Commit text to the current input field
-     */
-    private fun commitText(text: String) {
-        if (!isInputViewShown) {
-            Toast.makeText(
-                this,
-                "Transcription completed and saved to history. Open keyboard to insert manually.",
-                Toast.LENGTH_SHORT
-            ).show()
-            Log.d(TAG, "Skipped commitText because input view is hidden")
-            return
-        }
-
-        val ic = currentInputConnection ?: return
-        try {
-            // Modifier-aware path: when the user has Ctrl/Alt/Shift active on
-            // the Code keyboard and the next text is a single character with
-            // a known keycode, dispatch as a real KeyEvent so apps that honor
-            // InputConnection meta state (Termux, vim, IDEs) see the keychord.
-            // Multi-char strings or unknown chars fall back to commitText, but
-            // the modifier flags still consume so the user sees them clear.
-            val mods = modifierKeyState.current()
-            if (mods.anyActive() && text.length == 1) {
-                val keyCode = com.hyperwhisper.ime.keyboard.charToKeyCode(text[0])
-                if (keyCode != null) {
-                    val now = android.os.SystemClock.uptimeMillis()
-                    val meta = mods.toMetaState()
-                    ic.sendKeyEvent(
-                        android.view.KeyEvent(
-                            now, now, android.view.KeyEvent.ACTION_DOWN,
-                            keyCode, 0, meta, 0, 0,
-                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD
-                        )
-                    )
-                    ic.sendKeyEvent(
-                        android.view.KeyEvent(
-                            now, now, android.view.KeyEvent.ACTION_UP,
-                            keyCode, 0, meta, 0, 0,
-                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD
-                        )
-                    )
-                    Log.d(TAG, "Sent KeyEvent: keycode=$keyCode meta=$meta from text='$text'")
-                    modifierKeyState.consumeOneShot()
-                    return
-                }
-            }
-            ic.beginBatchEdit()
-            ic.commitText(text, 1)
-            ic.endBatchEdit()
-            if (mods.anyActive()) modifierKeyState.consumeOneShot()
-            Log.d(TAG, "Committed text: $text")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error committing text", e)
-        }
-    }
-
-    /**
-     * Delete one character before the cursor
-     */
-    private fun deleteText() {
-        val ic = currentInputConnection ?: return
-        try {
-            // Use sendKeyEvent instead of deleteSurroundingText for better reliability
-            // during rapid repeat operations. sendKeyEvent simulates actual key presses
-            // and doesn't suffer from the batching issues that deleteSurroundingText has.
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DEL))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DEL))
-            Log.d(TAG, "Deleted character")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deleting text", e)
-        }
-    }
-
-    /**
-     * Delete all text in the current input field
-     */
-    private fun deleteAllText() {
-        val ic = currentInputConnection ?: return
-        try {
-            // Get text before and after cursor
-            val textBefore = ic.getTextBeforeCursor(100000, 0)
-            val textAfter = ic.getTextAfterCursor(100000, 0)
-
-            val beforeLength = textBefore?.length ?: 0
-            val afterLength = textAfter?.length ?: 0
-
-            if (beforeLength > 0 || afterLength > 0) {
-                ic.deleteSurroundingText(beforeLength, afterLength)
-                Log.d(TAG, "Deleted all text (before: $beforeLength, after: $afterLength)")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deleting all text", e)
-        }
-    }
-
-    /**
-     * Delete selected text if any exists
-     */
-    private fun deleteSelectedText() {
-        val ic = currentInputConnection ?: return
-        try {
-            val selectedText = ic.getSelectedText(0)
-            if (!selectedText.isNullOrEmpty()) {
-                ic.commitText("", 1) // This replaces selected text with empty string
-                Log.d(TAG, "Deleted selected text: ${selectedText.take(50)}")
-            } else {
-                // If no selection, delete one character as fallback
-                deleteText()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deleting selected text", e)
-            // Fallback to normal delete
-            deleteText()
-        }
-    }
-
-    /**
-     * Insert clipboard contents at cursor position
-     */
-    private fun insertClipboard() {
-        try {
-            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            val clip = clipboard.primaryClip
-            if (clip != null && clip.itemCount > 0) {
-                val text = clip.getItemAt(0).text?.toString() ?: ""
-                if (text.isNotEmpty()) {
-                    commitText(text)
-                    Log.d(TAG, "Inserted clipboard text: ${text.take(50)}")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error inserting clipboard", e)
-        }
-    }
-
-    /**
      * Switch to the previously used keyboard (usually the user's QWERTY keyboard).
      * Falls back to input method picker if direct switch is unavailable.
+     *
+     * Stays on the service (vs. moving to InputConnectionController) because
+     * it touches the InputMethodManager / IMM picker, not the InputConnection.
      */
     private fun switchToTextKeyboard() {
         try {
@@ -436,192 +311,6 @@ class VoiceInputMethodService : InputMethodService(),
             Log.d(TAG, "Previous keyboard unavailable, showing input method picker")
         } catch (e: Exception) {
             Log.e(TAG, "Error switching keyboard", e)
-        }
-    }
-
-    /**
-     * Handles enter key press, sending an action or a newline
-     */
-    private fun handleEnter() {
-        val action = currentEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-        val isMultiLine = currentEditorInfo?.inputType?.and(android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
-
-        when {
-            // Always insert newline in multi-line fields if no specific action is set
-            isMultiLine && (action == EditorInfo.IME_ACTION_NONE || action == EditorInfo.IME_ACTION_UNSPECIFIED) -> {
-                commitText("\n")
-                Log.d(TAG, "handleEnter: newline in multi-line")
-            }
-            // Perform the editor action if specified
-            action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED -> {
-                if (!sendDefaultEditorAction(true)) {
-                    Log.w(TAG, "handleEnter: sendDefaultEditorAction failed, falling back to newline.")
-                    commitText("\n")
-                } else {
-                    Log.d(TAG, "handleEnter: sent editor action $action")
-                }
-            }
-            // Default to newline
-            else -> {
-                commitText("\n")
-                Log.d(TAG, "handleEnter: newline default")
-            }
-        }
-    }
-
-    /**
-     * Move cursor one position to the left.
-     */
-    private fun moveCursorLeft() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving cursor left", e)
-        }
-    }
-
-    /**
-     * Move cursor one position to the right.
-     */
-    private fun moveCursorRight() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving cursor right", e)
-        }
-    }
-
-    /**
-     * Move cursor one line up.
-     */
-    private fun moveCursorUp() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_UP))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving cursor up", e)
-        }
-    }
-
-    /**
-     * Move cursor one line down.
-     */
-    private fun moveCursorDown() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving cursor down", e)
-        }
-    }
-
-    /**
-     * Page up.
-     */
-    private fun pageUp() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_PAGE_UP))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_PAGE_UP))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending page up", e)
-        }
-    }
-
-    /**
-     * Page down.
-     */
-    private fun pageDown() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_PAGE_DOWN))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending page down", e)
-        }
-    }
-
-    /**
-     * Move cursor to beginning of line/field.
-     */
-    private fun moveToHome() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MOVE_HOME))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MOVE_HOME))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving to home", e)
-        }
-    }
-
-    /**
-     * Move cursor to end of line/field.
-     */
-    private fun moveToEnd() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MOVE_END))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MOVE_END))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error moving to end", e)
-        }
-    }
-
-    /**
-     * Send Insert key.
-     */
-    private fun sendInsert() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_INSERT))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_INSERT))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending insert", e)
-        }
-    }
-
-    /**
-     * Send forward delete (Delete key, not Backspace).
-     */
-    private fun sendForwardDelete() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_FORWARD_DEL))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_FORWARD_DEL))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending forward delete", e)
-        }
-    }
-
-    /**
-     * Send Escape key.
-     */
-    private fun sendEscape() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ESCAPE))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ESCAPE))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending escape", e)
-        }
-    }
-
-    /**
-     * Send Tab key.
-     */
-    private fun sendTab() {
-        val ic = currentInputConnection ?: return
-        try {
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_TAB))
-            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_TAB))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending tab", e)
         }
     }
 
