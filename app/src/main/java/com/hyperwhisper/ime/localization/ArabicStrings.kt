@@ -637,6 +637,12 @@ object ArabicStrings : Strings {
     override val errorProcessingFailedFormat = "فشل المعالجة: %1\$s: %2\$s"
 
     // Local processing
+    override val secretsGateRevealTitle = "أكّد لعرض مفتاح API"
+    override val secretsGateExportTitle = "أكّد لتصدير الأسرار"
+    override val secretsGateSubtitle = "استخدم قفل الجهاز للمتابعة"
+    override val secretsGateNotEnrolledMessage = "قم بإعداد قفل الجهاز للمتابعة"
+    override val secretsGateUnavailableMessage = "مصادقة الجهاز غير متاحة"
+
     override val errorLocalWhisperPathMissing = "لم يتم تكوين مسار نموذج Whisper المحلي."
     override val errorLocalWhisperModelNotFoundFormat = "لم يتم العثور على نموذج Whisper المحلي في: %s"
     override val errorLocalWhisperEmptyResult = "لم يُعد Whisper المحلي أي نص. جرب نموذجاً مختلفاً أو صوتاً أعلى."

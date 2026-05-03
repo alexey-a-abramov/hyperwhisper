@@ -1,9 +1,6 @@
 package com.hyperwhisper.ui.settings
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -48,6 +45,9 @@ import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.LlmConfig
 import com.hyperwhisper.data.LlmProvider
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.security.LocalSecretsReveal
+import com.hyperwhisper.security.SecretsRevealController
+import com.hyperwhisper.security.SecureClipboard
 import com.hyperwhisper.ui.about.AboutActivity
 import com.hyperwhisper.ui.settings.dialogs.AddModeDialog
 import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
@@ -87,8 +87,39 @@ fun SettingsScreen(
     val context = LocalContext.current
     val strings = LocalStrings.current
     val coroutineScope = rememberCoroutineScope()
-    val clipboardManager = remember {
-        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val secretsReveal = LocalSecretsReveal.current
+
+    fun gateAndExportSecrets() {
+        secretsReveal.request(
+            title = strings.secretsGateExportTitle,
+            subtitle = strings.secretsGateSubtitle,
+            onGranted = {
+                val exportJson = viewModel.buildSecretsExportJson()
+                SecureClipboard.copySensitive(
+                    context = context,
+                    label = "hyperwhisper-secrets",
+                    value = exportJson,
+                )
+                Toast.makeText(
+                    context,
+                    strings.settingsSecretsCopiedToast,
+                    Toast.LENGTH_LONG,
+                ).show()
+            },
+            onDenied = { reason ->
+                val msg = when (reason) {
+                    SecretsRevealController.Denial.NOT_ENROLLED ->
+                        strings.secretsGateNotEnrolledMessage
+                    SecretsRevealController.Denial.UNAVAILABLE ->
+                        strings.secretsGateUnavailableMessage
+                    SecretsRevealController.Denial.CANCELLED,
+                    SecretsRevealController.Denial.FAILED -> null
+                }
+                if (msg != null) {
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            },
+        )
     }
 
     var route by remember(initialProvider) {
@@ -196,14 +227,7 @@ fun SettingsScreen(
                                     text = { Text(strings.settingsOverflowExportSecrets) },
                                     onClick = {
                                         overflowOpen = false
-                                        val exportJson = viewModel.buildSecretsExportJson()
-                                        val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
-                                        clipboardManager.setPrimaryClip(clip)
-                                        Toast.makeText(
-                                            context,
-                                            strings.settingsSecretsCopiedToast,
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        gateAndExportSecrets()
                                     }
                                 )
                             }
@@ -370,12 +394,7 @@ fun SettingsScreen(
                                 onOpenApiLogs = { showApiCallLogs = true },
                                 onOpenProviderKeyHelp = { showProviderKeyHelp = true },
                                 techieModeEnabled = appearanceSettings.techieModeEnabled,
-                                onExportSecrets = {
-                                    val exportJson = viewModel.buildSecretsExportJson()
-                                    val clip = ClipData.newPlainText("hyperwhisper-secrets", exportJson)
-                                    clipboardManager.setPrimaryClip(clip)
-                                    Toast.makeText(context, strings.settingsSecretsCopiedToast, Toast.LENGTH_LONG).show()
-                                }
+                                onExportSecrets = { gateAndExportSecrets() }
                             )
 
                             SettingsCategory.ABOUT -> {

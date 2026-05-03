@@ -637,6 +637,12 @@ object EnglishStrings : Strings {
     override val errorProcessingFailedFormat = "Processing failed: %1\$s: %2\$s"
 
     // Local processing
+    override val secretsGateRevealTitle = "Confirm to reveal API key"
+    override val secretsGateExportTitle = "Confirm to export secrets"
+    override val secretsGateSubtitle = "Use your device lock to continue"
+    override val secretsGateNotEnrolledMessage = "Set up a device lock to continue"
+    override val secretsGateUnavailableMessage = "Device authentication unavailable"
+
     override val errorLocalWhisperPathMissing = "Local Whisper model path is not configured."
     override val errorLocalWhisperModelNotFoundFormat = "Local Whisper model not found at: %s"
     override val errorLocalWhisperEmptyResult = "On-device Whisper returned no text. Try a different model or louder audio."

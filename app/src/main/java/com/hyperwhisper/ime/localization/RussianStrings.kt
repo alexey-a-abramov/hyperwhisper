@@ -637,6 +637,12 @@ object RussianStrings : Strings {
     override val errorProcessingFailedFormat = "Ошибка обработки: %1\$s: %2\$s"
 
     // Local processing
+    override val secretsGateRevealTitle = "Подтвердите, чтобы показать ключ API"
+    override val secretsGateExportTitle = "Подтвердите экспорт секретов"
+    override val secretsGateSubtitle = "Используйте блокировку устройства, чтобы продолжить"
+    override val secretsGateNotEnrolledMessage = "Сначала настройте блокировку устройства"
+    override val secretsGateUnavailableMessage = "Аутентификация устройства недоступна"
+
     override val errorLocalWhisperPathMissing = "Путь к локальной модели Whisper не настроен."
     override val errorLocalWhisperModelNotFoundFormat = "Локальная модель Whisper не найдена: %s"
     override val errorLocalWhisperEmptyResult = "Локальный Whisper не вернул текст. Попробуйте другую модель или более громкое аудио."

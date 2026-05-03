@@ -36,7 +36,10 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import com.hyperwhisper.security.LocalSecretsReveal
+import com.hyperwhisper.security.SecretsRevealController
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -372,6 +375,8 @@ private fun CloudPanel(
             )
         }
 
+        val secretsReveal = LocalSecretsReveal.current
+        val ctx = LocalContext.current
         FieldGroup(title = strings.apiKey) {
             OutlinedTextField(
                 value = apiKey,
@@ -385,7 +390,31 @@ private fun CloudPanel(
                     else PasswordVisualTransformation(),
                 trailingIcon = {
                     Row {
-                        IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                        IconButton(onClick = {
+                            if (apiKeyVisible) {
+                                // Hiding never reveals — no gate.
+                                apiKeyVisible = false
+                            } else {
+                                secretsReveal.request(
+                                    title = strings.secretsGateRevealTitle,
+                                    subtitle = strings.secretsGateSubtitle,
+                                    onGranted = { apiKeyVisible = true },
+                                    onDenied = { reason ->
+                                        val msg = when (reason) {
+                                            SecretsRevealController.Denial.NOT_ENROLLED ->
+                                                strings.secretsGateNotEnrolledMessage
+                                            SecretsRevealController.Denial.UNAVAILABLE ->
+                                                strings.secretsGateUnavailableMessage
+                                            SecretsRevealController.Denial.CANCELLED,
+                                            SecretsRevealController.Denial.FAILED -> null
+                                        }
+                                        if (msg != null) {
+                                            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                                        }
+                                    },
+                                )
+                            }
+                        }) {
                             Icon(
                                 imageVector = if (apiKeyVisible) Icons.Filled.VisibilityOff
                                     else Icons.Filled.Visibility,

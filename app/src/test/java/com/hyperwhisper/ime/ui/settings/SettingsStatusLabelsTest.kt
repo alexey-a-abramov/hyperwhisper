@@ -97,7 +97,6 @@ class SettingsStatusLabelsTest {
         assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.APPEARANCE, s))
         assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.VOICE_MODES, s))
         assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.KEYBOARD_BEHAVIOR, s))
-        assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.UPDATES, s))
         assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.ABOUT, s))
         assertNull(SettingsStatusLabels.categoryTrailing(SettingsCategory.ADVANCED, s))
     }

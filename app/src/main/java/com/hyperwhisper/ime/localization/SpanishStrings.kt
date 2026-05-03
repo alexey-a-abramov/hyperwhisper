@@ -637,6 +637,12 @@ object SpanishStrings : Strings {
     override val errorProcessingFailedFormat = "Error de procesamiento: %1\$s: %2\$s"
 
     // Local processing
+    override val secretsGateRevealTitle = "Confirma para mostrar la clave API"
+    override val secretsGateExportTitle = "Confirma para exportar secretos"
+    override val secretsGateSubtitle = "Usa el bloqueo de tu dispositivo para continuar"
+    override val secretsGateNotEnrolledMessage = "Configura un bloqueo de dispositivo para continuar"
+    override val secretsGateUnavailableMessage = "Autenticación de dispositivo no disponible"
+
     override val errorLocalWhisperPathMissing = "La ruta del modelo Whisper local no está configurada."
     override val errorLocalWhisperModelNotFoundFormat = "Modelo Whisper local no encontrado en: %s"
     override val errorLocalWhisperEmptyResult = "Whisper local no devolvió texto. Prueba con otro modelo o con audio más alto."

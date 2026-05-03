@@ -37,12 +37,10 @@ object NetworkModule {
         .setLenient()
         .create()
 
-    @Provides
-    @Singleton
-    fun provideApiSettingsRepository(
-        @ApplicationContext context: Context,
-        gson: Gson
-    ): ApiSettingsRepository = ApiSettingsRepository(context, gson)
+    // ApiSettingsRepository is now provided via constructor injection
+    // (@Inject constructor in ApiSettingsRepository.kt). The DataStore it
+    // depends on is supplied via the @ApiSettingsDataStore qualifier in
+    // ApiSettingsDataStoreModule.
 
     @Provides
     @Singleton

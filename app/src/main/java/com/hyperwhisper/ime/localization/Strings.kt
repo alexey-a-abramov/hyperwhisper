@@ -648,6 +648,16 @@ interface Strings {
     val errorUnknown: String                       // "Unknown error"
     val errorProcessingFailedFormat: String        // "Processing failed: %1$s: %2$s"
 
+    // Biometric / device-credential gate shown before revealing or exporting
+    // API keys. Title is reused for export ("Confirm to reveal/export"),
+    // subtitle is the explanatory body. NotEnrolled fires when the device has
+    // no PIN/pattern/password/biometric configured.
+    val secretsGateRevealTitle: String           // "Confirm to reveal API key"
+    val secretsGateExportTitle: String           // "Confirm to export secrets"
+    val secretsGateSubtitle: String              // "Use your device lock to continue"
+    val secretsGateNotEnrolledMessage: String    // "Set up a device lock to continue"
+    val secretsGateUnavailableMessage: String    // "Device authentication unavailable"
+
     // On-device transcription / inference errors.
     val errorLocalWhisperPathMissing: String                 // "Local Whisper model path is not configured."
     val errorLocalWhisperModelNotFoundFormat: String         // "Local Whisper model not found at: %s"
