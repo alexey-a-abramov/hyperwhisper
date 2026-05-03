@@ -1,13 +1,24 @@
 package com.hyperwhisper.ui.settings.sections
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -15,11 +26,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.LlmProvider
+import com.hyperwhisper.ui.settings.ConnectionTestState
+import com.hyperwhisper.ui.settings.TestLogEntry
 import com.hyperwhisper.ui.settings.components.selectors.LlmProviderSelector
 import com.hyperwhisper.ui.settings.components.selectors.LlmModelSelector
 
@@ -39,13 +53,18 @@ fun LlmConfigSection(
     onResetLlmDefaults: () -> Unit,
     onReuseLlmKeyForProvider: () -> Unit,
     onShowLlmInfo: () -> Unit,
+    postProcessingTestState: ConnectionTestState = ConnectionTestState.Idle,
+    postProcessingTestLog: List<TestLogEntry> = emptyList(),
+    onTestPostProcessing: () -> Unit = {},
+    onResetPostProcessingTestState: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    Column(modifier = modifier.fillMaxWidth()) {
     // LLM Provider selector
     LlmProviderSelector(
         selectedProvider = llmProvider,
         onProviderSelected = onLlmProviderChange,
-        modifier = modifier.padding(bottom = 16.dp)
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
     )
 
     // Only show configuration if not NONE
@@ -105,14 +124,28 @@ fun LlmConfigSection(
                 singleLine = true
             )
 
-            // Only show reuse button if this key is set and provider key is empty
-            if (llmApiKey.isNotBlank() && providerApiKey.isBlank()) {
+            // Pull from transcription side: when the active LLM provider has
+            // a sibling configured for transcription with a stored key,
+            // surface a one-tap "use that key" affordance so the user doesn't
+            // have to retype it.
+            if (llmApiKey.isBlank() && providerApiKey.isNotBlank()) {
                 Spacer(Modifier.padding(vertical = 4.dp))
                 OutlinedButton(
                     onClick = onReuseLlmKeyForProvider,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Reuse this key for selected provider")
+                    Text("Use this provider's key from Transcription")
+                }
+            } else if (llmApiKey.isNotBlank() && providerApiKey.isBlank()) {
+                // Reverse direction: push LLM key into transcription side
+                // when transcription is missing one. Same handler — caller
+                // decides which direction to wire based on emptiness.
+                Spacer(Modifier.padding(vertical = 4.dp))
+                OutlinedButton(
+                    onClick = onReuseLlmKeyForProvider,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Reuse this key for transcription provider")
                 }
             }
 
@@ -151,6 +184,25 @@ fun LlmConfigSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 8.dp)
         )
+
+        // Test post-processing button
+        Button(
+            onClick = onTestPostProcessing,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = postProcessingTestState !is ConnectionTestState.Testing &&
+                llmModelId.isNotBlank() &&
+                (!llmRequiresAuth || llmApiKey.isNotBlank())
+        ) {
+            Text("Test post-processing with sample text")
+        }
+
+        com.hyperwhisper.ui.settings.sections.TestLogPanel(
+            entries = postProcessingTestLog,
+            state = postProcessingTestState,
+            autoCloseOnSuccess = true,
+            onDismiss = onResetPostProcessingTestState,
+            runningPlaceholder = "Sending sample text to LLM…"
+        )
     } else {
         // NONE selected - show info
         Text(
@@ -160,4 +212,6 @@ fun LlmConfigSection(
             modifier = Modifier.padding(vertical = 16.dp)
         )
     }
+    }
 }
+
