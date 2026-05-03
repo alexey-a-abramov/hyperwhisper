@@ -118,6 +118,15 @@ android {
         disable.add("MutableCollectionMutableState")
         disable.add("AutoboxingStateCreation")
     }
+
+    testOptions {
+        unitTests {
+            // Stub Android framework calls (e.g. android.util.Log) with default
+            // returns so JVM unit tests can exercise repository code without
+            // Robolectric. Production code still uses the real Log on device.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -149,6 +158,14 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Room — used for collection-shaped, write-heavy stores (history, api call
+    // log, usage stats). The other 4 lightweight stores (voice modes, recent
+    // languages / providers, per-app layout) stay in DataStore Preferences;
+    // their shape and write frequency don't justify a SQL store.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // Biometric / device-credential prompt for secrets reveal
     implementation("androidx.biometric:biometric:1.1.0")

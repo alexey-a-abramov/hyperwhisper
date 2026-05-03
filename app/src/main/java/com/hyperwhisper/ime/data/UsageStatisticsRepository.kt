@@ -3,52 +3,73 @@ package com.hyperwhisper.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
+import com.hyperwhisper.data.db.UsageStatsDao
+import com.hyperwhisper.data.db.UsageTotalsEntity
+import com.hyperwhisper.data.db.composeUsageStatistics
+import com.hyperwhisper.data.db.toEntity
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.usageStatsDataStore: DataStore<Preferences> by preferencesDataStore(name = "hyperwhisper_usage_stats")
+private val Context.usageStatsMigrationDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "hyperwhisper_usage_stats",
+)
 
 /**
- * Repository for tracking usage statistics
- * Records token usage per model and total audio processing duration
+ * Repository for tracking usage statistics.
+ *
+ * Storage moved from a JSON-blob-with-Map<String, ModelUsage> to two Room
+ * tables — per-model token totals (one row per modelId, indexed by primary
+ * key) and a singleton totals row for cross-session sums. Each [recordUsage]
+ * is now an atomic per-row upsert instead of a load-mutate-rewrite.
+ *
+ * Legacy data is imported once on first use; the sentinel
+ * `usage_stats_migrated_v1` short-circuits subsequent boots.
  */
 @Singleton
-class UsageStatisticsRepository @Inject constructor(
-    private val context: Context,
-    private val gson: Gson
+class UsageStatisticsRepository(
+    private val migrationStore: DataStore<Preferences>,
+    private val gson: Gson,
+    private val dao: UsageStatsDao,
+    scope: CoroutineScope,
 ) {
-    private val dataStore = context.usageStatsDataStore
+    @Inject constructor(
+        @ApplicationContext context: Context,
+        gson: Gson,
+        dao: UsageStatsDao,
+    ) : this(
+        migrationStore = context.usageStatsMigrationDataStore,
+        gson = gson,
+        dao = dao,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
 
-    companion object {
-        private val USAGE_STATISTICS_KEY = stringPreferencesKey("usage_statistics")
+    init {
+        scope.launch { migrateLegacyIfNeeded() }
+    }
+
+    val usageStatistics: Flow<UsageStatistics> = combine(
+        dao.observePerModel(),
+        dao.observeTotals(),
+    ) { perModel, totals ->
+        composeUsageStatistics(perModel, totals)
     }
 
     /**
-     * Usage Statistics Flow
-     * Emits current usage statistics including model token counts and audio duration
-     */
-    val usageStatistics: Flow<UsageStatistics> = dataStore.data.map { preferences ->
-        val statsJson = preferences[USAGE_STATISTICS_KEY]
-        if (statsJson.isNullOrEmpty()) {
-            UsageStatistics()
-        } else {
-            try {
-                gson.fromJson(statsJson, UsageStatistics::class.java) ?: UsageStatistics()
-            } catch (e: Exception) {
-                UsageStatistics()
-            }
-        }
-    }
-
-    /**
-     * Record usage for a transcription
-     * Updates token counts for the model and total audio duration
+     * Record usage for a transcription. Updates the per-model token row and
+     * the singleton totals row. Each operation is a single SQL upsert.
      */
     suspend fun recordUsage(
         modelId: String,
@@ -57,48 +78,66 @@ class UsageStatisticsRepository @Inject constructor(
         totalTokens: Int,
         audioDurationSeconds: Double,
         outputCharacters: Long = 0L,
-        outputBytes: Long = 0L
+        outputBytes: Long = 0L,
     ) {
-        dataStore.edit { preferences ->
-            val currentStatsJson = preferences[USAGE_STATISTICS_KEY]
-            val currentStats = if (currentStatsJson.isNullOrEmpty()) {
+        migrateLegacyIfNeeded()
+
+        val existingModel = dao.getForModel(modelId)
+        val newModel = ModelUsage(
+            inputTokens = (existingModel?.inputTokens ?: 0L) + inputTokens,
+            outputTokens = (existingModel?.outputTokens ?: 0L) + outputTokens,
+            totalTokens = (existingModel?.totalTokens ?: 0L) + totalTokens,
+        )
+        dao.upsertModelUsage(newModel.toEntity(modelId))
+
+        val existingTotals = dao.getTotals()
+        dao.upsertTotals(
+            UsageTotalsEntity(
+                totalAudioSeconds = (existingTotals?.totalAudioSeconds ?: 0.0) + audioDurationSeconds,
+                totalCharacters = (existingTotals?.totalCharacters ?: 0L) + outputCharacters,
+                totalBytes = (existingTotals?.totalBytes ?: 0L) + outputBytes,
+            ),
+        )
+    }
+
+    /** Clear all usage statistics (per-model + totals). */
+    suspend fun clearStatistics() {
+        dao.deleteAllPerModel()
+        dao.deleteTotals()
+    }
+
+    private suspend fun migrateLegacyIfNeeded() {
+        val prefs = migrationStore.data.first()
+        if (prefs[SENTINEL] == true) return
+
+        val json = prefs[LEGACY_KEY]
+        if (!json.isNullOrEmpty()) {
+            val parsed = try {
+                gson.fromJson(json, UsageStatistics::class.java) ?: UsageStatistics()
+            } catch (_: Exception) {
                 UsageStatistics()
-            } else {
-                try {
-                    gson.fromJson(currentStatsJson, UsageStatistics::class.java) ?: UsageStatistics()
-                } catch (e: Exception) {
-                    UsageStatistics()
-                }
             }
-
-            // Update model usage
-            val currentModelUsage = currentStats.modelUsage[modelId] ?: ModelUsage()
-            val newModelUsage = ModelUsage(
-                inputTokens = currentModelUsage.inputTokens + inputTokens,
-                outputTokens = currentModelUsage.outputTokens + outputTokens,
-                totalTokens = currentModelUsage.totalTokens + totalTokens
-            )
-
-            val updatedModelUsage = currentStats.modelUsage.toMutableMap()
-            updatedModelUsage[modelId] = newModelUsage
-
-            val updatedStats = UsageStatistics(
-                modelUsage = updatedModelUsage,
-                totalAudioSeconds = currentStats.totalAudioSeconds + audioDurationSeconds,
-                totalCharacters = currentStats.totalCharacters + outputCharacters,
-                totalBytes = currentStats.totalBytes + outputBytes
-            )
-
-            preferences[USAGE_STATISTICS_KEY] = gson.toJson(updatedStats)
+            if (parsed.modelUsage.isNotEmpty()) {
+                dao.upsertModelUsageAll(parsed.modelUsage.map { (id, u) -> u.toEntity(id) })
+            }
+            if (parsed.totalAudioSeconds > 0.0 || parsed.totalCharacters > 0 || parsed.totalBytes > 0) {
+                dao.upsertTotals(
+                    UsageTotalsEntity(
+                        totalAudioSeconds = parsed.totalAudioSeconds,
+                        totalCharacters = parsed.totalCharacters,
+                        totalBytes = parsed.totalBytes,
+                    ),
+                )
+            }
+        }
+        migrationStore.edit { p ->
+            p.remove(LEGACY_KEY)
+            p[SENTINEL] = true
         }
     }
 
-    /**
-     * Clear all usage statistics
-     */
-    suspend fun clearStatistics() {
-        dataStore.edit { preferences ->
-            preferences.remove(USAGE_STATISTICS_KEY)
-        }
+    companion object {
+        private val LEGACY_KEY = stringPreferencesKey("usage_statistics")
+        private val SENTINEL = booleanPreferencesKey("usage_stats_migrated_v1")
     }
 }

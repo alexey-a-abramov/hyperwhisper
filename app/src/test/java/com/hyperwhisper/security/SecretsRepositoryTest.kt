@@ -62,11 +62,13 @@ class SecretsRepositoryTest {
                 SecretSlot.Llm to "llm-key",
             ),
         )
-        repo.awaitInitialLoad()
 
-        assertEquals("sk-openai", repo.getOrEmpty(SecretSlot.Provider("OPENAI")))
-        assertEquals("dg-key", repo.getOrEmpty(SecretSlot.Provider("DEEPGRAM")))
-        assertEquals("llm-key", repo.getOrEmpty(SecretSlot.Llm))
+        // Read via the Flow rather than the in-memory snapshot — the snapshot
+        // is populated by a separate collector coroutine and may lag the write.
+        val secrets = repo.secrets.first { it.size >= 3 }
+        assertEquals("sk-openai", secrets[SecretSlot.Provider("OPENAI").storageKey])
+        assertEquals("dg-key", secrets[SecretSlot.Provider("DEEPGRAM").storageKey])
+        assertEquals("llm-key", secrets[SecretSlot.Llm.storageKey])
     }
 
     @Test fun `disk content is encrypted, never plaintext`() = runTest {

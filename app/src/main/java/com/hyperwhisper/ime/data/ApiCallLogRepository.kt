@@ -4,143 +4,83 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.hyperwhisper.data.db.ApiCallLogDao
+import com.hyperwhisper.data.db.toDomain
+import com.hyperwhisper.data.db.toEntity
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for managing API call logs
- * Stores logs in memory and persists to JSON file
- * Automatically rotates logs to keep only the most recent 20 entries per model
+ * Repository for managing API call logs.
+ *
+ * Backed by Room — replaces the previous "load JSON file, mutate the whole
+ * list, rewrite" pattern with `INSERT` + a per-(provider, model) trim query.
+ *
+ * On first use the legacy `filesDir/api_call_logs.json` is read once and
+ * imported, then the file is deleted.
  */
 @Singleton
-class ApiCallLogRepository @Inject constructor(
-    private val context: Context
+class ApiCallLogRepository(
+    private val legacyFile: File,
+    private val dao: ApiCallLogDao,
+    scope: CoroutineScope,
 ) {
+    @Inject constructor(
+        @ApplicationContext context: Context,
+        dao: ApiCallLogDao,
+    ) : this(
+        legacyFile = File(context.filesDir, LEGACY_FILE_NAME),
+        dao = dao,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
+
     companion object {
         private const val TAG = "ApiCallLogRepository"
-        private const val LOG_FILE_NAME = "api_call_logs.json"
+        private const val LEGACY_FILE_NAME = "api_call_logs.json"
         private const val MAX_LOGS_PER_MODEL = 20
     }
 
-    private val gson: Gson = GsonBuilder()
-        .setPrettyPrinting()
-        .create()
+    private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
-    private val logFile: File = File(context.filesDir, LOG_FILE_NAME)
-
-    private val _logs = MutableStateFlow<List<ApiCallLog>>(emptyList())
-    val logs: Flow<List<ApiCallLog>> = _logs.asStateFlow()
+    val logs: Flow<List<ApiCallLog>> =
+        dao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
 
     init {
-        loadLogs()
+        scope.launch { migrateLegacyIfNeeded() }
     }
 
     /**
-     * Load logs from persistent storage
-     */
-    private fun loadLogs() {
-        try {
-            if (logFile.exists()) {
-                val json = logFile.readText()
-                val container = gson.fromJson(json, ApiCallLogsContainer::class.java)
-                _logs.value = container.logs.sortedByDescending { it.timestamp }
-                Log.d(TAG, "Loaded ${_logs.value.size} API call logs")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading API call logs", e)
-            _logs.value = emptyList()
-        }
-    }
-
-    /**
-     * Save logs to persistent storage
-     */
-    private fun saveLogs() {
-        try {
-            val container = ApiCallLogsContainer(logs = _logs.value)
-            val json = gson.toJson(container)
-            logFile.writeText(json)
-            Log.d(TAG, "Saved ${_logs.value.size} API call logs")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving API call logs", e)
-        }
-    }
-
-    /**
-     * Add a new API call log entry
-     * Automatically rotates logs to keep only 20 most recent per model
+     * Add a new API call log entry. Each insert is followed by a per-(provider,
+     * modelId) trim that retains only the most recent [MAX_LOGS_PER_MODEL] rows
+     * for that combination — this keeps the table bounded under heavy use
+     * without scanning the whole table.
      */
     suspend fun addLog(log: ApiCallLog) {
         try {
-            val currentLogs = _logs.value.toMutableList()
-            currentLogs.add(log)
-
-            // Rotate logs: keep only 20 most recent per model
-            val rotatedLogs = rotateLogs(currentLogs)
-
-            _logs.value = rotatedLogs.sortedByDescending { it.timestamp }
-            saveLogs()
-
+            dao.upsert(log.toEntity())
+            dao.trimByProviderModel(
+                provider = log.provider.name,
+                modelId = log.modelId,
+                keep = MAX_LOGS_PER_MODEL,
+            )
             Log.d(TAG, "Added API call log for ${log.provider.displayName}/${log.modelId}")
         } catch (e: Exception) {
             Log.e(TAG, "Error adding API call log", e)
         }
     }
 
-    /**
-     * Rotate logs to keep only the most recent MAX_LOGS_PER_MODEL entries per model
-     */
-    private fun rotateLogs(logs: List<ApiCallLog>): List<ApiCallLog> {
-        // Group by provider + model
-        val groupedLogs = logs.groupBy { "${it.provider.name}/${it.modelId}" }
-
-        // Keep only the most recent 20 per group
-        val rotatedLogs = mutableListOf<ApiCallLog>()
-        groupedLogs.forEach { (key, entries) ->
-            val kept = entries.sortedByDescending { it.timestamp }.take(MAX_LOGS_PER_MODEL)
-            rotatedLogs.addAll(kept)
-            if (entries.size > MAX_LOGS_PER_MODEL) {
-                Log.d(TAG, "Rotated logs for $key: kept ${kept.size}, removed ${entries.size - kept.size}")
-            }
-        }
-
-        return rotatedLogs
-    }
-
-    /**
-     * Get logs for a specific provider
-     */
-    fun getLogsForProvider(provider: ApiProvider): List<ApiCallLog> {
-        return _logs.value.filter { it.provider == provider }
-    }
-
-    /**
-     * Get logs for a specific model
-     */
-    fun getLogsForModel(provider: ApiProvider, modelId: String): List<ApiCallLog> {
-        return _logs.value.filter { it.provider == provider && it.modelId == modelId }
-    }
-
-    /**
-     * Get grouped logs by model
-     */
-    fun getLogsGroupedByModel(): Map<String, List<ApiCallLog>> {
-        return _logs.value.groupBy { "${it.provider.displayName} / ${it.modelId}" }
-    }
-
-    /**
-     * Clear all logs
-     */
+    /** Clear all logs. */
     suspend fun clearAllLogs() {
         try {
-            _logs.value = emptyList()
-            if (logFile.exists()) {
-                logFile.delete()
-            }
+            dao.deleteAll()
             Log.d(TAG, "Cleared all API call logs")
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing API call logs", e)
@@ -148,30 +88,51 @@ class ApiCallLogRepository @Inject constructor(
     }
 
     /**
-     * Get statistics about API calls
+     * Compute statistics from the current set of logs. Suspending so the
+     * caller (a ViewModel coroutine) yields rather than blocking.
      */
-    fun getStatistics(): ApiCallStatistics {
-        val allLogs = _logs.value
-        val successCount = allLogs.count { it.success }
-        val errorCount = allLogs.count { !it.success }
-        val totalCalls = allLogs.size
-
-        val modelUsage = allLogs.groupBy { "${it.provider.displayName}/${it.modelId}" }
+    suspend fun getStatistics(): ApiCallStatistics {
+        val all = dao.getAll().mapNotNull { it.toDomain() }
+        val successCount = all.count { it.success }
+        val errorCount = all.count { !it.success }
+        val totalCalls = all.size
+        val modelUsage = all.groupBy { "${it.provider.displayName}/${it.modelId}" }
             .mapValues { it.value.size }
-
-        val averageDuration = if (allLogs.isNotEmpty()) {
-            allLogs.map { it.durationMs }.average().toLong()
+        val averageDuration = if (all.isNotEmpty()) {
+            all.map { it.durationMs }.average().toLong()
         } else {
             0L
         }
-
         return ApiCallStatistics(
             totalCalls = totalCalls,
             successCount = successCount,
             errorCount = errorCount,
             modelUsage = modelUsage,
-            averageDurationMs = averageDuration
+            averageDurationMs = averageDuration,
         )
+    }
+
+    /**
+     * One-shot import from `filesDir/api_call_logs.json`. The file is deleted
+     * on success so we don't re-import on every boot.
+     */
+    private suspend fun migrateLegacyIfNeeded() {
+        if (!legacyFile.exists()) return
+        try {
+            val json = legacyFile.readText()
+            val container = gson.fromJson(json, ApiCallLogsContainer::class.java)
+            val entities = container.logs.map { it.toEntity() }
+            if (entities.isNotEmpty()) {
+                dao.upsertAll(entities)
+                Log.d(TAG, "Migrated ${entities.size} API call log entries from legacy JSON")
+            }
+            legacyFile.delete()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error migrating legacy API call log file", e)
+            // Best-effort: if migration fails (e.g. corrupted JSON), drop the
+            // file so we don't loop forever on every boot.
+            runCatching { legacyFile.delete() }
+        }
     }
 }
 
@@ -183,5 +144,5 @@ data class ApiCallStatistics(
     val successCount: Int,
     val errorCount: Int,
     val modelUsage: Map<String, Int>,
-    val averageDurationMs: Long
+    val averageDurationMs: Long,
 )

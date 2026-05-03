@@ -154,16 +154,7 @@ class SettingsRepository @Inject constructor(
     suspend fun addApiCallLog(log: ApiCallLog) =
         apiCallLogRepository.addLog(log)
 
-    fun getApiCallLogsForProvider(provider: ApiProvider): List<ApiCallLog> =
-        apiCallLogRepository.getLogsForProvider(provider)
-
-    fun getApiCallLogsForModel(provider: ApiProvider, modelId: String): List<ApiCallLog> =
-        apiCallLogRepository.getLogsForModel(provider, modelId)
-
-    fun getApiCallLogsGroupedByModel(): Map<String, List<ApiCallLog>> =
-        apiCallLogRepository.getLogsGroupedByModel()
-
-    fun getApiCallStatistics(): ApiCallStatistics =
+    suspend fun getApiCallStatistics(): ApiCallStatistics =
         apiCallLogRepository.getStatistics()
 
     suspend fun clearApiCallLogs() =

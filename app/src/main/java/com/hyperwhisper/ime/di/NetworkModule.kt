@@ -55,20 +55,9 @@ object NetworkModule {
         @ApplicationContext context: Context
     ): AppearanceRepository = AppearanceRepository(context)
 
-    @Provides
-    @Singleton
-    fun provideUsageStatisticsRepository(
-        @ApplicationContext context: Context,
-        gson: Gson
-    ): UsageStatisticsRepository = UsageStatisticsRepository(context, gson)
-
-    @Provides
-    @Singleton
-    fun provideHistoryRepository(
-        @ApplicationContext context: Context,
-        gson: Gson,
-        appearanceRepository: AppearanceRepository
-    ): HistoryRepository = HistoryRepository(context, gson, appearanceRepository)
+    // UsageStatisticsRepository, HistoryRepository, and ApiCallLogRepository are
+    // provided via constructor injection (@Inject constructor) and pull their
+    // Room DAOs from RoomModule. No explicit @Provides needed here.
 
     @Provides
     @Singleton
@@ -83,12 +72,6 @@ object NetworkModule {
         @ApplicationContext context: Context,
         gson: Gson
     ): ProviderModelTrackingRepository = ProviderModelTrackingRepository(context, gson)
-
-    @Provides
-    @Singleton
-    fun provideApiCallLogRepository(
-        @ApplicationContext context: Context
-    ): ApiCallLogRepository = ApiCallLogRepository(context)
 
     @Provides
     @Singleton

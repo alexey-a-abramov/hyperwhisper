@@ -60,8 +60,10 @@ class ApiSettingsRepositoryMigrationTest {
             secretsRepository = secrets,
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
-        // Wait for the init coroutine (migration + first emission) to settle.
+        // Wait until migration is fully done. The sentinel is set as the very
+        // last step, so its presence implies plaintext has been stripped.
         secrets.awaitInitialLoad()
+        apiStore.data.first { it[booleanPreferencesKey("secrets_migrated_v1")] == true }
         repo.apiSettings.first { it.apiKeys.isNotEmpty() }
 
         // 1. Plaintext is gone from the api settings DataStore.
@@ -155,8 +157,8 @@ class ApiSettingsRepositoryMigrationTest {
             CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
         secrets.awaitInitialLoad()
+        apiStore.data.first { it[booleanPreferencesKey("secrets_migrated_v1")] == true }
 
-        // Wait until the snapshot reflects the migrated key.
         val raw = apiStore.data.first()
         assertNull(raw[stringPreferencesKey("api_key")])
         assertEquals("groq-LEGACY-PLAIN", secrets.getOrEmpty(SecretSlot.Provider("GROQ")))
