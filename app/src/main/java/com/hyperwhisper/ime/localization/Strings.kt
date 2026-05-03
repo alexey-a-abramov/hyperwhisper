@@ -636,4 +636,8 @@ interface Strings {
     val emojiCategoryObjects: String
     val emojiCategorySymbols: String
     val emojiCategoryFlags: String
+
+    // Processing indicator hint shown next to the spinner during transcription.
+    // Format string: %d is the estimated remaining seconds.
+    val processingEstimatedTimeFormat: String  // "Est: ~%ds"
 }

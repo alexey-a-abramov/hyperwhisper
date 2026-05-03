@@ -626,4 +626,7 @@ object RussianStrings : Strings {
     override val emojiCategoryObjects = "Объекты"
     override val emojiCategorySymbols = "Символы"
     override val emojiCategoryFlags = "Флаги"
+
+    // Processing indicator
+    override val processingEstimatedTimeFormat = "Прибл: ~%d с"
 }

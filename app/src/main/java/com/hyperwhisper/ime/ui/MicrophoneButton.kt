@@ -181,7 +181,7 @@ fun ProcessingIndicator(
     // Estimate time based on file size (rough estimate: ~1KB/sec processing)
     val estimatedSeconds = (audioFileSize / 1024.0).toInt().coerceAtLeast(1)
     val estimatedText = when {
-        audioFileSize > 0 -> "Est: ~${estimatedSeconds}s"
+        audioFileSize > 0 -> String.format(strings.processingEstimatedTimeFormat, estimatedSeconds)
         else -> ""
     }
 

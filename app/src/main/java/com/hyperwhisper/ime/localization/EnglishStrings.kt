@@ -626,4 +626,7 @@ object EnglishStrings : Strings {
     override val emojiCategoryObjects = "Objects"
     override val emojiCategorySymbols = "Symbols"
     override val emojiCategoryFlags = "Flags"
+
+    // Processing indicator
+    override val processingEstimatedTimeFormat = "Est: ~%ds"
 }

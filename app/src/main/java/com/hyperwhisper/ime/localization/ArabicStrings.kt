@@ -626,4 +626,7 @@ object ArabicStrings : Strings {
     override val emojiCategoryObjects = "أشياء"
     override val emojiCategorySymbols = "رموز"
     override val emojiCategoryFlags = "أعلام"
+
+    // Processing indicator
+    override val processingEstimatedTimeFormat = "تقريباً: ~%d ث"
 }
