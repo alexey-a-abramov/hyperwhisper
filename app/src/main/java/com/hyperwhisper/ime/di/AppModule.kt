@@ -48,7 +48,8 @@ object AppModule {
         voiceCommandProcessor: VoiceCommandProcessor,
         settingsRepository: SettingsRepository,
         soundManager: SoundManager,
-        audioRecorderManager: AudioRecorderManager
+        audioRecorderManager: AudioRecorderManager,
+        modifierKeyState: com.hyperwhisper.ime.keyboard.ModifierKeyState
     ): ViewModelProvider.Factory {
         return object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -60,7 +61,8 @@ object AppModule {
                         voiceCommandProcessor,
                         settingsRepository,
                         soundManager,
-                        audioRecorderManager
+                        audioRecorderManager,
+                        modifierKeyState
                     ) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class")

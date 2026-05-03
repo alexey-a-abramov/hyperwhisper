@@ -654,6 +654,7 @@ fun KeyboardScreen(
                         context.startActivity(intent)
                     }
                 )
+                val codeModifierState by viewModel.modifierKeyState.state.collectAsState()
                 TextKeyboardSectionNew(
                     mode = keyboardInputMode,
                     layout = currentKeyboardLayout,
@@ -681,6 +682,13 @@ fun KeyboardScreen(
                     onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
                     onStartRecording = { viewModel.startRecording() },
                     onStopRecording = { viewModel.stopRecording() },
+                    modifierState = codeModifierState,
+                    onToggleCtrl = { viewModel.modifierKeyState.toggleCtrl() },
+                    onToggleAlt = { viewModel.modifierKeyState.toggleAlt() },
+                    onToggleShift = { viewModel.modifierKeyState.toggleShift() },
+                    onLockCtrl = { viewModel.modifierKeyState.lockCtrl() },
+                    onLockAlt = { viewModel.modifierKeyState.lockAlt() },
+                    onLockShift = { viewModel.modifierKeyState.lockShift() },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1026,6 +1034,14 @@ private fun TextKeyboardSectionNew(
     onReturnToDictation: () -> Unit,
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
+    modifierState: com.hyperwhisper.ime.keyboard.ModifierKeyState.State =
+        com.hyperwhisper.ime.keyboard.ModifierKeyState.State(),
+    onToggleCtrl: () -> Unit = {},
+    onToggleAlt: () -> Unit = {},
+    onToggleShift: () -> Unit = {},
+    onLockCtrl: () -> Unit = {},
+    onLockAlt: () -> Unit = {},
+    onLockShift: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var shiftEnabled by remember { mutableStateOf(false) }
@@ -1081,6 +1097,13 @@ private fun TextKeyboardSectionNew(
                 onEnd = onEnd,
                 onPageUp = onPageUp,
                 onPageDown = onPageDown,
+                modifierState = modifierState,
+                onToggleCtrl = onToggleCtrl,
+                onToggleAlt = onToggleAlt,
+                onToggleShift = onToggleShift,
+                onLockCtrl = onLockCtrl,
+                onLockAlt = onLockAlt,
+                onLockShift = onLockShift,
                 modifier = modifier
             )
         }

@@ -85,6 +85,9 @@ class VoiceInputMethodService : InputMethodService(),
     @Inject
     lateinit var chatCompletionStrategy: ChatCompletionStrategy
 
+    @Inject
+    lateinit var modifierKeyState: com.hyperwhisper.ime.keyboard.ModifierKeyState
+
     private lateinit var viewModel: KeyboardViewModel
     private var composeView: ComposeView? = null
     private var recomposer: Recomposer? = null
@@ -292,9 +295,41 @@ class VoiceInputMethodService : InputMethodService(),
 
         val ic = currentInputConnection ?: return
         try {
+            // Modifier-aware path: when the user has Ctrl/Alt/Shift active on
+            // the Code keyboard and the next text is a single character with
+            // a known keycode, dispatch as a real KeyEvent so apps that honor
+            // InputConnection meta state (Termux, vim, IDEs) see the keychord.
+            // Multi-char strings or unknown chars fall back to commitText, but
+            // the modifier flags still consume so the user sees them clear.
+            val mods = modifierKeyState.current()
+            if (mods.anyActive() && text.length == 1) {
+                val keyCode = com.hyperwhisper.ime.keyboard.charToKeyCode(text[0])
+                if (keyCode != null) {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    val meta = mods.toMetaState()
+                    ic.sendKeyEvent(
+                        android.view.KeyEvent(
+                            now, now, android.view.KeyEvent.ACTION_DOWN,
+                            keyCode, 0, meta, 0, 0,
+                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD
+                        )
+                    )
+                    ic.sendKeyEvent(
+                        android.view.KeyEvent(
+                            now, now, android.view.KeyEvent.ACTION_UP,
+                            keyCode, 0, meta, 0, 0,
+                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD
+                        )
+                    )
+                    Log.d(TAG, "Sent KeyEvent: keycode=$keyCode meta=$meta from text='$text'")
+                    modifierKeyState.consumeOneShot()
+                    return
+                }
+            }
             ic.beginBatchEdit()
             ic.commitText(text, 1)
             ic.endBatchEdit()
+            if (mods.anyActive()) modifierKeyState.consumeOneShot()
             Log.d(TAG, "Committed text: $text")
         } catch (e: Exception) {
             Log.e(TAG, "Error committing text", e)

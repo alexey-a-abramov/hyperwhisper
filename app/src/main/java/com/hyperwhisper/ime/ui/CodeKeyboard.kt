@@ -1,5 +1,7 @@
 package com.hyperwhisper.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +60,14 @@ fun CodeKeyboard(
     onEnd: () -> Unit,
     onPageUp: () -> Unit,
     onPageDown: () -> Unit,
+    modifierState: com.hyperwhisper.ime.keyboard.ModifierKeyState.State =
+        com.hyperwhisper.ime.keyboard.ModifierKeyState.State(),
+    onToggleCtrl: () -> Unit = {},
+    onToggleAlt: () -> Unit = {},
+    onToggleShift: () -> Unit = {},
+    onLockCtrl: () -> Unit = {},
+    onLockAlt: () -> Unit = {},
+    onLockShift: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -105,11 +115,18 @@ fun CodeKeyboard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // Modifiers — visual only this pass; sendKeyEvent wiring is the
-                // next pass per the plan.
-                CodeActionButton("Ctrl", { onKeyPress("") }, weight = 1.0f, height = keyHeight, dim = true)
-                CodeActionButton("Alt", { onKeyPress("") }, weight = 1.0f, height = keyHeight, dim = true)
-                CodeActionButton("Shift", { onKeyPress("") }, weight = 1.0f, height = keyHeight, dim = true)
+                // Modifiers wired to ModifierKeyState. Tap = one-shot toggle
+                // (auto-clears after the next keypress); long-press = lock
+                // (stays on across multiple presses). The IME service consults
+                // the state at commit time and dispatches sendKeyEvent with
+                // proper meta flags so apps that honor InputConnection meta
+                // (Termux, vim, IDEs) see real keychords.
+                CodeModifierButton("Ctrl", modifierState.ctrl, modifierState.ctrlLocked,
+                    onTap = onToggleCtrl, onLock = onLockCtrl, weight = 1.0f, height = keyHeight)
+                CodeModifierButton("Alt", modifierState.alt, modifierState.altLocked,
+                    onTap = onToggleAlt, onLock = onLockAlt, weight = 1.0f, height = keyHeight)
+                CodeModifierButton("Shift", modifierState.shift, modifierState.shiftLocked,
+                    onTap = onToggleShift, onLock = onLockShift, weight = 1.0f, height = keyHeight)
                 CodeIconButton(Icons.Default.KeyboardArrowLeft, "Left", onMoveCursorLeft, weight = 0.9f, height = keyHeight)
                 CodeIconButton(Icons.Default.KeyboardArrowDown, "Down", onMoveCursorDown, weight = 0.9f, height = keyHeight)
                 CodeIconButton(Icons.Default.KeyboardArrowRight, "Right", onMoveCursorRight, weight = 0.9f, height = keyHeight)
@@ -190,6 +207,54 @@ private fun androidx.compose.foundation.layout.RowScope.CodeActionButton(
         ) {
             Text(
                 text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = fg,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.CodeModifierButton(
+    label: String,
+    active: Boolean,
+    locked: Boolean,
+    onTap: () -> Unit,
+    onLock: () -> Unit,
+    weight: Float,
+    height: androidx.compose.ui.unit.Dp
+) {
+    val bg = when {
+        locked -> MaterialTheme.colorScheme.tertiary
+        active -> MaterialTheme.colorScheme.primary
+        else -> KeyboardKeyColor
+    }
+    val fg = when {
+        locked -> MaterialTheme.colorScheme.onTertiary
+        active -> MaterialTheme.colorScheme.onPrimary
+        else -> KeyboardKeyTextColor
+    }
+    @OptIn(ExperimentalFoundationApi::class)
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bg,
+        tonalElevation = 1.dp,
+        modifier = Modifier
+            .weight(weight)
+            .height(height)
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLock
+            )
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (locked) "$label·" else label,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = fg,

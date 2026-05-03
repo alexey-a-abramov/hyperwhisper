@@ -29,7 +29,8 @@ class KeyboardViewModel @Inject constructor(
     private val voiceCommandProcessor: VoiceCommandProcessor,
     private val settingsRepository: SettingsRepository,
     private val soundManager: SoundManager,
-    private val audioRecorderManager: AudioRecorderManager
+    private val audioRecorderManager: AudioRecorderManager,
+    val modifierKeyState: com.hyperwhisper.ime.keyboard.ModifierKeyState
 ) : ViewModel() {
 
     // Create specialized ViewModels internally
