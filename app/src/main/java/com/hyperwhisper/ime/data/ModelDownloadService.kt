@@ -22,29 +22,33 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Foreground service that holds the app process alive while Whisper-model
- * downloads are in flight. Without this, dismissing the IME (or backgrounding
- * the app) is grounds for the system to reclaim our process mid-download —
- * a 1.5GB Whisper-medium download isn't going to survive that.
+ * Foreground service that holds the app process alive while model downloads
+ * (Whisper or Gemma) are in flight. Without this, dismissing the IME (or
+ * backgrounding the app) is grounds for the system to reclaim our process
+ * mid-download — a 1.5GB Whisper-medium or 5GB Gemma-9B isn't going to
+ * survive that.
  *
- * The service is a thin life-support shim: it doesn't drive the download
- * itself (that's still [WhisperModelDownloader] with its retry/resume/Range
- * logic), it just keeps our notification visible so Android leaves us alone.
+ * The service is a thin life-support shim: it doesn't drive the downloads
+ * itself (that's [WhisperModelDownloader] / [GemmaModelDownloader] with their
+ * retry/resume/Range logic), it just keeps our notification visible so
+ * Android leaves us alone.
  *
  * Lifecycle:
- *  - [WhisperModelDownloader.start] sends an Intent that ContextCompat
+ *  - Either downloader's `start()` sends an Intent that ContextCompat
  *    starts as a foreground service.
- *  - We observe [WhisperModelDownloader.states]; when no entry is active
- *    (Downloading, Queued, or Retrying), we call [stopSelf].
+ *  - We observe both `states` flows together; when neither has any active
+ *    entry (Downloading, Queued, or Retrying), we call [stopSelf].
  */
 @AndroidEntryPoint
 class ModelDownloadService : Service() {
 
-    @Inject lateinit var downloader: WhisperModelDownloader
+    @Inject lateinit var whisperDownloader: WhisperModelDownloader
+    @Inject lateinit var gemmaDownloader: GemmaModelDownloader
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observer: Job? = null
@@ -59,8 +63,14 @@ class ModelDownloadService : Service() {
         startInForeground(initialNotification())
 
         observer = scope.launch {
-            downloader.states.collectLatest { states ->
-                val active = states.filterValues { it.isActive() }
+            // Combine both flows so we can stop the service only when *both*
+            // queues are empty. collectLatest cancels stale renders if states
+            // change mid-emit.
+            combine(whisperDownloader.states, gemmaDownloader.states) { w, g ->
+                val activeW = w.filterValues { it.isActive() }
+                val activeG = g.filterValues { it.isActive() }
+                ActiveDownloads(activeW, activeG)
+            }.collectLatest { active ->
                 if (active.isEmpty()) {
                     Log.i(TAG, "No active downloads — stopping foreground service")
                     stopSelf()
@@ -102,10 +112,8 @@ class ModelDownloadService : Service() {
         .setProgress(0, 0, /*indeterminate=*/ true)
         .build()
 
-    private fun buildNotification(
-        active: Map<String, WhisperDownloadState>
-    ): Notification {
-        val n = active.size
+    private fun buildNotification(active: ActiveDownloads): Notification {
+        val n = active.total
         val (title, content, progress) = buildText(active)
         val builder = baseBuilder()
             .setContentTitle(title)
@@ -124,42 +132,89 @@ class ModelDownloadService : Service() {
     }
 
     private fun buildText(
-        active: Map<String, WhisperDownloadState>
+        active: ActiveDownloads
     ): Triple<String, String, Triple<Int, Int, Boolean>?> {
-        // If a single active download, show its progress in the bar; else
-        // show count + indeterminate bar.
-        if (active.size == 1) {
-            val (id, state) = active.entries.first()
-            val displayName = WhisperModelCatalog.byId(id)?.displayName ?: id
-            return when (state) {
-                is WhisperDownloadState.Downloading -> {
-                    val pct = if (state.totalBytes > 0)
-                        ((state.downloadedBytes * 100) / state.totalBytes).toInt() else 0
-                    val rate = if (state.bytesPerSec > 0)
-                        " · ${formatBps(state.bytesPerSec)}" else ""
-                    val eta = if (state.etaSeconds > 0) " · ETA ${state.etaSeconds}s" else ""
-                    Triple(
-                        "Downloading $displayName",
-                        "$pct%$rate$eta",
-                        Triple(pct, 100, false)
-                    )
-                }
-                is WhisperDownloadState.Queued -> Triple(
-                    "Queued: $displayName", "Waiting to start…", Triple(0, 0, true)
-                )
-                is WhisperDownloadState.Retrying -> Triple(
-                    "Retrying $displayName",
-                    "Attempt ${state.attempt}/${state.maxAttempts} · ${state.lastError}",
-                    Triple(0, 0, true)
-                )
-                else -> Triple(displayName, "Working…", Triple(0, 0, true))
+        // If a single active download (across both engines), show its
+        // progress in the bar; else show count + indeterminate bar.
+        if (active.total == 1) {
+            active.whisper.entries.firstOrNull()?.let { (id, state) ->
+                val displayName = WhisperModelCatalog.byId(id)?.displayName ?: id
+                return whisperText(displayName, state)
+            }
+            active.gemma.entries.firstOrNull()?.let { (id, state) ->
+                val displayName = GemmaModelCatalog.byId(id)?.displayName ?: id
+                return gemmaText(displayName, state)
             }
         }
         return Triple(
-            "${active.size} model downloads",
+            "${active.total} model downloads",
             "Tap to view progress",
             null
         )
+    }
+
+    private fun whisperText(
+        displayName: String,
+        state: WhisperDownloadState
+    ): Triple<String, String, Triple<Int, Int, Boolean>?> = when (state) {
+        is WhisperDownloadState.Downloading -> {
+            val pct = if (state.totalBytes > 0)
+                ((state.downloadedBytes * 100) / state.totalBytes).toInt() else 0
+            val rate = if (state.bytesPerSec > 0)
+                " · ${formatBps(state.bytesPerSec)}" else ""
+            val eta = if (state.etaSeconds > 0) " · ETA ${state.etaSeconds}s" else ""
+            Triple(
+                "Downloading $displayName",
+                "$pct%$rate$eta",
+                Triple(pct, 100, false)
+            )
+        }
+        is WhisperDownloadState.Queued -> Triple(
+            "Queued: $displayName", "Waiting to start…", Triple(0, 0, true)
+        )
+        is WhisperDownloadState.Retrying -> Triple(
+            "Retrying $displayName",
+            "Attempt ${state.attempt}/${state.maxAttempts} · ${state.lastError}",
+            Triple(0, 0, true)
+        )
+        else -> Triple(displayName, "Working…", Triple(0, 0, true))
+    }
+
+    private fun gemmaText(
+        displayName: String,
+        state: GemmaDownloadState
+    ): Triple<String, String, Triple<Int, Int, Boolean>?> = when (state) {
+        is GemmaDownloadState.Downloading -> {
+            val pct = if (state.totalBytes > 0)
+                ((state.downloadedBytes * 100) / state.totalBytes).toInt() else 0
+            val rate = if (state.bytesPerSec > 0)
+                " · ${formatBps(state.bytesPerSec)}" else ""
+            val eta = if (state.etaSeconds > 0) " · ETA ${state.etaSeconds}s" else ""
+            Triple(
+                "Downloading $displayName",
+                "$pct%$rate$eta",
+                Triple(pct, 100, false)
+            )
+        }
+        is GemmaDownloadState.Queued -> Triple(
+            "Queued: $displayName", "Waiting to start…", Triple(0, 0, true)
+        )
+        is GemmaDownloadState.Retrying -> Triple(
+            "Retrying $displayName",
+            "Attempt ${state.attempt}/${state.maxAttempts} · ${state.lastError}",
+            Triple(0, 0, true)
+        )
+        else -> Triple(displayName, "Working…", Triple(0, 0, true))
+    }
+
+    /** Active download counts grouped by engine, kept separable so the
+     *  notification text can format the right state machine. */
+    private data class ActiveDownloads(
+        val whisper: Map<String, WhisperDownloadState>,
+        val gemma: Map<String, GemmaDownloadState>
+    ) {
+        val total: Int get() = whisper.size + gemma.size
+        fun isEmpty(): Boolean = whisper.isEmpty() && gemma.isEmpty()
     }
 
     private fun baseBuilder(): NotificationCompat.Builder {
@@ -219,6 +274,13 @@ class ModelDownloadService : Service() {
             is WhisperDownloadState.Downloading,
             is WhisperDownloadState.Queued,
             is WhisperDownloadState.Retrying -> true
+            else -> false
+        }
+
+        private fun GemmaDownloadState.isActive(): Boolean = when (this) {
+            is GemmaDownloadState.Downloading,
+            is GemmaDownloadState.Queued,
+            is GemmaDownloadState.Retrying -> true
             else -> false
         }
     }
