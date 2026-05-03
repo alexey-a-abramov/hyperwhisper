@@ -3,6 +3,8 @@ package com.hyperwhisper.network
 import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
+import com.hyperwhisper.utils.TraceLogger
+import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import okhttp3.Interceptor
 import retrofit2.Retrofit
@@ -19,6 +21,7 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
+    private val localProcessingStrategy: LocalProcessingStrategy,
     private val settingsRepository: SettingsRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
     private val gson: Gson
@@ -91,15 +94,32 @@ class VoiceRepository @Inject constructor(
     ): ApiResult<String> {
         val processingStartTime = System.currentTimeMillis()
         val audioFileSizeBytes = audioFile.length()
+
+        // Pre-flight: fail fast with a clear message rather than a generic API error.
+        validateConfig(voiceMode, apiSettings)?.let { msg ->
+            TraceLogger.error(TAG, "Config validation failed: $msg")
+            apiCallLogRepository.addLog(
+                ApiCallLog(
+                    provider = apiSettings.provider,
+                    modelId = apiSettings.modelId,
+                    requestType = "config-validation",
+                    inputSize = audioFileSizeBytes,
+                    responseText = null,
+                    success = false,
+                    errorMessage = msg,
+                    durationMs = 0
+                )
+            )
+            return ApiResult.Error(msg)
+        }
+
         return try {
 
-            Log.d(TAG, "=== PROCESSING STARTED ===")
-            Log.d(TAG, "File: ${audioFile.name}")
-            Log.d(TAG, "File size: ${audioFileSizeBytes / 1024} KB")
-            Log.d(TAG, "Provider: ${apiSettings.provider.displayName}")
-            Log.d(TAG, "Model: ${apiSettings.modelId}")
-            Log.d(TAG, "Voice mode: ${voiceMode.name}")
-            Log.d(TAG, "Requires auth: ${apiSettings.getCurrentRequiresAuth()}")
+            TraceLogger.trace(TAG, "=== PROCESSING STARTED ===")
+            TraceLogger.trace(TAG, "File: ${audioFile.name} (${audioFileSizeBytes / 1024} KB)")
+            TraceLogger.trace(TAG, "Provider: ${apiSettings.provider.displayName}, Model: ${apiSettings.modelId}")
+            TraceLogger.trace(TAG, "Voice mode: ${voiceMode.name}, RequiresAuth: ${apiSettings.getCurrentRequiresAuth()}")
+            logLlmConfig(apiSettings.llmConfig)
 
             // Calculate audio duration in seconds (approximate based on file size and format)
             // For m4a at 128kbps: ~16KB per second
@@ -156,7 +176,11 @@ class VoiceRepository @Inject constructor(
             } else {
                 // Single-step processing (direct strategy)
                 val strategy = selectStrategy(voiceMode, apiSettings.provider)
-                val strategyName = if (strategy is TranscriptionStrategy) "transcription" else "chat-completion"
+                val strategyName = when (strategy) {
+                    is TranscriptionStrategy -> "transcription"
+                    is LocalProcessingStrategy -> "local"
+                    else -> "chat-completion"
+                }
                 val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
 
                 Log.d(TAG, "Using single-step processing with strategy: $strategyName")
@@ -236,9 +260,8 @@ class VoiceRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing audio", e)
+            TraceLogger.error(TAG, "Error processing audio (provider=${apiSettings.provider.name}, model=${apiSettings.modelId})", e)
 
-            // Log API call error
             apiCallLogRepository.addLog(
                 ApiCallLog(
                     provider = apiSettings.provider,
@@ -252,7 +275,59 @@ class VoiceRepository @Inject constructor(
                 )
             )
 
-            ApiResult.Error("Processing failed: ${e.message}", e)
+            ApiResult.Error(friendlyErrorMessage(e), e)
+        } catch (t: Throwable) {
+            // Catches OOM/UnsatisfiedLinkError etc. from local model inference paths.
+            // We log and convert to a graceful error rather than letting it crash the IME.
+            TraceLogger.error(TAG, "Fatal error in audio processing — converted to ApiResult.Error", t)
+            ApiResult.Error("Inference failed: ${t.javaClass.simpleName}: ${t.message ?: "no message"}")
+        }
+    }
+
+    /**
+     * Validate provider/LLM/model setup. Returns null when OK, or a user-facing
+     * error string. Never logs the API key.
+     */
+    private fun validateConfig(voiceMode: VoiceMode, s: ApiSettings): String? {
+        if (s.modelId.isBlank()) return "Transcription model is not configured. Open Settings → Transcription."
+        val baseUrl = s.getCurrentBaseUrl()
+        if (baseUrl.isBlank() && s.provider != ApiProvider.SELFHOSTED_WHISPER) {
+            return "Provider base URL is empty for ${s.provider.displayName}."
+        }
+        if (s.getCurrentRequiresAuth() && s.getCurrentApiKey().isBlank()) {
+            return "API key for ${s.provider.displayName} is missing."
+        }
+
+        val llm = s.llmConfig
+        val needsLlm = llm.provider != LlmProvider.NONE &&
+            (voiceMode.id != "verbatim" || s.outputLanguage.isNotEmpty())
+        if (needsLlm) {
+            if (llm.modelId.isBlank()) return "LLM model is not set for ${llm.provider.displayName}."
+            if (llm.getBaseUrl().isBlank()) return "LLM base URL is empty for ${llm.provider.displayName}."
+            if (llm.requiresAuth && llm.apiKey.isBlank()) {
+                return "LLM API key for ${llm.provider.displayName} is missing."
+            }
+        }
+        return null
+    }
+
+    private fun logLlmConfig(llm: LlmConfig) {
+        // Never log the key itself; only whether one is present.
+        TraceLogger.trace(
+            TAG,
+            "LLM config: provider=${llm.provider.name}, model=${llm.modelId}, " +
+                "baseUrl=${llm.getBaseUrl()}, requiresAuth=${llm.requiresAuth}, " +
+                "hasKey=${llm.apiKey.isNotBlank()}"
+        )
+    }
+
+    private fun friendlyErrorMessage(e: Throwable): String {
+        val msg = e.message ?: ""
+        return when {
+            "Unable to resolve host" in msg -> "Cannot reach server — check internet connection."
+            "timeout" in msg -> "Request timed out — server not responding."
+            "SSL" in msg || "certificate" in msg -> "SSL/Certificate error — check HTTPS configuration."
+            else -> "Processing failed: ${e.javaClass.simpleName}: ${msg.ifBlank { "unknown error" }}"
         }
     }
 
@@ -468,7 +543,21 @@ class VoiceRepository @Inject constructor(
      * - For Gemini: Always use Chat Completion Strategy (supports audio natively)
      * - For Hugging Face: Always use Chat Completion Strategy (text-only models)
      */
-    private fun selectStrategy(
+    private suspend fun selectStrategy(
+        voiceMode: VoiceMode,
+        provider: ApiProvider
+    ): AudioProcessingStrategy {
+        // On-device Whisper takes priority — if the user marked it active,
+        // route there regardless of which cloud provider is configured.
+        val useLocal = settingsRepository.apiSettings.first().localModelSettings.useLocalWhisper
+        if (useLocal) {
+            Log.d(TAG, "Selected LocalProcessingStrategy (on-device Whisper active)")
+            return localProcessingStrategy
+        }
+        return selectStrategyForCloud(voiceMode, provider)
+    }
+
+    private fun selectStrategyForCloud(
         voiceMode: VoiceMode,
         provider: ApiProvider
     ): AudioProcessingStrategy {
