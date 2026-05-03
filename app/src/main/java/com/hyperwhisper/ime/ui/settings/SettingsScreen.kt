@@ -457,7 +457,7 @@ private fun PostProcessingDetail(
     postProcessingTestLog: List<com.hyperwhisper.ui.settings.TestLogEntry> = emptyList(),
     onTestPostProcessing: () -> Unit = {},
     onResetPostProcessingTestState: () -> Unit = {},
-    openRouterModels: List<com.hyperwhisper.ui.settings.OpenRouterModelInfo> = emptyList(),
+    openRouterModels: List<com.hyperwhisper.network.OpenRouterModelInfo> = emptyList(),
     openRouterRefreshing: Boolean = false,
     openRouterError: String? = null,
     onRefreshOpenRouterModels: () -> Unit = {}

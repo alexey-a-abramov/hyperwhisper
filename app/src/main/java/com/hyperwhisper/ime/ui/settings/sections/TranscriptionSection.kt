@@ -75,8 +75,8 @@ import com.hyperwhisper.data.LocalModelType
 import com.hyperwhisper.data.WhisperDownloadState
 import com.hyperwhisper.data.WhisperModelCatalog
 import com.hyperwhisper.data.WhisperModelEntry
+import com.hyperwhisper.network.OpenRouterModelInfo
 import com.hyperwhisper.ui.settings.ConnectionTestState
-import com.hyperwhisper.ui.settings.OpenRouterModelInfo
 import com.hyperwhisper.ui.settings.SettingsStatusLabels
 import com.hyperwhisper.ui.settings.TestLogEntry
 import com.hyperwhisper.ui.settings.TestLogLevel

@@ -29,7 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.hyperwhisper.ui.settings.OpenRouterModelInfo
+import com.hyperwhisper.network.OpenRouterModelInfo
 
 /**
  * Shared OpenRouter catalog browser. Used by both Transcription (where the
@@ -37,7 +37,7 @@ import com.hyperwhisper.ui.settings.OpenRouterModelInfo
  * audio input) and Post-processing/LLM (where the audio filter is off — all
  * chat-capable models are valid post-processors).
  *
- * The catalog itself is fetched in [com.hyperwhisper.ui.settings.SettingsViewModel.refreshOpenRouterModels]
+ * The catalog itself is fetched in [com.hyperwhisper.network.OpenRouterDiscoveryService.refreshOpenRouterModels]
  * — the same StateFlow feeds both call-sites.
  */
 /** Which side of the IME hosts this panel. Drives the pre-filter semantics:
