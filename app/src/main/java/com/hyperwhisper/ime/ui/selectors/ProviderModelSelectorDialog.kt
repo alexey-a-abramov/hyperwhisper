@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -77,11 +79,31 @@ fun ProviderModelSelectorDialog(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Header section
-            Surface(
+            // Compact header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Provider + model",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "${availableProviders.size}/${ApiProvider.entries.size} configured",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Hidden — was the verbose header card
+            if (false) Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(12.dp)
@@ -138,33 +160,33 @@ fun ProviderModelSelectorDialog(
 
             Divider()
 
-            // Provider list
+            // Provider list (compact)
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(preferredProviderOrder.size) { index ->
                     val provider = preferredProviderOrder[index]
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (provider == currentProvider) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
                         },
-                        tonalElevation = if (provider == currentProvider) 6.dp else 2.dp
+                        tonalElevation = if (provider == currentProvider) 2.dp else 0.dp
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = provider.displayName,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = if (provider == currentProvider) {
                                     MaterialTheme.colorScheme.onPrimaryContainer
                                 } else {
@@ -179,13 +201,13 @@ fun ProviderModelSelectorDialog(
                             }
 
                             Text(
-                                text = "Current: $providerModel",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
+                                text = providerModel.ifBlank { "—" },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
                                 color = if (provider == currentProvider) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                 }
                             )
 

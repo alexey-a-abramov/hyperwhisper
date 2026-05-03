@@ -145,8 +145,17 @@ fun LanguageModelRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val isLocal = apiSettings.localModelSettings.useLocalWhisper
+                    val primary = if (isLocal) "Local Whisper" else apiSettings.provider.displayName
+                    val secondary = if (isLocal) {
+                        apiSettings.localModelSettings.whisperModelPath
+                            .substringAfterLast('/')
+                            .ifBlank { "no model selected" }
+                    } else {
+                        apiSettings.modelId
+                    }
                     Text(
-                        text = apiSettings.provider.displayName,
+                        text = primary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (recordingState == RecordingState.IDLE) {
@@ -157,7 +166,7 @@ fun LanguageModelRow(
                         maxLines = 1
                     )
                     Text(
-                        text = apiSettings.modelId,
+                        text = secondary,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Light,
                         color = if (recordingState == RecordingState.IDLE) {

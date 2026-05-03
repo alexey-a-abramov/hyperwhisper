@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.activity.compose.BackHandler
 
 enum class EnterAction {
     NEWLINE,
@@ -40,15 +40,15 @@ fun EnterActionSelectorDialog(
         else -> EnterAction.NEWLINE
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
-        ) {
+    // IMEs cannot host real Android Dialogs (BadTokenException — token null
+    // is not valid). Render as a full-screen overlay inside the IME composition.
+    BackHandler(onBack = onDismiss)
+    Surface(
+        modifier = Modifier.fillMaxSize().padding(8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 8.dp
+    ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -97,7 +97,6 @@ fun EnterActionSelectorDialog(
             }
         }
     }
-}
 
 @Composable
 private fun ActionOption(

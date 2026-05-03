@@ -19,8 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.activity.compose.BackHandler
 import com.hyperwhisper.data.KeyboardLayout
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.VoiceMode
@@ -40,18 +39,17 @@ fun LayoutSelectorDialog(
     onShowVoiceModeDialog: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    // IMEs cannot host real Android Dialogs (BadTokenException — token null).
+    // Render as a full-screen Surface overlay inside the IME composition instead.
+    BackHandler(onBack = onDismiss)
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 8.dp
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp
-        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -234,7 +232,6 @@ fun LayoutSelectorDialog(
             }
         }
     }
-}
 
 @Composable
 private fun SectionTitle(text: String) {

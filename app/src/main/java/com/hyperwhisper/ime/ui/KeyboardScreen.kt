@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
@@ -78,12 +85,14 @@ private enum class KeyboardActionStyle {
     ENTER
 }
 
-private val KeyboardSurfaceColor = Color(0xFF000000)
-private val KeyboardKeyColor = Color(0xFFFFFFFF)
-private val KeyboardKeyTextColor = Color(0xFF000000)
-private val KeyboardSpaceColor = Color(0xFFFFEB3B)
-private val KeyboardBackspaceColor = Color(0xFFD32F2F)
-private val KeyboardEnterColor = Color(0xFF00C853)
+internal val KeyboardSurfaceColor = Color(0xFF000000)
+internal val KeyboardKeyColor = Color(0xFFFFFFFF)
+internal val KeyboardKeyTextColor = Color(0xFF000000)
+// Canonical action-button palette. Same yellow/red/green across every layout
+// (QWERTY, Code, Emoji, Dictation's bottom row) so muscle memory transfers.
+internal val KeyboardSpaceColor = Color(0xFFFFEB3B)
+internal val KeyboardBackspaceColor = Color(0xFFD32F2F)
+internal val KeyboardEnterColor = Color(0xFF00C853)
 private val KeyboardSpecialTextColor = Color(0xFF000000)
 private val KeyboardModeSwitcherColor = Color(0xFF424242)
 
@@ -374,9 +383,66 @@ fun KeyboardScreen(
     // DON'T auto-clear errors - let user read them
     // Errors will be cleared when user taps mic again or manually dismisses
 
+    // Normalize legacy persisted modes so the user always lands on one of
+    // the 4 supported layouts — even if their saved-last-mode was NUMPAD or
+    // similar from a pre-consolidation build.
+    LaunchedEffect(Unit) {
+        val normalized = keyboardInputMode.normalize()
+        if (normalized != keyboardInputMode) keyboardInputMode = normalized
+    }
+
+    // Mode cycle = the 4 base modes plus any agent modes the user has enabled.
+    val keyboardModeOrder = remember(appearanceSettings.enabledAgentKeyboards) {
+        val base = listOf(
+            com.hyperwhisper.data.KeyboardInputMode.DICTATION,
+            com.hyperwhisper.data.KeyboardInputMode.QWERTY,
+            com.hyperwhisper.data.KeyboardInputMode.CODE,
+            com.hyperwhisper.data.KeyboardInputMode.EMOJI
+        )
+        val agents = com.hyperwhisper.data.KeyboardInputMode.agentModes
+            .filter { it.name in appearanceSettings.enabledAgentKeyboards }
+        base + agents
+    }
+    var modeMenuExpanded by remember { mutableStateOf(false) }
+    var modeChangeToast by remember { mutableStateOf<com.hyperwhisper.data.KeyboardInputMode?>(null) }
+    LaunchedEffect(modeChangeToast) {
+        if (modeChangeToast != null) {
+            kotlinx.coroutines.delay(1100)
+            modeChangeToast = null
+        }
+    }
+    val cycleKeyboardMode: (Int) -> Unit = { dir ->
+        val cur = keyboardModeOrder.indexOf(keyboardInputMode).coerceAtLeast(0)
+        val next = keyboardModeOrder[(cur + dir + keyboardModeOrder.size) % keyboardModeOrder.size]
+        keyboardInputMode = next
+        modeChangeToast = next
+    }
+    val swipeAccum = remember { kotlin.collections.mutableListOf(0f) }
+    val swipeDensity = androidx.compose.ui.platform.LocalDensity.current
+
     Box(modifier = modifier.fillMaxWidth().height(320.dp)) {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { swipeAccum[0] = 0f },
+                        onDragEnd = {
+                            // Threshold ~64dp = a deliberate swipe, not a stray drag.
+                            val px = with(swipeDensity) { 64.dp.toPx() }
+                            val dx = swipeAccum[0]
+                            if (kotlin.math.abs(dx) > px) {
+                                if (dx < 0) cycleKeyboardMode(1)
+                                else cycleKeyboardMode(-1)
+                            }
+                            swipeAccum[0] = 0f
+                        },
+                        onDragCancel = { swipeAccum[0] = 0f },
+                        onHorizontalDrag = { _: androidx.compose.ui.input.pointer.PointerInputChange, dx: Float ->
+                            swipeAccum[0] = swipeAccum[0] + dx
+                        }
+                    )
+                },
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp
         ) {
@@ -390,16 +456,38 @@ fun KeyboardScreen(
                 verticalArrangement = Arrangement.Top
             ) {
             if (keyboardInputMode == KeyboardInputMode.DICTATION) {
-                // Top Row: Backspace (left) | Settings + View Logs (techie) + Help (right)
-                TopControlsRow(
-                    context = context,
-                    showKeyboardSwitcher = false,
-                    techieModeEnabled = appearanceSettings.techieModeEnabled,
-                    onSwitchKeyboard = onSwitchKeyboard,
-                    onDelete = onDelete,
-                    onDeleteAll = onDeleteAll
+                // Single universal navigation row — replaces the old top-controls
+                // row entirely. Settings/help/logs live in the strip itself,
+                // so we don't waste a second row.
+                UniversalKeyboardTopStrip(
+                    currentMode = keyboardInputMode,
+                    cycleOrder = keyboardModeOrder,
+                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    onEsc = onEscape,
+                    onTab = onTab,
+                    onBackspace = onDelete,
+                    onSettings = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    },
+                    onLogs = if (appearanceSettings.techieModeEnabled) {
+                        {
+                            val intent = android.content.Intent(
+                                context, com.hyperwhisper.ui.logs.LogsActivity::class.java
+                            ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                            context.startActivity(intent)
+                        }
+                    } else null,
+                    onHelp = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
@@ -459,12 +547,68 @@ fun KeyboardScreen(
                     onPasteText = onTextCommit,
                     onShowHistory = { showHistoryPanel = true },
                     onSpace = handleSpacePress,
-                    showKeyboardButton = true,
+                    // Mode switching now lives in the universal top strip,
+                    // so suppress the redundant in-row switcher.
+                    showKeyboardButton = false,
                     onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY },
                     currentKeyboardMode = keyboardInputMode,
                     onModeChange = { keyboardInputMode = it }
                 )
+            } else if (keyboardInputMode.isAgent) {
+                UniversalKeyboardTopStrip(
+                    currentMode = keyboardInputMode,
+                    cycleOrder = keyboardModeOrder,
+                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    onModePillTap = { modeMenuExpanded = true },
+                    onEsc = onEscape,
+                    onTab = onTab,
+                    onBackspace = onDelete,
+                    onSettings = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    },
+                    onHelp = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
+                )
+                AgentKeyboard(
+                    title = keyboardInputMode.displayName,
+                    commands = com.hyperwhisper.data.AgentCommands.byMode(keyboardInputMode),
+                    onInsert = onTextCommit,
+                    onSpace = handleSpacePress,
+                    onEnter = onEnter,
+                    onDelete = onDelete,
+                    modifier = Modifier.weight(1f)
+                )
             } else if (keyboardInputMode == KeyboardInputMode.EMOJI) {
+                UniversalKeyboardTopStrip(
+                    currentMode = keyboardInputMode,
+                    cycleOrder = keyboardModeOrder,
+                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    onModePillTap = { modeMenuExpanded = true },
+                    onEsc = onEscape,
+                    onTab = onTab,
+                    onBackspace = onDelete,
+                    onSettings = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    },
+                    onHelp = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
+                )
                 EmojiKeyboard(
                     recentEmojis = appearanceSettings.recentEmojis,
                     searchQuery = emojiSearchQuery,
@@ -487,6 +631,28 @@ fun KeyboardScreen(
                     modifier = Modifier.weight(1f)
                 )
             } else {
+                UniversalKeyboardTopStrip(
+                    currentMode = keyboardInputMode,
+                    cycleOrder = keyboardModeOrder,
+                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
+                    onModePillTap = { modeMenuExpanded = true },
+                    onEsc = onEscape,
+                    onTab = onTab,
+                    onBackspace = onDelete,
+                    onSettings = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    },
+                    onHelp = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
+                )
                 TextKeyboardSectionNew(
                     mode = keyboardInputMode,
                     layout = currentKeyboardLayout,
@@ -731,6 +897,103 @@ fun KeyboardScreen(
                 )
             }
         }
+
+        // Mode-picker dropdown overlay. Compose Popup/DropdownMenu can't be
+        // used in IMEs (BadTokenException — same root cause as Compose
+        // Dialog), so we render the menu inline as a Card positioned below
+        // the strip + a tap-to-dismiss scrim covering the rest of the surface.
+        if (modeMenuExpanded) {
+            val scrimSource = remember { MutableInteractionSource() }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = scrimSource
+                    ) { modeMenuExpanded = false }
+            )
+            Card(
+                modifier = Modifier
+                    .padding(top = 38.dp, start = 60.dp)
+                    .widthIn(min = 180.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    keyboardModeOrder.forEach { mode ->
+                        val isCurrent = mode == keyboardInputMode.normalize()
+                        Surface(
+                            onClick = {
+                                keyboardInputMode = mode
+                                modeChangeToast = mode
+                                modeMenuExpanded = false
+                            },
+                            color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+                                else Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isCurrent) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                } else {
+                                    Spacer(modifier = Modifier.width(22.dp))
+                                }
+                                Text(
+                                    text = mode.displayName,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isCurrent) FontWeight.SemiBold
+                                        else FontWeight.Normal,
+                                    color = if (isCurrent)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mode-change toast: appears when swipe cycles to a new keyboard mode.
+        // Auto-dismisses via the LaunchedEffect at the top of the function.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = modeChangeToast != null,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it / 2 },
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 },
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            modeChangeToast?.let { mode ->
+                Surface(
+                    modifier = Modifier.padding(top = 12.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    shape = RoundedCornerShape(20.dp),
+                    tonalElevation = 6.dp,
+                    shadowElevation = 6.dp
+                ) {
+                    Text(
+                        text = mode.displayName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -800,7 +1063,26 @@ private fun TextKeyboardSectionNew(
 
     val bottomRowKeys = if (isSpecialChars) emptyList() else layoutDef.bottomRow
 
-    when (mode) {
+    when (mode.normalize()) {
+        KeyboardInputMode.CODE -> {
+            CodeKeyboard(
+                onKeyPress = onKeyPress,
+                onSpacePress = onSpacePress,
+                onDelete = onDelete,
+                onEnter = onEnter,
+                onTab = onTab,
+                onEscape = onEscape,
+                onMoveCursorLeft = onMoveCursorLeft,
+                onMoveCursorRight = onMoveCursorRight,
+                onMoveCursorUp = onMoveCursorUp,
+                onMoveCursorDown = onMoveCursorDown,
+                onHome = onHome,
+                onEnd = onEnd,
+                onPageUp = onPageUp,
+                onPageDown = onPageDown,
+                modifier = modifier
+            )
+        }
         KeyboardInputMode.NUMPAD -> {
             // Classic numpad layout with F-keys and sticky modifiers
             Surface(
@@ -1750,22 +2032,13 @@ private fun TextKeyboardSectionNew(
                             }
                         }
 
-                        // Bottom row with unified mode switcher
+                        // Bottom row — mode switching is in the universal
+                        // top strip; bottom row is now pure typing keys.
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Unified mode switcher (left)
-                            UnifiedModeSwitcher(
-                                currentMode = mode,
-                                onModeChange = onModeChange,
-                                onReturnToDictation = onReturnToDictation,
-                                currentLayout = layout,
-                                onLayoutSelectorClick = onSpaceLongPress,
-                                modifier = Modifier.weight(3f).height(keyHeight)
-                            )
-
                             // Comma
                             KeyboardKeyButton(
                                 label = ",",
@@ -1778,7 +2051,7 @@ private fun TextKeyboardSectionNew(
                                 label = "space",
                                 onClick = onSpacePress,
                                 onLongPress = onSpaceLongPress,
-                                modifier = Modifier.weight(2.5f),
+                                modifier = Modifier.weight(5.5f),
                                 style = KeyboardActionStyle.SPACE,
                                 height = keyHeight,
                                 longPressThreshold = 800L

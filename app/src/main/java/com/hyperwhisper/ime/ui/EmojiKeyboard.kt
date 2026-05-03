@@ -67,61 +67,60 @@ fun EmojiKeyboard(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Emoji grid
+        // Emoji grid. Single LazyVerticalGrid for both search and category
+        // browsing; nesting a LazyVerticalGrid inside a LazyColumn item gives
+        // it unbounded height and crashes Compose with
+        // "Vertically scrollable component was measured with an infinity
+        // maximum height constraints" (seen in crash-20260502-212123).
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (searchQuery.isNotEmpty()) {
-                // Show search results
-                val searchResults = EmojiData.searchEmojis(searchQuery)
-                EmojiGrid(
-                    emojis = searchResults,
-                    onEmojiClick = { emoji ->
-                        onEmojiSelected(emoji)
-                    },
-                    emojisPerRow = 15
-                )
+            val emojisPerRow = 15
+            val visibleEmojis = if (searchQuery.isNotEmpty()) {
+                EmojiData.searchEmojis(searchQuery)
             } else {
-                // Show emojis by category with recents at top
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Recent emojis section (if any)
-                    if (recentEmojis.isNotEmpty()) {
-                        item {
-                            Column {
-                                Text(
-                                    text = "Recently Used",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                                )
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    items(recentEmojis) { emoji ->
-                                        EmojiButton(
-                                            emoji = emoji,
-                                            onClick = { onEmojiSelected(emoji) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
-                    }
+                EmojiData.emojisByCategory[selectedCategory] ?: emptyList()
+            }
 
-                    // Category emojis
-                    item {
-                        val categoryEmojis = EmojiData.emojisByCategory[selectedCategory] ?: emptyList()
-                        EmojiGrid(
-                            emojis = categoryEmojis,
-                            onEmojiClick = { emoji ->
-                                onEmojiSelected(emoji)
-                            },
-                            emojisPerRow = 15
-                        )
+            if (visibleEmojis.isEmpty() && searchQuery.isNotEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No emojis found",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(emojisPerRow),
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (searchQuery.isEmpty() && recentEmojis.isNotEmpty()) {
+                        item(
+                            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
+                        ) {
+                            Text(
+                                text = "Recently Used",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
+                            )
+                        }
+                        items(recentEmojis) { emoji ->
+                            EmojiButton(emoji = emoji, onClick = { onEmojiSelected(emoji) })
+                        }
+                        item(
+                            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
+                        ) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                    }
+                    items(visibleEmojis) { emoji ->
+                        EmojiButton(emoji = emoji, onClick = { onEmojiSelected(emoji) })
                     }
                 }
             }
@@ -134,18 +133,13 @@ fun EmojiKeyboard(
             modifier = Modifier.fillMaxWidth().height(45.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // Mode switcher
-            UnifiedModeSwitcher(
-                currentMode = currentMode,
-                onModeChange = onModeChange,
-                onReturnToDictation = onReturnToDictation,
-                modifier = Modifier.weight(2.5f).fillMaxHeight()
-            )
+            // Mode switching now lives in the universal top strip; no
+            // redundant inline switcher here.
 
             // Space
             Surface(
                 onClick = onSpace,
-                modifier = Modifier.weight(2f).fillMaxHeight(),
+                modifier = Modifier.weight(4.5f).fillMaxHeight(),
                 shape = RoundedCornerShape(8.dp),
                 color = Color(0xFFFFEB3B)
             ) {

@@ -212,7 +212,7 @@ fun BottomActionsRow(
             }
         }
 
-        // Space button (minimal elongated bar like a space bar)
+        // Space — same canonical yellow as every other layout's spacebar.
         Button(
             onClick = onSpace,
             modifier = Modifier
@@ -223,7 +223,8 @@ fun BottomActionsRow(
                 .height(56.dp),
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                containerColor = com.hyperwhisper.ui.KeyboardSpaceColor,
+                contentColor = Color.Black
             ),
             contentPadding = PaddingValues(0.dp)
         ) {
@@ -231,7 +232,7 @@ fun BottomActionsRow(
                 text = strings.space,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = Color.Black,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontFeatureSettings = "smcp" // Small caps
                 )
