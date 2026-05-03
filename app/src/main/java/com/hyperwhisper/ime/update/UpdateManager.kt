@@ -6,9 +6,22 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.content.FileProvider
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import com.hyperwhisper.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,6 +32,10 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private val Context.updatePrefsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "hyperwhisper_update_prefs",
+)
 
 @Singleton
 class UpdateManager @Inject constructor(
@@ -31,14 +48,55 @@ class UpdateManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "UpdateManager"
-        private const val SKIPPED_VERSION_KEY = "skipped_update_version"
-        private const val SKIPPED_BUILD_TIMESTAMP_KEY = "skipped_build_timestamp"
+        private val SKIPPED_VERSION_KEY = intPreferencesKey("skipped_update_version")
+        private val SKIPPED_BUILD_TIMESTAMP_KEY = longPreferencesKey("skipped_build_timestamp")
+        private val MIGRATED_FROM_SHARED_PREFS = booleanPreferencesKey("migrated_from_shared_prefs_v1")
 
         // Fallback: raw JSON file in repo (for testing or if API rate limited)
         private const val UPDATE_CHECK_URL = "https://raw.githubusercontent.com/alexey-a-abramov/hyperwhisper/main/latest-version.json"
     }
 
-    private val prefs = context.getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
+    /**
+     * In-memory snapshot of the persisted skip state, kept in sync with
+     * DataStore by [scope]'s collector. The public API stays synchronous —
+     * callers were already non-suspend (UI onClick handlers, ApkProber
+     * lambdas) and rewriting them all just to thread `suspend` would have
+     * been invasive without a real benefit.
+     */
+    private data class SkipState(val skippedVersion: Int = -1, val skippedBuildTimestamp: Long = -1L)
+
+    private val dataStore = context.updatePrefsDataStore
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val state = MutableStateFlow(SkipState())
+
+    init {
+        scope.launch {
+            migrateFromSharedPreferencesIfNeeded()
+            dataStore.data.map { prefs ->
+                SkipState(
+                    skippedVersion = prefs[SKIPPED_VERSION_KEY] ?: -1,
+                    skippedBuildTimestamp = prefs[SKIPPED_BUILD_TIMESTAMP_KEY] ?: -1L,
+                )
+            }.collect { state.value = it }
+        }
+    }
+
+    private suspend fun migrateFromSharedPreferencesIfNeeded() {
+        val current = dataStore.data.first()
+        if (current[MIGRATED_FROM_SHARED_PREFS] == true) return
+
+        val legacy = context.getSharedPreferences("update_prefs", Context.MODE_PRIVATE)
+        val legacyVersion = legacy.getInt("skipped_update_version", -1)
+        val legacyBuildTimestamp = legacy.getLong("skipped_build_timestamp", -1L)
+
+        dataStore.edit { prefs ->
+            if (legacyVersion != -1) prefs[SKIPPED_VERSION_KEY] = legacyVersion
+            if (legacyBuildTimestamp != -1L) prefs[SKIPPED_BUILD_TIMESTAMP_KEY] = legacyBuildTimestamp
+            prefs[MIGRATED_FROM_SHARED_PREFS] = true
+        }
+        // Best-effort cleanup of the old SharedPreferences file.
+        runCatching { legacy.edit().clear().apply() }
+    }
 
     /**
      * Get current app version
@@ -53,40 +111,35 @@ class UpdateManager @Inject constructor(
         return Pair(packageInfo.versionCode.toInt(), packageInfo.versionName)
     }
 
-    /**
-     * Check if a specific version was skipped by user
-     */
-    fun isVersionSkipped(versionCode: Int): Boolean {
-        return prefs.getInt(SKIPPED_VERSION_KEY, -1) == versionCode
-    }
+    /** Check if a specific version was skipped by user. */
+    fun isVersionSkipped(versionCode: Int): Boolean = state.value.skippedVersion == versionCode
 
-    /**
-     * Check if a specific build timestamp was skipped by user
-     */
-    fun isBuildTimestampSkipped(buildTimestamp: Long): Boolean {
-        return prefs.getLong(SKIPPED_BUILD_TIMESTAMP_KEY, -1) == buildTimestamp
-    }
+    /** Check if a specific build timestamp was skipped by user. */
+    fun isBuildTimestampSkipped(buildTimestamp: Long): Boolean =
+        state.value.skippedBuildTimestamp == buildTimestamp
 
-    /**
-     * Mark a version as skipped (don't prompt again for this version)
-     */
+    /** Mark a version as skipped (don't prompt again for this version). */
     fun skipVersion(versionCode: Int) {
-        prefs.edit().putInt(SKIPPED_VERSION_KEY, versionCode).apply()
+        scope.launch {
+            dataStore.edit { it[SKIPPED_VERSION_KEY] = versionCode }
+        }
     }
 
-    /**
-     * Mark a build timestamp as skipped (don't prompt again for this build)
-     */
+    /** Mark a build timestamp as skipped (don't prompt again for this build). */
     fun skipBuildTimestamp(buildTimestamp: Long) {
-        prefs.edit().putLong(SKIPPED_BUILD_TIMESTAMP_KEY, buildTimestamp).apply()
+        scope.launch {
+            dataStore.edit { it[SKIPPED_BUILD_TIMESTAMP_KEY] = buildTimestamp }
+        }
     }
 
-    /**
-     * Clear skipped version (e.g., after updating)
-     */
+    /** Clear skipped version (e.g., after updating). */
     fun clearSkippedVersion() {
-        prefs.edit().remove(SKIPPED_VERSION_KEY).apply()
-        prefs.edit().remove(SKIPPED_BUILD_TIMESTAMP_KEY).apply()
+        scope.launch {
+            dataStore.edit { prefs ->
+                prefs.remove(SKIPPED_VERSION_KEY)
+                prefs.remove(SKIPPED_BUILD_TIMESTAMP_KEY)
+            }
+        }
     }
 
     /**
