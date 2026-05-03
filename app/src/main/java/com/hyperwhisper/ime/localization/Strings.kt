@@ -368,9 +368,12 @@ interface Strings {
     val transcriptionWorkingPlaceholder: String
     val transcriptionTestSuccessLabel: String
     val transcriptionTestFailedLabel: String
+    val transcriptionTestReadyLabel: String
     val transcriptionTestLogCopied: String
     val transcriptionTestLogCopyDesc: String
     val transcriptionTestLogDismissDesc: String
+    val transcriptionTestLogExpand: String
+    val transcriptionTestLogCollapse: String
     val transcriptionCloudActiveText: String
     val transcriptionCloudInactiveText: String
     val transcriptionSetCloudActive: String
@@ -498,7 +501,6 @@ interface Strings {
     // API call logs screen.
     val apiCallLogsHeader: String
     val apiCallLogsSubtitle: String
-    val apiCallLogsClearDesc: String
     val apiCallLogsStatistics: String
     val apiCallLogsStatTotal: String
     val apiCallLogsStatSuccess: String

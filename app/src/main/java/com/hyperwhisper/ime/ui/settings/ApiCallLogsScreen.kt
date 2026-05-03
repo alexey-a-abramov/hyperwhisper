@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiCallLog
 import com.hyperwhisper.data.ApiCallStatistics
+import com.hyperwhisper.localization.LocalStrings
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +32,7 @@ fun ApiCallLogsScreen(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     val groupedLogs = remember(logs) {
         logs.groupBy { "${it.provider.displayName} / ${it.modelId}" }
     }
@@ -57,14 +59,14 @@ fun ApiCallLogsScreen(
                 ) {
                     Column {
                         Text(
-                            text = "API CALL LOGS",
+                            text = strings.apiCallLogsHeader,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "View recent API calls",
+                            text = strings.apiCallLogsSubtitle,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -74,14 +76,14 @@ fun ApiCallLogsScreen(
                         IconButton(onClick = onClearLogs) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
-                                contentDescription = "Clear Logs",
+                                contentDescription = strings.clearLogs,
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
                         IconButton(onClick = onDismiss) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = strings.close,
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -103,7 +105,7 @@ fun ApiCallLogsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Statistics",
+                        text = strings.apiCallLogsStatistics,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -112,10 +114,10 @@ fun ApiCallLogsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        StatItem("Total Calls", statistics.totalCalls.toString())
-                        StatItem("Success", statistics.successCount.toString(), MaterialTheme.colorScheme.primary)
-                        StatItem("Errors", statistics.errorCount.toString(), MaterialTheme.colorScheme.error)
-                        StatItem("Avg Time", "${statistics.averageDurationMs}ms")
+                        StatItem(strings.apiCallLogsStatTotal, statistics.totalCalls.toString())
+                        StatItem(strings.apiCallLogsStatSuccess, statistics.successCount.toString(), MaterialTheme.colorScheme.primary)
+                        StatItem(strings.apiCallLogsStatErrors, statistics.errorCount.toString(), MaterialTheme.colorScheme.error)
+                        StatItem(strings.apiCallLogsStatAvgTime, "${statistics.averageDurationMs}ms")
                     }
                 }
             }
@@ -151,7 +153,7 @@ fun ApiCallLogsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No API calls logged yet",
+                                text = strings.apiCallLogsEmpty,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                         }
@@ -185,6 +187,7 @@ private fun StatItem(
 
 @Composable
 private fun ApiCallLogItem(log: ApiCallLog) {
+    val strings = LocalStrings.current
     val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val timeString = remember(log.timestamp) { dateFormat.format(Date(log.timestamp)) }
 
@@ -217,7 +220,7 @@ private fun ApiCallLogItem(log: ApiCallLog) {
                 ) {
                     Icon(
                         imageVector = if (log.success) Icons.Default.CheckCircle else Icons.Default.Error,
-                        contentDescription = if (log.success) "Success" else "Error",
+                        contentDescription = if (log.success) strings.apiCallLogsSuccessDesc else strings.apiCallLogsErrorDesc,
                         tint = if (log.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp)
                     )
@@ -248,7 +251,7 @@ private fun ApiCallLogItem(log: ApiCallLog) {
 
             if (!log.success && log.errorMessage != null) {
                 Text(
-                    text = "Error: ${log.errorMessage}",
+                    text = "${strings.apiCallLogsErrorPrefix}${log.errorMessage}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.error,
                     fontFamily = FontFamily.Monospace

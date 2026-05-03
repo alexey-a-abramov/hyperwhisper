@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.localization.LocalStrings
 
 @Composable
 fun HistoryReductionWarningDialog(
@@ -24,6 +25,7 @@ fun HistoryReductionWarningDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalStrings.current
     val itemsToDelete = (currentSize - newSize).coerceAtLeast(0)
 
     AlertDialog(
@@ -35,24 +37,24 @@ fun HistoryReductionWarningDialog(
                 tint = MaterialTheme.colorScheme.error
             )
         },
-        title = { Text("Reduce History Size?") },
+        title = { Text(strings.dialogHistoryReductionTitle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "You are reducing the maximum history size from $currentSize to $newSize items.",
+                    text = strings.dialogHistoryReductionBodyFormat.format(currentSize, newSize),
                     fontSize = 14.sp
                 )
                 Text(
-                    text = "$itemsToDelete history items including their audio files will be permanently deleted.",
+                    text = strings.dialogHistoryReductionWarningFormat.format(itemsToDelete),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error
                 )
                 Text(
-                    text = "This action cannot be undone.",
+                    text = strings.dialogHistoryReductionUndoNote,
                     fontSize = 13.sp,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -66,12 +68,12 @@ fun HistoryReductionWarningDialog(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("DELETE $itemsToDelete ITEMS")
+                Text(strings.dialogHistoryReductionConfirmFormat.format(itemsToDelete))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL")
+                Text(strings.cancel.uppercase())
             }
         }
     )

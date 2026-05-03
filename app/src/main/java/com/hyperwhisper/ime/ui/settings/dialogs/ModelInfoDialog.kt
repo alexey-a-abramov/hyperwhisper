@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.localization.LocalStrings
 
 @Composable
 fun ModelInfoDialog(
@@ -29,6 +30,7 @@ fun ModelInfoDialog(
     modelId: String,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -41,7 +43,7 @@ fun ModelInfoDialog(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text("Model Information")
+                Text(strings.dialogModelInfoTitle)
             }
         },
         text = {
@@ -51,7 +53,7 @@ fun ModelInfoDialog(
             ) {
                 // Provider name
                 Text(
-                    text = "Provider: ${provider.displayName}",
+                    text = "${strings.dialogModelInfoProviderPrefix}${provider.displayName}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
@@ -60,7 +62,7 @@ fun ModelInfoDialog(
 
                 // Current model
                 Text(
-                    text = "Selected Model:",
+                    text = strings.dialogModelInfoSelectedModelLabel,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -199,7 +201,7 @@ fun ModelInfoDialog(
 
                 // Available models
                 Text(
-                    text = "Available Models:",
+                    text = strings.dialogModelInfoAvailableModelsLabel,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -225,7 +227,7 @@ fun ModelInfoDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("CLOSE")
+                Text(strings.close.uppercase())
             }
         }
     )

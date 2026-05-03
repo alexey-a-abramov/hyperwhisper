@@ -15,33 +15,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hyperwhisper.data.VoiceMode
+import com.hyperwhisper.localization.LocalStrings
 
 @Composable
 fun AddModeDialog(
     onDismiss: () -> Unit,
     onAdd: (String, String) -> Unit
 ) {
+    val strings = LocalStrings.current
     var name by remember { mutableStateOf("") }
     var systemPrompt by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Voice Mode") },
+        title = { Text(strings.addVoiceMode) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Mode Name") },
-                    placeholder = { Text("e.g., Formal") },
+                    label = { Text(strings.modeName) },
+                    placeholder = { Text(strings.dialogVoiceModeNamePlaceholder) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = systemPrompt,
                     onValueChange = { systemPrompt = it },
-                    label = { Text("System Prompt") },
-                    placeholder = { Text("e.g., Transcribe and make it formal") },
+                    label = { Text(strings.systemPrompt) },
+                    placeholder = { Text(strings.dialogVoiceModePromptPlaceholder) },
                     minLines = 3,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth()
@@ -57,12 +59,12 @@ fun AddModeDialog(
                 },
                 enabled = name.isNotBlank() && systemPrompt.isNotBlank()
             ) {
-                Text("Add")
+                Text(strings.add)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(strings.cancel)
             }
         }
     )
@@ -74,26 +76,27 @@ fun EditModeDialog(
     onDismiss: () -> Unit,
     onUpdate: (VoiceMode) -> Unit
 ) {
+    val strings = LocalStrings.current
     var name by remember { mutableStateOf(mode.name) }
     var systemPrompt by remember { mutableStateOf(mode.systemPrompt) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Voice Mode") },
+        title = { Text(strings.editVoiceMode) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Mode Name") },
+                    label = { Text(strings.modeName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = systemPrompt,
                     onValueChange = { systemPrompt = it },
-                    label = { Text("System Prompt") },
-                    placeholder = { Text("Enter the system prompt for this mode") },
+                    label = { Text(strings.systemPrompt) },
+                    placeholder = { Text(strings.enterPrompt) },
                     minLines = 4,
                     maxLines = 8,
                     modifier = Modifier.fillMaxWidth()
@@ -109,12 +112,12 @@ fun EditModeDialog(
                 },
                 enabled = name.isNotBlank() && systemPrompt.isNotBlank()
             ) {
-                Text("Save")
+                Text(strings.save)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(strings.cancel)
             }
         }
     )

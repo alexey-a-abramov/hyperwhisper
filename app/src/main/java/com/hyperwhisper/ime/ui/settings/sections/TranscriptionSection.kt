@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.LocalModelInfo
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.data.LocalModelSettings
 import com.hyperwhisper.data.LocalModelType
 import com.hyperwhisper.data.WhisperDownloadState
@@ -199,6 +200,7 @@ private fun TestSectionInline(
     onResetConnectionState: () -> Unit,
     onShowApiCallLogs: () -> Unit
 ) {
+    val strings = LocalStrings.current
     Spacer(Modifier.height(8.dp))
     Button(
         onClick = onTestConnection,
@@ -206,20 +208,20 @@ private fun TestSectionInline(
         enabled = connectionTestState !is ConnectionTestState.Testing
     ) {
         Text(
-            if (connectionTestState is ConnectionTestState.Testing) "Testing…"
-            else "Test transcription"
+            if (connectionTestState is ConnectionTestState.Testing) strings.transcriptionTestingShort
+            else strings.transcriptionTestButton
         )
     }
     OutlinedButton(
         onClick = onShowApiCallLogs,
         modifier = Modifier.fillMaxWidth()
-    ) { Text("View API logs") }
+    ) { Text(strings.viewApiLogs) }
     TestLogPanel(
         entries = transcriptionTestLog,
         state = connectionTestState,
         autoCloseOnSuccess = false,
         onDismiss = onResetConnectionState,
-        runningPlaceholder = "Preparing test…"
+        runningPlaceholder = strings.transcriptionPreparingTest
     )
 }
 
@@ -228,6 +230,7 @@ private fun SourcePivot(
     selected: TranscriptionTab,
     onSelect: (TranscriptionTab) -> Unit
 ) {
+    val strings = LocalStrings.current
     Surface(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -236,14 +239,14 @@ private fun SourcePivot(
         Row(modifier = Modifier.padding(4.dp)) {
             PivotChip(
                 selected = selected == TranscriptionTab.CLOUD,
-                label = "Cloud",
+                label = strings.transcriptionTabCloud,
                 icon = Icons.Outlined.Cloud,
                 onClick = { onSelect(TranscriptionTab.CLOUD) },
                 modifier = Modifier.weight(1f)
             )
             PivotChip(
                 selected = selected == TranscriptionTab.LOCAL,
-                label = "Local",
+                label = strings.transcriptionTabLocal,
                 icon = Icons.Outlined.PhoneAndroid,
                 onClick = { onSelect(TranscriptionTab.LOCAL) },
                 modifier = Modifier.weight(1f)
@@ -297,6 +300,7 @@ private fun CloudPanel(
     onResetConnectionState: () -> Unit = {},
     onShowApiCallLogs: () -> Unit = {}
 ) {
+    val strings = LocalStrings.current
     var provider by remember(apiSettings.provider) { mutableStateOf(apiSettings.provider) }
     var baseUrl by remember(apiSettings) { mutableStateOf(apiSettings.getCurrentBaseUrl()) }
     var apiKey by remember(apiSettings) { mutableStateOf(apiSettings.getCurrentApiKey()) }
@@ -316,13 +320,13 @@ private fun CloudPanel(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ActiveSourceCard(
             isActive = cloudActive,
-            activeText = "Cloud is the active transcription source.",
-            inactiveText = "Cloud configuration saved but not active. Use this to override the on-device model.",
-            ctaLabel = "Set cloud as active",
+            activeText = strings.transcriptionCloudActiveText,
+            inactiveText = strings.transcriptionCloudInactiveText,
+            ctaLabel = strings.transcriptionSetCloudActive,
             onSetActive = onSetActive
         )
 
-        FieldGroup(title = "Provider") {
+        FieldGroup(title = strings.provider) {
             CloudProviderSelector(
                 selectedProvider = provider,
                 onProviderSelected = { newProvider ->
@@ -341,7 +345,7 @@ private fun CloudPanel(
             )
         }
 
-        FieldGroup(title = "Model") {
+        FieldGroup(title = strings.transcriptionFieldGroupModel) {
             ModelSelector(
                 provider = provider,
                 selectedModel = modelId,
@@ -368,7 +372,7 @@ private fun CloudPanel(
             )
         }
 
-        FieldGroup(title = "API key") {
+        FieldGroup(title = strings.apiKey) {
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = {
@@ -376,7 +380,7 @@ private fun CloudPanel(
                     persist()
                 },
                 singleLine = true,
-                placeholder = { Text(if (requiresAuth) "Required" else "Optional") },
+                placeholder = { Text(if (requiresAuth) strings.transcriptionApiKeyRequiredHint else strings.transcriptionApiKeyOptionalHint) },
                 visualTransformation = if (apiKeyVisible) androidx.compose.ui.text.input.VisualTransformation.None
                     else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -385,7 +389,7 @@ private fun CloudPanel(
                             Icon(
                                 imageVector = if (apiKeyVisible) Icons.Filled.VisibilityOff
                                     else Icons.Filled.Visibility,
-                                contentDescription = if (apiKeyVisible) "Hide" else "Show"
+                                contentDescription = if (apiKeyVisible) strings.transcriptionApiKeyHide else strings.transcriptionApiKeyShow
                             )
                         }
                     }
@@ -399,19 +403,19 @@ private fun CloudPanel(
                 OutlinedButton(
                     onClick = onShowProviderKeyHelp,
                     modifier = Modifier.weight(1f)
-                ) { Text("How to get a key") }
+                ) { Text(strings.transcriptionHowToGetKey) }
             }
         }
 
-        FieldGroup(title = "Languages") {
+        FieldGroup(title = strings.transcriptionLanguagesHeader) {
             LanguageSelector(
                 selectedLanguage = inputLanguage,
                 onLanguageSelected = {
                     inputLanguage = it
                     persist()
                 },
-                label = "Input language",
-                supportingText = "Spoken language (auto-detect supported)"
+                label = strings.transcriptionInputLanguageLabel,
+                supportingText = strings.transcriptionInputLanguageSupporting
             )
             Spacer(Modifier.height(8.dp))
             LanguageSelector(
@@ -420,8 +424,8 @@ private fun CloudPanel(
                     outputLanguage = it
                     persist()
                 },
-                label = "Output language",
-                supportingText = "Translate transcription (leave blank to keep original)"
+                label = strings.transcriptionOutputLanguageLabel,
+                supportingText = strings.transcriptionOutputLanguageSupporting
             )
         }
 
@@ -437,7 +441,7 @@ private fun CloudPanel(
                     persist()
                 },
                 singleLine = true,
-                label = { Text("API endpoint") },
+                label = { Text(strings.transcriptionApiEndpointLabel) },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -447,9 +451,9 @@ private fun CloudPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Requires API key", style = MaterialTheme.typography.bodyLarge)
+                    Text(strings.transcriptionRequiresApiKey, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Disable for self-hosted servers without auth",
+                        strings.transcriptionRequiresApiKeyDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -487,8 +491,10 @@ fun TestLogPanel(
     state: ConnectionTestState,
     autoCloseOnSuccess: Boolean,
     onDismiss: () -> Unit,
-    runningPlaceholder: String = "Working…"
+    runningPlaceholder: String? = null
 ) {
+    val strings = LocalStrings.current
+    val resolvedRunningPlaceholder = runningPlaceholder ?: strings.transcriptionWorkingPlaceholder
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     // Reset expansion whenever the state transitions (e.g. a new test begins).
@@ -505,10 +511,10 @@ fun TestLogPanel(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val statusLabel = when (state) {
-        is ConnectionTestState.Testing -> runningPlaceholder
-        is ConnectionTestState.Success -> "Success"
-        is ConnectionTestState.Error -> "Failed"
-        else -> "Ready"
+        is ConnectionTestState.Testing -> resolvedRunningPlaceholder
+        is ConnectionTestState.Success -> strings.transcriptionTestSuccessLabel
+        is ConnectionTestState.Error -> strings.transcriptionTestFailedLabel
+        else -> strings.transcriptionTestReadyLabel
     }
 
     Card(
@@ -554,13 +560,13 @@ fun TestLogPanel(
                         onClick = {
                             val text = buildTestLogText(state, entries)
                             clipboard.setText(AnnotatedString(text))
-                            Toast.makeText(context, "Test log copied", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.transcriptionTestLogCopied, Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             Icons.Filled.ContentCopy,
-                            contentDescription = "Copy log",
+                            contentDescription = strings.transcriptionTestLogCopyDesc,
                             tint = onContainerColor,
                             modifier = Modifier.size(16.dp)
                         )
@@ -573,7 +579,7 @@ fun TestLogPanel(
                     ) {
                         Icon(
                             if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                            contentDescription = if (expanded) "Collapse logs" else "Expand logs",
+                            contentDescription = if (expanded) strings.transcriptionTestLogCollapse else strings.transcriptionTestLogExpand,
                             tint = onContainerColor,
                             modifier = Modifier.size(20.dp)
                         )
@@ -688,6 +694,7 @@ private fun LocalWhisperPanel(
     onShowApiCallLogs: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     var hasFullStorageAccess by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager()
@@ -700,8 +707,8 @@ private fun LocalWhisperPanel(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ActiveSourceCard(
             isActive = localActive,
-            activeText = "On-device Whisper is active: ${settings.whisperModelPath.substringAfterLast('/')}",
-            inactiveText = "Pick a model below — tap “Use this model” to make it the active transcription source.",
+            activeText = "${strings.transcriptionLocalActivePrefix}${settings.whisperModelPath.substringAfterLast('/')}",
+            inactiveText = strings.transcriptionLocalInactiveText,
             ctaLabel = null,
             onSetActive = {}
         )
@@ -722,12 +729,12 @@ private fun LocalWhisperPanel(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Storage access required",
+                                strings.transcriptionStorageAccessRequired,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Text(
-                                "To find models in Downloads and other shared folders",
+                                strings.transcriptionStorageAccessDesc,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                             )
@@ -749,15 +756,15 @@ private fun LocalWhisperPanel(
                             containerColor = MaterialTheme.colorScheme.error,
                             contentColor = MaterialTheme.colorScheme.onError
                         )
-                    ) { Text("Grant access") }
+                    ) { Text(strings.transcriptionGrantAccess) }
                 }
             }
         }
 
-        FieldGroup(title = "Whisper models") {
+        FieldGroup(title = strings.transcriptionWhisperModelsHeader) {
             if (discoveredModels.isEmpty()) {
                 Text(
-                    "No models found. Place .bin or .gguf files in Downloads/Models.",
+                    strings.transcriptionNoModelsFound,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -783,7 +790,7 @@ private fun LocalWhisperPanel(
                 ) {
                     Icon(Icons.Outlined.Refresh, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Rescan")
+                    Text(strings.transcriptionRescan)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     OutlinedButton(
@@ -792,21 +799,21 @@ private fun LocalWhisperPanel(
                             onDiscover()
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Refresh access") }
+                    ) { Text(strings.transcriptionRefreshAccess) }
                 }
             }
         }
 
-        FieldGroup(title = "Performance") {
+        FieldGroup(title = strings.transcriptionPerformanceHeader) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto-discover", style = MaterialTheme.typography.bodyLarge)
+                    Text(strings.transcriptionAutoDiscoverTitle, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Scan common folders for model files",
+                        strings.transcriptionAutoDiscoverDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -823,9 +830,9 @@ private fun LocalWhisperPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Processing threads", style = MaterialTheme.typography.bodyLarge)
+                    Text(strings.transcriptionThreadsTitle, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Higher = faster, more battery (1–16)",
+                        strings.transcriptionThreadsDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -864,6 +871,7 @@ private fun LocalModelRow(
     onSetActive: () -> Unit,
     onVerify: () -> Unit
 ) {
+    val strings = LocalStrings.current
     Surface(
         onClick = onSelect,
         color = when {
@@ -895,7 +903,7 @@ private fun LocalModelRow(
                 IconButton(onClick = onVerify) {
                     Icon(
                         Icons.Outlined.Verified,
-                        contentDescription = "Verify integrity",
+                        contentDescription = strings.transcriptionVerifyIntegrityDesc,
                         tint = if (model.hash.isNotEmpty()) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(20.dp)
@@ -906,7 +914,7 @@ private fun LocalModelRow(
                 Button(
                     onClick = onSetActive,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Use this model") }
+                ) { Text(strings.transcriptionUseThisModel) }
             }
         }
     }
@@ -914,13 +922,14 @@ private fun LocalModelRow(
 
 @Composable
 private fun ActiveBadge() {
+    val strings = LocalStrings.current
     Surface(
         color = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary,
         shape = MaterialTheme.shapes.small
     ) {
         Text(
-            "Active",
+            strings.transcriptionActiveBadge,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             fontWeight = FontWeight.SemiBold
@@ -997,6 +1006,7 @@ private fun AdvancedFieldGroup(
     onToggle: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val strings = LocalStrings.current
     Column {
         Surface(
             onClick = onToggle,
@@ -1009,7 +1019,7 @@ private fun AdvancedFieldGroup(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Advanced",
+                    strings.advancedSettings,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)

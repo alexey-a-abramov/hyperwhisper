@@ -18,9 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.localization.LocalStrings
 
 @Composable
 fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
+    val strings = LocalStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -33,7 +35,7 @@ fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text("Input Language Hint")
+                Text(strings.inputLanguageHintLabel)
             }
         },
         text = {
@@ -42,22 +44,22 @@ fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "This setting provides a hint to the speech recognition model about the language being spoken. While 'Auto-detect' works well in most cases, providing a specific language can improve accuracy:",
+                    strings.dialogInputLanguageBody,
                     fontSize = 14.sp
                 )
-                Text("• For speakers with strong accents.", fontSize = 14.sp)
-                Text("• For less common languages or dialects.", fontSize = 14.sp)
-                Text("• In noisy environments.", fontSize = 14.sp)
+                Text(strings.dialogInputLanguageBullet1, fontSize = 14.sp)
+                Text(strings.dialogInputLanguageBullet2, fontSize = 14.sp)
+                Text(strings.dialogInputLanguageBullet3, fontSize = 14.sp)
                 Divider()
                 Text(
-                    "If your transcriptions are inaccurate, try setting this to your native language.",
+                    strings.dialogInputLanguageFooter,
                     fontWeight = FontWeight.Medium
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("CLOSE")
+                Text(strings.close.uppercase())
             }
         }
     )
@@ -65,6 +67,7 @@ fun InputLanguageInfoDialog(onDismiss: () -> Unit) {
 
 @Composable
 fun LogsInfoDialog(onDismiss: () -> Unit) {
+    val strings = LocalStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -77,7 +80,7 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text("View API Logs")
+                Text(strings.viewApiLogs)
             }
         },
         text = {
@@ -86,7 +89,7 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "HyperWhisper logs all API requests and responses for debugging.",
+                    strings.dialogLogsInfoBody,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -94,33 +97,33 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
                 Divider()
 
                 Text(
-                    "Viewing Logs:",
+                    strings.dialogLogsInfoViewingHeader,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
 
-                Text("• Use ADB: adb logcat | grep HyperWhisper", fontSize = 13.sp)
-                Text("• Install a logcat app from Play Store", fontSize = 13.sp)
-                Text("• Filter by: ChatCompletionStrategy, VoiceRepository", fontSize = 13.sp)
+                Text(strings.dialogLogsInfoViewing1, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoViewing2, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoViewing3, fontSize = 13.sp)
 
                 Divider()
 
                 Text(
-                    "Logged Information:",
+                    strings.dialogLogsInfoLoggedHeader,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
 
-                Text("• API request details (URL, model, prompts)", fontSize = 13.sp)
-                Text("• Response status and content", fontSize = 13.sp)
-                Text("• Token usage (input/output/total)", fontSize = 13.sp)
-                Text("• Audio file information", fontSize = 13.sp)
-                Text("• Error messages and traces", fontSize = 13.sp)
+                Text(strings.dialogLogsInfoLogged1, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoLogged2, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoLogged3, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoLogged4, fontSize = 13.sp)
+                Text(strings.dialogLogsInfoLogged5, fontSize = 13.sp)
 
                 Divider()
 
                 Text(
-                    "Note: Logs show first 10 chars of API keys only.",
+                    strings.dialogLogsInfoNote,
                     fontSize = 12.sp,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -129,7 +132,7 @@ fun LogsInfoDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("CLOSE")
+                Text(strings.close.uppercase())
             }
         }
     )

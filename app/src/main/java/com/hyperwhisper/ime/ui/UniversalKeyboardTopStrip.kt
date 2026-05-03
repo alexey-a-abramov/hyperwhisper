@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
@@ -63,6 +64,7 @@ fun UniversalKeyboardTopStrip(
     onLogs: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     val normalized = currentMode.normalize()
     val inVoice = normalized == KeyboardInputMode.DICTATION
 
@@ -90,7 +92,7 @@ fun UniversalKeyboardTopStrip(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Mic,
-                        contentDescription = "Back to voice",
+                        contentDescription = strings.keyboardBackToVoiceDesc,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -131,13 +133,13 @@ fun UniversalKeyboardTopStrip(
             // Settings / Help / Logs — same place across every layout, no
             // separate top-controls row.
             if (onSettings != null) {
-                IconChip(onClick = onSettings, icon = Icons.Default.Settings, desc = "Settings")
+                IconChip(onClick = onSettings, icon = Icons.Default.Settings, desc = strings.settingsDesc)
             }
             if (onLogs != null) {
-                IconChip(onClick = onLogs, icon = Icons.Default.Assignment, desc = "Logs")
+                IconChip(onClick = onLogs, icon = Icons.Default.Assignment, desc = strings.keyboardLogsDesc)
             }
             if (onHelp != null) {
-                IconChip(onClick = onHelp, icon = Icons.Default.HelpOutline, desc = "Help")
+                IconChip(onClick = onHelp, icon = Icons.Default.HelpOutline, desc = strings.keyboardHelpDesc)
             }
 
             // Universal dev shortcuts.
@@ -151,7 +153,7 @@ fun UniversalKeyboardTopStrip(
             ) {
                 Icon(
                     imageVector = Icons.Default.Backspace,
-                    contentDescription = "Backspace",
+                    contentDescription = strings.keyboardBackspaceDesc,
                     modifier = Modifier.size(16.dp)
                 )
             }

@@ -110,6 +110,7 @@ internal fun UnifiedModeSwitcher(
     onLayoutSelectorClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -169,7 +170,7 @@ internal fun UnifiedModeSwitcher(
             ) {
                 Icon(
                     imageVector = Icons.Default.Mic,
-                    contentDescription = "Dictation",
+                    contentDescription = strings.keyboardDictationDesc,
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
@@ -1066,6 +1067,7 @@ private fun TextKeyboardSectionNew(
     onLockShift: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var shiftEnabled by remember { mutableStateOf(false) }
     var capsLockEnabled by remember { mutableStateOf(false) }
     var ctrlSticky by remember { mutableStateOf(false) }
@@ -1913,7 +1915,7 @@ private fun TextKeyboardSectionNew(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Stop,
-                                                contentDescription = "Stop Recording",
+                                                contentDescription = strings.stopRecording,
                                                 tint = Color.White,
                                                 modifier = Modifier.size(16.dp)
                                             )
@@ -1937,7 +1939,7 @@ private fun TextKeyboardSectionNew(
                                     else -> {
                                         Icon(
                                             imageVector = Icons.Default.Mic,
-                                            contentDescription = "Start Recording",
+                                            contentDescription = strings.startRecording,
                                             tint = Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -2458,6 +2460,7 @@ fun MicrophoneButton(
 
 @Composable
 fun IdleMicButton(onClick: () -> Unit) {
+    val strings = LocalStrings.current
     FloatingActionButton(
         onClick = onClick,
         modifier = Modifier.size(72.dp),
@@ -2466,7 +2469,7 @@ fun IdleMicButton(onClick: () -> Unit) {
     ) {
         Icon(
             imageVector = Icons.Default.Mic,
-            contentDescription = "Start Recording",
+            contentDescription = strings.startRecording,
             modifier = Modifier.size(36.dp)
         )
     }
@@ -2474,6 +2477,7 @@ fun IdleMicButton(onClick: () -> Unit) {
 
 @Composable
 fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
+    val strings = LocalStrings.current
     // Pulsing animation
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -2506,7 +2510,7 @@ fun RecordingMicButton(onClick: () -> Unit, recordingDuration: Long = 0L) {
         ) {
             Icon(
                 imageVector = Icons.Default.Stop,
-                contentDescription = "Stop Recording",
+                contentDescription = strings.stopRecording,
                 modifier = Modifier.size(28.dp)
             )
             Text(
@@ -2527,6 +2531,7 @@ fun ProcessingIndicator(
     audioDurationSeconds: Double = 0.0,
     onCancel: () -> Unit = {}
 ) {
+    val strings = LocalStrings.current
     // Format file size for display
     val fileSizeText = when {
         audioFileSize < 1024 -> "${audioFileSize}B"
@@ -2617,7 +2622,7 @@ fun ProcessingIndicator(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel",
+                    contentDescription = strings.cancel,
                     modifier = Modifier.size(16.dp)
                 )
             }

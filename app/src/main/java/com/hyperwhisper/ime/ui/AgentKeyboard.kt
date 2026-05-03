@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.AgentCommand
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
@@ -49,6 +50,7 @@ fun AgentKeyboard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = KeyboardSurfaceColor,
@@ -96,7 +98,7 @@ fun AgentKeyboard(
                 )
                 ActionIconKey(
                     icon = Icons.Default.KeyboardReturn,
-                    desc = "Enter",
+                    desc = strings.keyboardEnterDesc,
                     weight = 1f,
                     bg = KeyboardEnterColor,
                     fg = Color.White,
@@ -104,7 +106,7 @@ fun AgentKeyboard(
                 )
                 ActionIconKey(
                     icon = Icons.Default.Backspace,
-                    desc = "Backspace",
+                    desc = strings.keyboardBackspaceDesc,
                     weight = 1f,
                     bg = KeyboardBackspaceColor,
                     fg = Color.White,

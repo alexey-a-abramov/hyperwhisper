@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.SUPPORTED_LANGUAGES
+import com.hyperwhisper.localization.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +34,7 @@ fun LanguageSelector(
     supportingText: String,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     val selectedLang = SUPPORTED_LANGUAGES.find { it.code == selectedLanguage }
@@ -83,7 +85,7 @@ fun LanguageSelector(
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = selectedLang?.name ?: "Auto-detect",
+            value = selectedLang?.name ?: strings.autoDetect,
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -104,7 +106,7 @@ fun LanguageSelector(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search languages...") },
+                placeholder = { Text(strings.languageSelectorSearchPlaceholder) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -145,7 +147,7 @@ fun LanguageSelector(
 
             if (filteredLanguages.isEmpty()) {
                 Text(
-                    text = "No languages found",
+                    text = strings.noLanguagesFound,
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontSize = 14.sp

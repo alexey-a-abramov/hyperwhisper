@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.util.repeatOnHold
 
 @Composable
@@ -40,6 +41,7 @@ fun EmojiKeyboard(
     currentMode: com.hyperwhisper.data.KeyboardInputMode,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     var selectedCategory by remember { mutableStateOf(EmojiData.EmojiCategory.SMILEYS) }
 
     Column(
@@ -87,7 +89,7 @@ fun EmojiKeyboard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No emojis found",
+                        text = strings.emojiNoEmojisFound,
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 14.sp
                     )
@@ -104,7 +106,7 @@ fun EmojiKeyboard(
                             span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }
                         ) {
                             Text(
-                                text = "Recently Used",
+                                text = strings.emojiRecentlyUsed,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.7f),
@@ -172,7 +174,7 @@ fun EmojiKeyboard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Backspace,
-                        contentDescription = "Backspace",
+                        contentDescription = strings.keyboardBackspaceDesc,
                         tint = Color.White
                     )
                 }
@@ -191,7 +193,7 @@ fun EmojiKeyboard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.KeyboardReturn,
-                        contentDescription = "Enter",
+                        contentDescription = strings.keyboardEnterDesc,
                         tint = Color.White
                     )
                 }
@@ -207,6 +209,7 @@ private fun SearchBar(
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
     Surface(
         modifier = modifier.height(40.dp),
         shape = RoundedCornerShape(8.dp),
@@ -221,7 +224,7 @@ private fun SearchBar(
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Search",
+                contentDescription = strings.keyboardSearchDesc,
                 tint = Color.White.copy(alpha = 0.6f),
                 modifier = Modifier.size(20.dp)
             )
@@ -238,7 +241,7 @@ private fun SearchBar(
                 decorationBox = { innerTextField ->
                     if (query.isEmpty()) {
                         Text(
-                            text = "Search emoji...",
+                            text = strings.emojiSearchPlaceholder,
                             color = Color.White.copy(alpha = 0.4f),
                             fontSize = 14.sp
                         )
@@ -254,7 +257,7 @@ private fun SearchBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Clear",
+                        contentDescription = strings.clear,
                         tint = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.size(16.dp)
                     )
@@ -327,13 +330,14 @@ private fun EmojiGrid(
     onEmojiClick: (String) -> Unit,
     emojisPerRow: Int
 ) {
+    val strings = LocalStrings.current
     if (emojis.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "No emojis found",
+                text = strings.emojiNoEmojisFound,
                 color = Color.White.copy(alpha = 0.5f),
                 fontSize = 14.sp
             )
