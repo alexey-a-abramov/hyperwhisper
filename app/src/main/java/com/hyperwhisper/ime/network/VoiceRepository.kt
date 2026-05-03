@@ -4,79 +4,22 @@ import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
 import com.hyperwhisper.utils.TraceLogger
-import kotlinx.coroutines.flow.first
-import okhttp3.OkHttpClient
-import okhttp3.Interceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import com.google.gson.Gson
 import java.io.File
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
 class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
-    private val chatCompletionStrategy: ChatCompletionStrategy,
-    private val localProcessingStrategy: LocalProcessingStrategy,
     private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
     private val settingsRepository: SettingsRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
-    private val gson: Gson
+    private val llmServiceFactory: LlmServiceFactory,
+    private val processingRouter: ProcessingRouter,
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
-    }
-
-    /**
-     * Create a dynamic LLM API client based on LLM configuration
-     */
-    private fun createLlmApiService(llmConfig: LlmConfig): ChatCompletionApiService {
-        // Create auth interceptor for LLM
-        val authInterceptor = Interceptor { chain ->
-            val requestBuilder = chain.request().newBuilder()
-
-            // Add authorization header if required
-            if (llmConfig.requiresAuth && llmConfig.apiKey.isNotEmpty()) {
-                when (llmConfig.provider) {
-                    com.hyperwhisper.data.LlmProvider.ANTHROPIC -> {
-                        // Anthropic uses x-api-key header
-                        requestBuilder.addHeader("x-api-key", llmConfig.apiKey)
-                        requestBuilder.addHeader("anthropic-version", "2023-06-01")
-                    }
-                    else -> {
-                        // OpenAI-compatible providers use Bearer token
-                        requestBuilder.addHeader("Authorization", "Bearer ${llmConfig.apiKey}")
-                    }
-                }
-            }
-
-            requestBuilder.addHeader("Content-Type", "application/json")
-            val request = requestBuilder.build()
-            chain.proceed(request)
-        }
-
-        // Create OkHttp client for LLM
-        val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(180, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .callTimeout(300, TimeUnit.SECONDS)
-            .build()
-
-        // Create Retrofit instance
-        val baseUrl = llmConfig.getBaseUrl()
-        val retrofit = Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .build()
-
-        return retrofit.create(ChatCompletionApiService::class.java)
     }
 
     /**
@@ -135,7 +78,7 @@ class VoiceRepository @Inject constructor(
             val audioBase64 = base64Result.getOrNull() ?: ""
 
             // Check if we need two-step processing (transcription + post-processing)
-            val needsTwoStepProcessing = needsTwoStepProcessing(voiceMode, apiSettings)
+            val needsTwoStepProcessing = processingRouter.needsTwoStepProcessing(voiceMode, apiSettings)
 
             if (needsTwoStepProcessing) {
                 // Step 1: Transcribe audio
@@ -176,7 +119,7 @@ class VoiceRepository @Inject constructor(
                 }
             } else {
                 // Single-step processing (direct strategy)
-                val strategy = selectStrategy(voiceMode, apiSettings.provider)
+                val strategy = processingRouter.selectStrategy(voiceMode, apiSettings.provider)
                 val strategyName = when (strategy) {
                     is TranscriptionStrategy -> "transcription"
                     is LocalProcessingStrategy -> "local"
@@ -205,7 +148,7 @@ class VoiceRepository @Inject constructor(
                             transcriptionModel = apiSettings.modelId,
                             postProcessingModel = null,
                             translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
-                            translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                            translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) LanguageNames.displayNameFor(apiSettings.outputLanguage) else null,
                             originalTranscription = null,
                             voiceModeName = voiceMode.name,
                             systemPrompt = systemPrompt,
@@ -291,7 +234,7 @@ class VoiceRepository @Inject constructor(
                 )
             )
 
-            ApiResult.Error(friendlyErrorMessage(e), e)
+            ApiResult.Error(ErrorMessageFormatter.friendlyMessage(e), e)
         } catch (t: Throwable) {
             // Catches OOM/UnsatisfiedLinkError etc. from local model inference paths.
             // We log and convert to a graceful error rather than letting it crash the IME.
@@ -337,67 +280,12 @@ class VoiceRepository @Inject constructor(
         )
     }
 
-    private fun friendlyErrorMessage(e: Throwable): String {
-        val msg = e.message ?: ""
-        return when {
-            "Unable to resolve host" in msg -> "Cannot reach server — check internet connection."
-            "timeout" in msg -> "Request timed out — server not responding."
-            "SSL" in msg || "certificate" in msg -> "SSL/Certificate error — check HTTPS configuration."
-            else -> "Processing failed: ${e.javaClass.simpleName}: ${msg.ifBlank { "unknown error" }}"
-        }
-    }
-
-    /**
-     * Determine if two-step processing is needed
-     * (transcription-only models with transformation modes or translation)
-     */
-    private fun needsTwoStepProcessing(
-        voiceMode: VoiceMode,
-        apiSettings: ApiSettings
-    ): Boolean {
-        // If LLM is disabled (NONE), no post-processing
-        if (apiSettings.llmConfig.provider == com.hyperwhisper.data.LlmProvider.NONE) {
-            return false
-        }
-
-        // Translation is only needed if output language is set AND different from input
-        // If both are the same (e.g., both "en"), no translation is needed
-        val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
-            apiSettings.outputLanguage != apiSettings.inputLanguage
-
-        // OpenRouter supports audio in chat completions AND translation in one step
-        if (apiSettings.provider == ApiProvider.OPENROUTER) return false
-
-        // Gemini supports audio in chat completions AND translation in one step
-        if (apiSettings.provider == ApiProvider.GEMINI) return false
-
-        // Antigravity provider is OpenAI-compatible chat endpoint with audio support
-        if (apiSettings.provider == ApiProvider.ANTIGRAVITY) return false
-
-        // Hugging Face is text-only - requires two-step for all audio input
-        if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
-
-        // Verbatim mode only needs post-processing if translation is required
-        if (voiceMode.id == "verbatim") return needsTranslation
-
-        // All other providers with transformation modes need two-step
-        return true
-    }
-
-    /**
-     * Get language name from ISO code for translation instruction
-     */
-    private fun getLanguageName(languageCode: String): String {
-        val language = SUPPORTED_LANGUAGES.find { it.code == languageCode }
-        return language?.name ?: languageCode.uppercase()
-    }
-
     /**
      * Build system prompt with optional translation instruction
      */
     private fun buildSystemPrompt(basePrompt: String, outputLanguage: String): String {
         return if (outputLanguage.isNotEmpty()) {
-            val languageName = getLanguageName(outputLanguage)
+            val languageName = LanguageNames.displayNameFor(outputLanguage)
             "$basePrompt\n\nIMPORTANT: Translate the output to $languageName. Return ONLY the $languageName translation, do not include the original text."
         } else {
             basePrompt
@@ -437,7 +325,7 @@ class VoiceRepository @Inject constructor(
             Log.d(TAG, "Using LLM for post-processing: ${llmConfig.provider.displayName}, model: $postProcessModel")
             Log.d(TAG, "LLM endpoint: ${llmConfig.getBaseUrl()}")
             if (apiSettings.outputLanguage.isNotEmpty()) {
-                Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
+                Log.d(TAG, "Translation enabled: output language = ${LanguageNames.displayNameFor(apiSettings.outputLanguage)}")
             }
 
             // LOCAL_GEMMA → in-process MediaPipe path. Bypass the HTTP client
@@ -483,7 +371,7 @@ class VoiceRepository @Inject constructor(
                     transcriptionModel = transcriptionModel,
                     postProcessingModel = "LocalGemma:${java.io.File(localPath).name}",
                     translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
-                    translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                    translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) LanguageNames.displayNameFor(apiSettings.outputLanguage) else null,
                     originalTranscription = transcribedText,
                     voiceModeName = voiceMode.name,
                     systemPrompt = systemPrompt,
@@ -520,7 +408,7 @@ class VoiceRepository @Inject constructor(
 
             // Create dynamic LLM API client and make API call
             val postProcessStartTime = System.currentTimeMillis()
-            val llmApiService = createLlmApiService(llmConfig)
+            val llmApiService = llmServiceFactory.create(llmConfig)
             val response = llmApiService.chatCompletion(request)
             val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
 
@@ -553,7 +441,7 @@ class VoiceRepository @Inject constructor(
                         transcriptionModel = transcriptionModel,
                         postProcessingModel = "${llmConfig.provider.displayName}:$postProcessModel",
                         translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
-                        translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
+                        translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) LanguageNames.displayNameFor(apiSettings.outputLanguage) else null,
                         originalTranscription = transcribedText,
                         voiceModeName = voiceMode.name,
                         systemPrompt = systemPrompt,
@@ -619,68 +507,6 @@ class VoiceRepository @Inject constructor(
             Log.e(TAG, "Error in post-processing, returning original text", e)
             // On exception, return original transcription
             ApiResult.Success(transcribedText)
-        }
-    }
-
-    /**
-     * Select appropriate strategy based on voice mode and API provider
-     *
-     * Logic:
-     * - For "Verbatim" mode with OpenAI/Groq: Use Transcription Strategy
-     * - For transformation modes (Polite, Casual, etc.): Use Chat Completion Strategy
-     * - For OpenRouter: Always use Chat Completion Strategy
-     * - For Gemini: Always use Chat Completion Strategy (supports audio natively)
-     * - For Hugging Face: Always use Chat Completion Strategy (text-only models)
-     */
-    private suspend fun selectStrategy(
-        voiceMode: VoiceMode,
-        provider: ApiProvider
-    ): AudioProcessingStrategy {
-        // On-device Whisper takes priority — if the user marked it active,
-        // route there regardless of which cloud provider is configured.
-        val useLocal = settingsRepository.apiSettings.first().localModelSettings.useLocalWhisper
-        if (useLocal) {
-            Log.d(TAG, "Selected LocalProcessingStrategy (on-device Whisper active)")
-            return localProcessingStrategy
-        }
-        return selectStrategyForCloud(voiceMode, provider)
-    }
-
-    private fun selectStrategyForCloud(
-        voiceMode: VoiceMode,
-        provider: ApiProvider
-    ): AudioProcessingStrategy {
-        return when {
-            // OpenRouter always uses chat completion
-            provider == ApiProvider.OPENROUTER -> {
-                Log.d(TAG, "Selected ChatCompletionStrategy (OpenRouter)")
-                chatCompletionStrategy
-            }
-            // Gemini always uses chat completion (supports audio natively)
-            provider == ApiProvider.GEMINI -> {
-                Log.d(TAG, "Selected ChatCompletionStrategy (Gemini)")
-                chatCompletionStrategy
-            }
-            // Antigravity uses OpenAI-compatible chat completion with OAuth-backed quota
-            provider == ApiProvider.ANTIGRAVITY -> {
-                Log.d(TAG, "Selected ChatCompletionStrategy (Antigravity)")
-                chatCompletionStrategy
-            }
-            // Hugging Face always uses chat completion (text-only LLMs)
-            provider == ApiProvider.HUGGINGFACE -> {
-                Log.d(TAG, "Selected ChatCompletionStrategy (HuggingFace - text-only)")
-                chatCompletionStrategy
-            }
-            // Verbatim mode with transcription-style providers uses transcription
-            voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ || provider == ApiProvider.SELFHOSTED_WHISPER) -> {
-                Log.d(TAG, "Selected TranscriptionStrategy (Verbatim)")
-                transcriptionStrategy
-            }
-            // All transformations use chat completion
-            else -> {
-                Log.d(TAG, "Selected ChatCompletionStrategy (Transformation)")
-                chatCompletionStrategy
-            }
         }
     }
 
