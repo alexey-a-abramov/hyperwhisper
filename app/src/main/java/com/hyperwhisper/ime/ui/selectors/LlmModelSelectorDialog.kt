@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,54 +31,48 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hyperwhisper.data.ApiProvider
-import com.hyperwhisper.data.ProviderModelSelection
+import com.hyperwhisper.data.LlmProvider
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
- * Transcription provider + model picker for the IME.
+ * Full-screen LLM provider + model picker for the IME context.
  *
- * Two-step flow: tap a provider → if it has only one default model, commit
- * immediately; if it has multiple, the row expands to a model list and a
- * second tap commits. This replaces the old dual SELECT / PICK MODEL buttons
- * with a single tap target per row.
+ * IMEs can't host real Compose Dialogs (BadTokenException — the IME service
+ * doesn't have an Activity window token), so we render as a Surface overlay
+ * that fills the IME's compose tree. Same approach as
+ * [ProviderModelSelectorDialog] for transcription.
  *
- * Ordering: current selection first, then recently-used pairs, then the
- * remaining configured providers. Unconfigured providers don't appear here —
- * that filtering happens in the caller via `configuredProviders`.
+ * Two-pane behaviour: tap a provider to expand its model list inline, tap a
+ * model to commit. Switching provider here changes only `provider` and
+ * `modelId` in `LlmConfig` — API keys and custom base URLs still need to be
+ * configured in Settings, since the data model holds a single LLM key, not a
+ * per-provider map.
  */
 @Composable
-fun ProviderModelSelectorDialog(
-    currentProvider: ApiProvider,
+fun LlmModelSelectorDialog(
+    currentProvider: LlmProvider,
     currentModelId: String,
-    configuredProviders: List<ApiProvider>,
-    recentSelections: List<ProviderModelSelection>,
-    onProviderModelSelected: (ApiProvider, String) -> Unit,
+    onProviderModelSelected: (LlmProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = LocalStrings.current
-    var expandedProvider by remember { mutableStateOf<ApiProvider?>(null) }
-
-    val availableProviders = remember(configuredProviders, currentProvider) {
-        configuredProviders.distinct().ifEmpty { listOf(currentProvider) }
+    var expandedProvider by remember { mutableStateOf<LlmProvider?>(currentProvider) }
+    // "Configured" today means: providers that don't need a key (locals,
+    // OpenAI-compatible) plus the currently-selected provider (we know it
+    // has a key because it's the active one). Once per-provider LLM keys
+    // exist this filter expands to anything with a stored key.
+    val providers = remember(currentProvider) {
+        LlmProvider.entries.filter {
+            it != LlmProvider.NONE && (it == currentProvider || !it.requiresAuth)
+        }
     }
 
-    // Recency-aware ordering: current → recently-used → others. The first
-    // recently-used entry becomes the "default model" we suggest for each
-    // provider in the row; falls back to the provider's first defaultModel.
-    val orderedProviders = remember(currentProvider, recentSelections, availableProviders) {
-        val recentProviders = recentSelections.map { it.provider }.distinct()
-        val ordered = mutableListOf<ApiProvider>()
-        if (currentProvider in availableProviders) ordered.add(currentProvider)
-        ordered.addAll(recentProviders.filter { it in availableProviders && it !in ordered })
-        ordered.addAll(availableProviders.filter { it !in ordered })
-        ordered
-    }
-
+    // No BackHandler — IMEs don't provide an OnBackPressedDispatcherOwner,
+    // and calling BackHandler crashes with IllegalStateException. User
+    // dismisses via the × close button.
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surface
@@ -97,16 +90,11 @@ fun ProviderModelSelectorDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Transcription provider",
+                    text = "Post-processing LLM",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "${availableProviders.size}/${ApiProvider.entries.size} configured",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(
@@ -118,33 +106,24 @@ fun ProviderModelSelectorDialog(
                 }
             }
 
+            Text(
+                text = "Switching provider keeps the existing API key — set " +
+                    "the new provider's key in Settings if needed.",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                modifier = Modifier.padding(horizontal = 6.dp)
+            )
+
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(orderedProviders) { provider ->
+                items(providers) { provider ->
                     val isCurrent = provider == currentProvider
                     val isExpanded = provider == expandedProvider
-                    // Pick the model to surface in the collapsed row: the
-                    // current setting if this is the active provider, else
-                    // the most-recently used pair for this provider, else
-                    // its first default.
-                    val suggestedModel = if (isCurrent) {
-                        currentModelId
-                    } else {
-                        recentSelections.firstOrNull { it.provider == provider }?.modelId
-                            ?: provider.defaultModels.firstOrNull().orEmpty()
-                    }
-                    val hasMultiple = provider.defaultModels.size > 1
                     Surface(
                         onClick = {
-                            if (hasMultiple) {
-                                expandedProvider = if (isExpanded) null else provider
-                            } else {
-                                // Single-model providers commit on tap — no
-                                // point making the user open a list of one.
-                                onProviderModelSelected(provider, suggestedModel)
-                            }
+                            expandedProvider = if (isExpanded) null else provider
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
@@ -161,50 +140,29 @@ fun ProviderModelSelectorDialog(
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = provider.localizedDisplayName(),
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isCurrent)
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isCurrent) {
                                     Text(
-                                        text = provider.localizedDisplayName(),
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (isCurrent)
-                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = suggestedModel.ifBlank { "—" },
+                                        text = currentModelId,
                                         fontSize = 11.sp,
                                         fontFamily = FontFamily.Monospace,
-                                        color = if (isCurrent)
-                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                if (hasMultiple) {
-                                    Icon(
-                                        imageVector = Icons.Default.ChevronRight,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                } else if (isCurrent) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(18.dp)
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                                     )
                                 }
                             }
 
-                            // Inline model list — appears below the provider
-                            // row when the user expands it. Tap a model to
-                            // commit and dismiss.
+                            // Inline model list — only for the expanded
+                            // provider, so the screen doesn't drown in 60+
+                            // model entries at once.
                             if (isExpanded) {
                                 Column(
                                     modifier = Modifier
@@ -217,6 +175,7 @@ fun ProviderModelSelectorDialog(
                                         Surface(
                                             onClick = {
                                                 onProviderModelSelected(provider, model)
+                                                onDismiss()
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(6.dp),
@@ -247,9 +206,7 @@ fun ProviderModelSelectorDialog(
                                                     color = if (isCurrentModel)
                                                         MaterialTheme.colorScheme.onPrimary
                                                     else
-                                                        MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                        MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
                                         }
