@@ -88,6 +88,10 @@ enum class KeyboardInputMode(val displayName: String) {
     AGENT_OPENCODE("OpenCode"),
     AGENT_GEMINI("Gemini CLI"),
     AGENT_CODEX("Codex CLI"),
+    // Cross-agent macro palette — hardcoded prompt phrases the user reuses
+    // regardless of which CLI is on the other end. Trial; may consolidate or
+    // promote to a category-within-agent if it proves too much of a switch tax.
+    AGENT_MACROS("Macros"),
 
     // --- Legacy values, transparently rerouted. Kept so old DataStore values
     // still parse. ---
@@ -100,7 +104,7 @@ enum class KeyboardInputMode(val displayName: String) {
 
     companion object {
         val agentModes: Set<KeyboardInputMode> = setOf(
-            AGENT_CLAUDE_CODE, AGENT_OPENCODE, AGENT_GEMINI, AGENT_CODEX
+            AGENT_CLAUDE_CODE, AGENT_OPENCODE, AGENT_GEMINI, AGENT_CODEX, AGENT_MACROS
         )
     }
 
@@ -152,6 +156,12 @@ data class AppearanceSettings(
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
     val unlimitedHistory: Boolean = false, // If true, maxHistoryItems is ignored
     val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION, // Remember last keyboard mode
+    /**
+     * Preset bound to the third (configurable) slot in the top-strip mode bar.
+     * Tap on that slot switches to this mode; long-press lets the user rebind
+     * it. Defaults to CODE — a common third-mode pick after Voice and QWERTY.
+     */
+    val presetKeyboardMode: KeyboardInputMode = KeyboardInputMode.CODE,
     val currentKeyboardLayout: KeyboardLayout = KeyboardLayout.ENGLISH, // Current active layout
     val enabledKeyboardLayouts: Set<KeyboardLayout> = setOf(KeyboardLayout.ENGLISH), // Enabled layouts (EN enabled by default)
     val recentEmojis: List<String> = emptyList(), // Last 10 recently used emojis

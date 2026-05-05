@@ -603,6 +603,7 @@ object RussianStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
+    override val keyboardModeAgentMacros = "Макросы"
     override val keyboardModeSpecialChars = "Символы"
     override val keyboardModeSystemKeys = "Системные клавиши"
     override val keyboardModeVibeCoding = "Vibe Coding"

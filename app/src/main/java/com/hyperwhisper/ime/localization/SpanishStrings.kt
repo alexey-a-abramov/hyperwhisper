@@ -603,6 +603,7 @@ object SpanishStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
+    override val keyboardModeAgentMacros = "Macros"
     override val keyboardModeSpecialChars = "Símbolos"
     override val keyboardModeSystemKeys = "Teclas del sistema"
     override val keyboardModeVibeCoding = "Vibe Coding"

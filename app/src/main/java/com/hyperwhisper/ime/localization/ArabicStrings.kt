@@ -603,6 +603,7 @@ object ArabicStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
+    override val keyboardModeAgentMacros = "وحدات ماكرو"
     override val keyboardModeSpecialChars = "رموز"
     override val keyboardModeSystemKeys = "مفاتيح النظام"
     override val keyboardModeVibeCoding = "Vibe Coding"

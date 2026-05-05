@@ -613,6 +613,7 @@ interface Strings {
     val keyboardModeAgentOpencode: String
     val keyboardModeAgentGemini: String
     val keyboardModeAgentCodex: String
+    val keyboardModeAgentMacros: String
     val keyboardModeSpecialChars: String
     val keyboardModeSystemKeys: String
     val keyboardModeVibeCoding: String

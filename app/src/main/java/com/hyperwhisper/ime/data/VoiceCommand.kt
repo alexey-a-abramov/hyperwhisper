@@ -135,6 +135,7 @@ data class VoiceCommand(
             "opencode" -> KeyboardInputMode.AGENT_OPENCODE
             "gemini", "geminicli" -> KeyboardInputMode.AGENT_GEMINI
             "codex", "codexcli" -> KeyboardInputMode.AGENT_CODEX
+            "macros", "macro", "phrases", "snippets" -> KeyboardInputMode.AGENT_MACROS
             else -> null
         }
     }

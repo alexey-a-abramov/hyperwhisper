@@ -168,6 +168,7 @@ fun KeyboardInputMode.localizedDisplayName(): String {
         KeyboardInputMode.AGENT_OPENCODE -> s.keyboardModeAgentOpencode
         KeyboardInputMode.AGENT_GEMINI -> s.keyboardModeAgentGemini
         KeyboardInputMode.AGENT_CODEX -> s.keyboardModeAgentCodex
+        KeyboardInputMode.AGENT_MACROS -> s.keyboardModeAgentMacros
         KeyboardInputMode.SPECIAL_CHARS -> s.keyboardModeSpecialChars
         KeyboardInputMode.SYSTEM_KEYS -> s.keyboardModeSystemKeys
         KeyboardInputMode.VIBE_CODING -> s.keyboardModeVibeCoding
