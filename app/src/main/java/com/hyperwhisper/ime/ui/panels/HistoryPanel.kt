@@ -20,12 +20,20 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +61,9 @@ fun TranscriptionHistoryPanel(
     onReprocessWithNewSettings: ((TranscriptionHistoryItem) -> Unit)? = null
 ) {
     val strings = LocalStrings.current
+    // Local confirmation state — IMEs can't host real Dialogs, so the
+    // confirmation is rendered as an inline overlay over the history list.
+    var showClearConfirmation by remember { mutableStateOf(false) }
 
     // Fullscreen overlay - no padding for maximum space
     Surface(
@@ -100,9 +111,11 @@ fun TranscriptionHistoryPanel(
                 // Compact action buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (history.isNotEmpty()) {
-                        // Clear all - small icon button
+                        // Clear all — confirmation gate so a stray tap can't
+                        // wipe the entire history. Tap once to arm the
+                        // confirmation overlay below.
                         IconButton(
-                            onClick = onClearAll,
+                            onClick = { showClearConfirmation = true },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -217,48 +230,22 @@ fun TranscriptionHistoryPanel(
                                         }
                                     }
 
-                                    // Right: compact reprocess buttons (icons only)
-                                    if (hasAudio && (onPlayAudio != null || onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            if (onPlayAudio != null) {
-                                                IconButton(
-                                                    onClick = { onPlayAudio(item) },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.PlayArrow,
-                                                        contentDescription = "Play original audio",
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            }
-                                            if (onReprocessWithCurrentSettings != null) {
-                                                IconButton(
-                                                    onClick = { onReprocessWithCurrentSettings(item) },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Replay,
-                                                        contentDescription = "Reprocess with current settings",
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.secondary
-                                                    )
-                                                }
-                                            }
-                                            if (onReprocessWithNewSettings != null) {
-                                                IconButton(
-                                                    onClick = { onReprocessWithNewSettings(item) },
-                                                    modifier = Modifier.size(28.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Tune,
-                                                        contentDescription = "Reprocess with new settings",
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            }
+                                    // Right: just the play button in the
+                                    // header. The reprocess buttons are now
+                                    // a labeled row below the text — bigger
+                                    // hit targets and discoverable instead of
+                                    // hiding behind 16dp icons.
+                                    if (hasAudio && onPlayAudio != null) {
+                                        IconButton(
+                                            onClick = { onPlayAudio(item) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Play original audio",
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
                                         }
                                     }
                                 }
@@ -274,12 +261,140 @@ fun TranscriptionHistoryPanel(
                                     )
                                 } else if (isAudioOnly) {
                                     Text(
-                                        "Tap replay to transcribe this audio",
+                                        "Tap reprocess to transcribe this audio",
                                         fontSize = 11.sp,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
+
+                                // Reprocess actions — only meaningful when
+                                // we still have the source audio. Two paths:
+                                // current settings (one tap), or pick a
+                                // different model (opens picker).
+                                if (hasAudio && (onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (onReprocessWithCurrentSettings != null) {
+                                            FilledTonalButton(
+                                                onClick = { onReprocessWithCurrentSettings(item) },
+                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                colors = ButtonDefaults.filledTonalButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                                ),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Replay,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.size(4.dp))
+                                                Text(
+                                                    "Redo: current",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        if (onReprocessWithNewSettings != null) {
+                                            OutlinedButton(
+                                                onClick = { onReprocessWithNewSettings(item) },
+                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Tune,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.size(4.dp))
+                                                Text(
+                                                    "Redo: pick model",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Confirmation overlay — clearing history is destructive (deletes
+        // every transcription + audio file), so a stray tap on the trash
+        // icon shouldn't be enough. Inline Surface instead of a real Dialog
+        // because the IME can't host one.
+        if (showClearConfirmation) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                shadowElevation = 8.dp
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Text(
+                            text = "Clear all history?",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "This deletes ${history.size} transcription${if (history.size == 1) "" else "s"} and any saved audio. This can't be undone.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showClearConfirmation = false },
+                                modifier = Modifier.weight(1f).height(40.dp)
+                            ) {
+                                Text(strings.cancel, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            TextButton(
+                                onClick = {
+                                    onClearAll()
+                                    showClearConfirmation = false
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            ) {
+                                Text(
+                                    strings.clearAll,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
