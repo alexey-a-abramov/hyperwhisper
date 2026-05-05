@@ -1,11 +1,13 @@
 package com.hyperwhisper.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -31,43 +32,44 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.components.LongPressIndicator
 import com.hyperwhisper.ui.util.localizedDisplayName
 import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
- * Universal top strip rendered above every non-DICTATION keyboard layout.
+ * Universal top strip rendered above every keyboard layout.
  *
- * Provides three guarantees:
- *  - You can always see the current mode (no more "what layout am I in?").
- *  - You can always exit to Voice with one tap (no more swipe-trapped).
- *  - The three most common dev shortcuts (Esc / Tab / Backspace) are always
- *    one tap away, regardless of which layout is active.
+ * Provides:
+ *  - Three keyboard switches always visible — Voice (mic), QWERTY (A) and a
+ *    user-configurable preset slot. Tap on the preset switches to whatever
+ *    mode it's bound to; long-press opens a picker so the user can rebind it.
+ *  - Three universal dev shortcuts (Esc / Tab / Backspace) one tap away.
+ *  - Settings + Logs entry points.
  *
  * 36dp tall.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UniversalKeyboardTopStrip(
     currentMode: KeyboardInputMode,
-    cycleOrder: List<KeyboardInputMode>,
+    presetMode: KeyboardInputMode,
     onSelectMode: (KeyboardInputMode) -> Unit,
-    onReturnToVoice: () -> Unit,
+    onPresetLongPress: () -> Unit,
     onEsc: () -> Unit,
     onTab: () -> Unit,
     onBackspace: () -> Unit,
-    onModePillTap: () -> Unit = {
-        // Default: advance to next mode (legacy behavior). Caller wires this
-        // to a dropdown menu when they want it.
-        val idx = cycleOrder.indexOf(currentMode.normalize()).coerceAtLeast(0)
-        onSelectMode(cycleOrder[(idx + 1) % cycleOrder.size])
-    },
     onSettings: (() -> Unit)? = null,
-    onHelp: (() -> Unit)? = null,
     onLogs: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
     val normalized = currentMode.normalize()
-    val inVoice = normalized == KeyboardInputMode.DICTATION
+    val normalizedPreset = presetMode.normalize().let {
+        // Voice and QWERTY have dedicated buttons — never bind them to the
+        // configurable slot or the user can't escape the third button.
+        if (it == KeyboardInputMode.DICTATION || it == KeyboardInputMode.QWERTY)
+            KeyboardInputMode.CODE else it
+    }
 
     Surface(
         modifier = modifier
@@ -83,64 +85,79 @@ fun UniversalKeyboardTopStrip(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Voice fast-return — only meaningful when NOT already in voice.
-            // In voice mode this chip is redundant noise.
-            if (!inVoice) {
-                ChipButton(
-                    onClick = onReturnToVoice,
-                    bg = MaterialTheme.colorScheme.primaryContainer,
-                    fg = MaterialTheme.colorScheme.onPrimaryContainer
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = strings.keyboardBackToVoiceDesc,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+            // Slot 1 — Voice (Dictation).
+            ModeSlot(
+                isSelected = normalized == KeyboardInputMode.DICTATION,
+                onClick = { onSelectMode(KeyboardInputMode.DICTATION) }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = strings.keyboardBackToVoiceDesc,
+                    modifier = Modifier.size(16.dp)
+                )
             }
 
-            // Mode pill — tap opens a dropdown menu (caller hosts the overlay
-            // since IMEs can't render Compose Popup/Dialog due to window
-            // token limitations).
-            Surface(
-                onClick = onModePillTap,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(6.dp),
+            // Slot 2 — QWERTY ("A" label, plain text per spec).
+            ModeSlot(
+                isSelected = normalized == KeyboardInputMode.QWERTY,
+                onClick = { onSelectMode(KeyboardInputMode.QWERTY) }
+            ) {
+                Text(
+                    "A",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            // Slot 3 — configurable preset. Fixed width so any label fits
+            // (longest is "Claude Code"). Tap = activate, long-press = rebind.
+            // When current mode IS the preset, render highlighted.
+            val presetIsCurrent = normalized == normalizedPreset
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(vertical = 2.dp)
+                    .width(108.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = if (presetIsCurrent)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (presetIsCurrent)
+                        MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .combinedClickable(
+                            onClick = { onSelectMode(normalizedPreset) },
+                            onLongClick = onPresetLongPress
+                        )
                 ) {
-                    Text(
-                        normalized.localizedDisplayName(),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "▾",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = normalizedPreset.localizedDisplayName(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
                 }
+                LongPressIndicator(padding = 3.dp)
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Settings / Help / Logs — same place across every layout, no
-            // separate top-controls row.
+            // Settings / Logs — Help is intentionally absent; reachable from
+            // Settings if needed.
             if (onSettings != null) {
                 IconChip(onClick = onSettings, icon = Icons.Default.Settings, desc = strings.settingsDesc)
             }
             if (onLogs != null) {
                 IconChip(onClick = onLogs, icon = Icons.Default.Assignment, desc = strings.keyboardLogsDesc)
-            }
-            if (onHelp != null) {
-                IconChip(onClick = onHelp, icon = Icons.Default.HelpOutline, desc = strings.keyboardHelpDesc)
             }
 
             // Universal dev shortcuts.
@@ -158,6 +175,33 @@ fun UniversalKeyboardTopStrip(
                     modifier = Modifier.size(16.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ModeSlot(
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier
+            .fillMaxHeight()
+            .padding(vertical = 2.dp)
+            .width(40.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
         }
     }
 }

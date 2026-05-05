@@ -40,6 +40,7 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_MAX_HISTORY_ITEMS_KEY = stringPreferencesKey("appearance_max_history_items")
         private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
         private val APPEARANCE_LAST_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_last_keyboard_mode")
+        private val APPEARANCE_PRESET_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_preset_keyboard_mode")
         private val APPEARANCE_ENABLED_AGENTS_KEY = stringSetPreferencesKey("appearance_enabled_agents")
         private val APPEARANCE_PER_APP_LAYOUT_KEY = booleanPreferencesKey("appearance_per_app_layout_memory")
     }
@@ -94,6 +95,13 @@ class AppearanceRepository @Inject constructor(
                     KeyboardInputMode.DICTATION
                 }
             } ?: KeyboardInputMode.DICTATION,
+            presetKeyboardMode = preferences[APPEARANCE_PRESET_KEYBOARD_MODE_KEY]?.let {
+                try {
+                    KeyboardInputMode.valueOf(it)
+                } catch (e: Exception) {
+                    KeyboardInputMode.CODE
+                }
+            } ?: KeyboardInputMode.CODE,
             enabledAgentKeyboards = preferences[APPEARANCE_ENABLED_AGENTS_KEY] ?: emptySet(),
             perAppLayoutMemoryEnabled = preferences[APPEARANCE_PER_APP_LAYOUT_KEY] ?: true
         )
@@ -118,6 +126,7 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY] = settings.maxHistoryItems.toString()
             preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
             preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY] = settings.lastKeyboardInputMode.name
+            preferences[APPEARANCE_PRESET_KEYBOARD_MODE_KEY] = settings.presetKeyboardMode.name
             preferences[APPEARANCE_ENABLED_AGENTS_KEY] = settings.enabledAgentKeyboards
             preferences[APPEARANCE_PER_APP_LAYOUT_KEY] = settings.perAppLayoutMemoryEnabled
         }

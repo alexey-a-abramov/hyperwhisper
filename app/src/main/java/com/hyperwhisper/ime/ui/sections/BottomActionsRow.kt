@@ -3,10 +3,10 @@ package com.hyperwhisper.ui.sections
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,12 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.KeyboardReturn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,95 +31,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
-
-private val KeyboardModeSwitcherColor = Color(0xFF424242)
-
-@Composable
-private fun UnifiedModeSwitcherCompact(
-    currentMode: KeyboardInputMode,
-    onModeChange: (KeyboardInputMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // ABC button
-        Surface(
-            onClick = {
-                when (currentMode) {
-                    KeyboardInputMode.QWERTY -> onModeChange(KeyboardInputMode.SPECIAL_CHARS)
-                    KeyboardInputMode.SPECIAL_CHARS -> onModeChange(KeyboardInputMode.QWERTY)
-                    else -> onModeChange(KeyboardInputMode.QWERTY)
-                }
-            },
-            modifier = Modifier.weight(1f).height(56.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = if (currentMode == KeyboardInputMode.QWERTY || currentMode == KeyboardInputMode.SPECIAL_CHARS)
-                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "ABC",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-        }
-
-        // Dictation button (current mode - shown but not clickable since we're already in it)
-        Surface(
-            modifier = Modifier.weight(1f).height(56.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.primary // Always highlighted in dictation mode
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = "Dictation",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        // Vibe Coding button
-        Surface(
-            onClick = { onModeChange(KeyboardInputMode.VIBE_CODING) },
-            modifier = Modifier.weight(1f).height(56.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = if (currentMode == KeyboardInputMode.VIBE_CODING)
-                MaterialTheme.colorScheme.primary else KeyboardModeSwitcherColor
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "</>",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-        }
-    }
-}
+import com.hyperwhisper.ui.components.LongPressIndicator
 
 /**
- * Bottom actions row of the keyboard
- * Contains mode switcher, paste last transcription button (with long press for history) and space button
+ * Bottom actions row of the keyboard.
+ *
+ * Layout: [Paste-last (chip with paste icon + truncated preview, long-press
+ * for history)] [Space] [Enter]. Enter pinned at bottom-right matches every
+ * other layout's bottom row, so the same screen position works regardless of
+ * which keyboard mode the user is in.
  */
 @Composable
 fun BottomActionsRow(
@@ -131,96 +51,77 @@ fun BottomActionsRow(
     onPasteText: (String) -> Unit,
     onShowHistory: () -> Unit,
     onSpace: () -> Unit,
-    showKeyboardButton: Boolean = false,
-    onKeyboardButtonClick: () -> Unit = {},
-    currentKeyboardMode: KeyboardInputMode = KeyboardInputMode.DICTATION,
-    onModeChange: (KeyboardInputMode) -> Unit = {},
+    onEnter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
+    val rowHeight = 44.dp
 
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth().height(rowHeight),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Unified mode switcher (replaces single keyboard button)
-        if (showKeyboardButton) {
-            UnifiedModeSwitcherCompact(
-                currentMode = currentKeyboardMode,
-                onModeChange = onModeChange,
-                modifier = Modifier.width(180.dp)
-            )
-        }
+        val hasPasteContent = lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()
 
-        // Paste last transcribed text button with long press for history
-        // Show if there's last transcribed text OR if there's history available
-        if (lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()) {
-            // Use lastTranscribedText if available, otherwise use first history item
-            val textToShow = if (lastTranscribedText.isNotEmpty()) lastTranscribedText else transcriptionHistory.first().text
-
-            Surface(
+        if (hasPasteContent) {
+            val textToShow = if (lastTranscribedText.isNotEmpty()) lastTranscribedText
+                else transcriptionHistory.first().text
+            // Compact paste-last pill: paste icon + preview text only. The
+            // orange dot in the corner advertises the long-press history
+            // affordance — the verbose "(HOLD: HISTORY)" caption is gone.
+            Box(
                 modifier = Modifier
-                    .weight(1.3f)
-                    .height(56.dp)
-                    .pointerInput(enableHistoryPanel) {
-                        detectTapGestures(
-                            onTap = { onPasteText(textToShow) },
-                            onLongPress = {
-                                if (enableHistoryPanel) {
-                                    onShowHistory()
-                                }
-                            }
-                        )
-                    },
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(8.dp)
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(enableHistoryPanel) {
+                            detectTapGestures(
+                                onTap = { onPasteText(textToShow) },
+                                onLongPress = {
+                                    if (enableHistoryPanel) onShowHistory()
+                                }
+                            )
+                        }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentPaste,
-                        contentDescription = strings.pasteLastTranscription,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Column(
-                        horizontalAlignment = Alignment.Start,
-                        modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            strings.pasteLastHold.uppercase(),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = strings.pasteLastTranscription,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(16.dp)
                         )
+                        Spacer(Modifier.width(8.dp))
                         Text(
-                            if (textToShow.length > 40) {
-                                textToShow.take(40) + "..."
-                            } else {
-                                textToShow
-                            },
-                            fontSize = 8.sp,
+                            text = if (textToShow.length > 24) textToShow.take(24) + "…" else textToShow,
+                            fontSize = 11.sp,
                             maxLines = 1,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
                         )
                     }
                 }
+                if (enableHistoryPanel) LongPressIndicator(padding = 4.dp)
             }
         }
 
         // Space — same canonical yellow as every other layout's spacebar.
+        // When the paste pill is hidden it expands to take the full free
+        // width so the space target stays large.
         Button(
             onClick = onSpace,
             modifier = Modifier
-                .weight(
-                    if (lastTranscribedText.isEmpty() && transcriptionHistory.isEmpty()) 1f
-                    else 0.6f
-                )
-                .height(56.dp),
+                .weight(if (hasPasteContent) 1.4f else 1f)
+                .fillMaxHeight(),
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = com.hyperwhisper.ui.KeyboardSpaceColor,
@@ -237,6 +138,29 @@ fun BottomActionsRow(
                     fontFeatureSettings = "smcp" // Small caps
                 )
             )
+        }
+
+        // Enter — pinned bottom-right, fixed width. Same screen position as
+        // every other layout's enter, so muscle memory transfers.
+        Surface(
+            onClick = onEnter,
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .width(60.dp)
+                .fillMaxHeight()
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardReturn,
+                    contentDescription = strings.enterDesc,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

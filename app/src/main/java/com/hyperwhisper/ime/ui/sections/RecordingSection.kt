@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.KeyboardReturn
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,10 +40,13 @@ import com.hyperwhisper.ui.components.InputFieldInfo
 import com.hyperwhisper.ui.indicators.RecordingTimer
 
 /**
- * Recording section - the main interactive area
- * Left: Cancel button (during recording) or InputFieldInfo (techie mode)
- * Center: Microphone button + Timer
- * Right: Enter button
+ * Recording section - the main interactive area.
+ * Left: Cancel button (during recording) or empty when idle.
+ * Center: Microphone button + Timer.
+ * Right: Backspace — sits between the Output language chip above and the
+ * Enter button below, so the right column reads Out → Backspace → Enter
+ * top to bottom. Backspace is repeat-on-hold for the same long-press =
+ * delete-fast behaviour as every other layout.
  */
 @Composable
 fun RecordingSection(
@@ -69,7 +71,8 @@ fun RecordingSection(
     onPressReleaseRecording: () -> Unit = {},
     onConfirmRecording: () -> Unit = {},
     onToggleTimer: () -> Unit,
-    onEnter: () -> Unit,
+    onDelete: () -> Unit = {},
+    onDeleteAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -151,30 +154,18 @@ fun RecordingSection(
             }
         }
 
-        // Right side: Enter button (same size as REC button)
+        // Right side: backspace lives here so the right column reads
+        // Out → Backspace → Enter top-to-bottom. Repeat-on-hold matches the
+        // backspace behaviour in the universal top strip.
         Box(
-            modifier = Modifier.width(70.dp).fillMaxHeight(),
+            modifier = Modifier.width(60.dp).fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
-            Surface(
-                onClick = onEnter,
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                tonalElevation = 2.dp
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardReturn,
-                        contentDescription = strings.enterDesc,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
+            RepeatableDeleteButton(
+                onDelete = onDelete,
+                onDeleteAll = onDeleteAll,
+                modifier = Modifier.size(56.dp)
+            )
         }
     }
 }
