@@ -42,10 +42,12 @@ import com.hyperwhisper.ui.sections.RecordingSection
 import com.hyperwhisper.ui.dialogs.ModeSelectionDialog
 import com.hyperwhisper.ui.dialogs.CancelRecordingConfirmationDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
+import com.hyperwhisper.ui.selectors.LlmModelSelectorDialog
 import com.hyperwhisper.ui.selectors.ProviderModelSelectorDialog
 import com.hyperwhisper.ui.dialogs.EnterActionSelectorDialog
 import com.hyperwhisper.ui.dialogs.EnterAction
 import com.hyperwhisper.ui.dialogs.LayoutSelectorDialog
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 internal val KeyboardSurfaceColor = Color(0xFF000000)
 internal val KeyboardKeyColor = Color(0xFFFFFFFF)
@@ -115,10 +117,24 @@ fun KeyboardScreen(
     var showModeDialog by remember { mutableStateOf(false) }
     var showProviderModelDialog by remember { mutableStateOf(false) }
     var keyboardInputMode by remember { mutableStateOf(appearanceSettings.lastKeyboardInputMode) }
+    // Snapshot of the most recent non-agent mode, so picking a command from
+    // an agent palette can drop the user back into the typing layout they
+    // came from instead of stranding them on the chips grid.
+    var lastNonAgentMode by remember {
+        mutableStateOf(
+            if (appearanceSettings.lastKeyboardInputMode.isAgent) KeyboardInputMode.QWERTY
+            else appearanceSettings.lastKeyboardInputMode
+        )
+    }
     var currentKeyboardLayout by remember { mutableStateOf(appearanceSettings.currentKeyboardLayout) }
     var emojiSearchQuery by remember { mutableStateOf("") }
     var showLayoutSelector by remember { mutableStateOf(false) }
     var showEnterActionSelector by remember { mutableStateOf(false) }
+    // Picker for the third "configurable preset" slot in the top strip.
+    var showPresetPicker by remember { mutableStateOf(false) }
+    // Inline LLM provider+model picker (only meaningful when the active
+    // voice mode runs a post-processing step).
+    var showLlmModelDialog by remember { mutableStateOf(false) }
     var lastSpacePressTime by remember { mutableStateOf(0L) }
     var spacePressDuration by remember { mutableStateOf(0L) }
     val coroutineScope = rememberCoroutineScope()
@@ -148,6 +164,9 @@ fun KeyboardScreen(
             viewModel.saveKeyboardInputMode(updatedSettings)
         }
         viewModel.recordLayoutForCurrentApp(keyboardInputMode)
+        if (!keyboardInputMode.isAgent) {
+            lastNonAgentMode = keyboardInputMode
+        }
     }
 
     // Apply layout-switch requests from outside the Compose tree (the IME
@@ -262,7 +281,6 @@ fun KeyboardScreen(
             .filter { it.name in appearanceSettings.enabledAgentKeyboards }
         base + agents
     }
-    var modeMenuExpanded by remember { mutableStateOf(false) }
     var modeChangeToast by remember { mutableStateOf<com.hyperwhisper.data.KeyboardInputMode?>(null) }
     LaunchedEffect(modeChangeToast) {
         if (modeChangeToast != null) {
@@ -278,6 +296,35 @@ fun KeyboardScreen(
     }
     val swipeAccum = remember { kotlin.collections.mutableListOf(0f) }
     val swipeDensity = androidx.compose.ui.platform.LocalDensity.current
+
+    // Single composable factory shared by every layout branch — every layout
+    // gets the same top strip with the same wiring, so we don't repeat the
+    // 25-line call-site five times.
+    val topStrip: @Composable () -> Unit = {
+        UniversalKeyboardTopStrip(
+            currentMode = keyboardInputMode,
+            presetMode = appearanceSettings.presetKeyboardMode,
+            onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+            onPresetLongPress = { showPresetPicker = true },
+            onEsc = onEscape,
+            onTab = onTab,
+            onBackspace = onDelete,
+            onSettings = {
+                val intent = android.content.Intent(
+                    context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                context.startActivity(intent)
+            },
+            onLogs = if (appearanceSettings.techieModeEnabled) {
+                {
+                    val intent = android.content.Intent(
+                        context, com.hyperwhisper.ui.logs.LogsActivity::class.java
+                    ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                    context.startActivity(intent)
+                }
+            } else null
+        )
+    }
 
     Box(modifier = modifier.fillMaxWidth().height(320.dp)) {
         Surface(
@@ -315,38 +362,7 @@ fun KeyboardScreen(
                 verticalArrangement = Arrangement.Top
             ) {
             if (keyboardInputMode == KeyboardInputMode.DICTATION) {
-                // Single universal navigation row — replaces the old top-controls
-                // row entirely. Settings/help/logs live in the strip itself,
-                // so we don't waste a second row.
-                UniversalKeyboardTopStrip(
-                    currentMode = keyboardInputMode,
-                    cycleOrder = keyboardModeOrder,
-                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
-                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
-                    onEsc = onEscape,
-                    onTab = onTab,
-                    onBackspace = onDelete,
-                    onSettings = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    },
-                    onLogs = if (appearanceSettings.techieModeEnabled) {
-                        {
-                            val intent = android.content.Intent(
-                                context, com.hyperwhisper.ui.logs.LogsActivity::class.java
-                            ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                            context.startActivity(intent)
-                        }
-                    } else null,
-                    onHelp = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    }
-                )
+                topStrip()
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
@@ -363,6 +379,7 @@ fun KeyboardScreen(
                     onShowConfigInfo = { showConfigInfo = true },
                     onShowProviderModelDialog = { showProviderModelDialog = true },
                     onShowModeDialog = { showModeDialog = true },
+                    onShowLlmModelDialog = { showLlmModelDialog = true },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -393,7 +410,8 @@ fun KeyboardScreen(
                     onPressReleaseRecording = { viewModel.stopRecording() },
                     onConfirmRecording = { viewModel.confirmRecording() },
                     onToggleTimer = { showTimerText = !showTimerText },
-                    onEnter = onEnter,
+                    onDelete = onDelete,
+                    onDeleteAll = onDeleteAll,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -406,68 +424,29 @@ fun KeyboardScreen(
                     onPasteText = onTextCommit,
                     onShowHistory = { showHistoryPanel = true },
                     onSpace = handleSpacePress,
-                    // Mode switching now lives in the universal top strip,
-                    // so suppress the redundant in-row switcher.
-                    showKeyboardButton = false,
-                    onKeyboardButtonClick = { keyboardInputMode = KeyboardInputMode.QWERTY },
-                    currentKeyboardMode = keyboardInputMode,
-                    onModeChange = { keyboardInputMode = it }
+                    onEnter = onEnter
                 )
             } else if (keyboardInputMode.isAgent) {
-                UniversalKeyboardTopStrip(
-                    currentMode = keyboardInputMode,
-                    cycleOrder = keyboardModeOrder,
-                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
-                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
-                    onModePillTap = { modeMenuExpanded = true },
-                    onEsc = onEscape,
-                    onTab = onTab,
-                    onBackspace = onDelete,
-                    onSettings = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    },
-                    onHelp = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    }
-                )
+                topStrip()
                 AgentKeyboard(
                     title = keyboardInputMode.displayName,
                     commands = com.hyperwhisper.data.AgentCommands.byMode(keyboardInputMode),
-                    onInsert = onTextCommit,
+                    onInsert = { text ->
+                        onTextCommit(text)
+                        // Picking a command means the user is done with the
+                        // palette layer — drop them back into their typing
+                        // layout so they can fill in args / hit enter without
+                        // an extra mode-cycle tap.
+                        keyboardInputMode = lastNonAgentMode
+                    },
                     onSpace = handleSpacePress,
                     onEnter = onEnter,
                     onDelete = onDelete,
+                    lastSentText = lastTranscribedText,
                     modifier = Modifier.weight(1f)
                 )
             } else if (keyboardInputMode == KeyboardInputMode.EMOJI) {
-                UniversalKeyboardTopStrip(
-                    currentMode = keyboardInputMode,
-                    cycleOrder = keyboardModeOrder,
-                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
-                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
-                    onModePillTap = { modeMenuExpanded = true },
-                    onEsc = onEscape,
-                    onTab = onTab,
-                    onBackspace = onDelete,
-                    onSettings = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    },
-                    onHelp = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    }
-                )
+                topStrip()
                 EmojiKeyboard(
                     recentEmojis = appearanceSettings.recentEmojis,
                     searchQuery = emojiSearchQuery,
@@ -490,28 +469,7 @@ fun KeyboardScreen(
                     modifier = Modifier.weight(1f)
                 )
             } else {
-                UniversalKeyboardTopStrip(
-                    currentMode = keyboardInputMode,
-                    cycleOrder = keyboardModeOrder,
-                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
-                    onReturnToVoice = { keyboardInputMode = KeyboardInputMode.DICTATION },
-                    onModePillTap = { modeMenuExpanded = true },
-                    onEsc = onEscape,
-                    onTab = onTab,
-                    onBackspace = onDelete,
-                    onSettings = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    },
-                    onHelp = {
-                        val intent = android.content.Intent(
-                            context, com.hyperwhisper.ui.about.AboutActivity::class.java
-                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                        context.startActivity(intent)
-                    }
-                )
+                topStrip()
                 val codeModifierState by viewModel.modifierKeyState.state.collectAsState()
                 TextKeyboardSectionNew(
                     mode = keyboardInputMode,
@@ -683,6 +641,19 @@ fun KeyboardScreen(
             )
         }
 
+        // Show LLM provider+model picker (inline IME version).
+        if (showLlmModelDialog) {
+            LlmModelSelectorDialog(
+                currentProvider = apiSettings.llmConfig.provider,
+                currentModelId = apiSettings.llmConfig.modelId,
+                onProviderModelSelected = { provider, modelId ->
+                    viewModel.setLlmProviderAndModel(provider, modelId)
+                    showLlmModelDialog = false
+                },
+                onDismiss = { showLlmModelDialog = false }
+            )
+        }
+
         // Show Enter Action Selector Dialog
         if (showEnterActionSelector) {
             EnterActionSelectorDialog(
@@ -765,11 +736,17 @@ fun KeyboardScreen(
             }
         }
 
-        // Mode-picker dropdown overlay. Compose Popup/DropdownMenu can't be
-        // used in IMEs (BadTokenException — same root cause as Compose
-        // Dialog), so we render the menu inline as a Card positioned below
-        // the strip + a tap-to-dismiss scrim covering the rest of the surface.
-        if (modeMenuExpanded) {
+        // Long-press preset picker. Voice and QWERTY have dedicated slots in
+        // the strip; this picker covers everything else the user might want
+        // bound to the third slot. Same scrim+card pattern as before since
+        // IMEs can't host real Compose Popups.
+        if (showPresetPicker) {
+            val presetCandidates = remember(appearanceSettings.enabledAgentKeyboards) {
+                val base = listOf(KeyboardInputMode.CODE, KeyboardInputMode.EMOJI)
+                val agents = KeyboardInputMode.agentModes
+                    .filter { it.name in appearanceSettings.enabledAgentKeyboards }
+                base + agents
+            }
             val scrimSource = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
@@ -777,11 +754,11 @@ fun KeyboardScreen(
                     .clickable(
                         indication = null,
                         interactionSource = scrimSource
-                    ) { modeMenuExpanded = false }
+                    ) { showPresetPicker = false }
             )
             Card(
                 modifier = Modifier
-                    .padding(top = 38.dp, start = 60.dp)
+                    .padding(top = 38.dp, start = 92.dp)
                     .widthIn(min = 180.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -789,13 +766,14 @@ fun KeyboardScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    keyboardModeOrder.forEach { mode ->
-                        val isCurrent = mode == keyboardInputMode.normalize()
+                    presetCandidates.forEach { mode ->
+                        val isCurrent = mode == appearanceSettings.presetKeyboardMode.normalize()
                         Surface(
                             onClick = {
+                                viewModel.setPresetKeyboardMode(mode)
                                 keyboardInputMode = mode
                                 modeChangeToast = mode
-                                modeMenuExpanded = false
+                                showPresetPicker = false
                             },
                             color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
                                 else Color.Transparent,
@@ -819,7 +797,7 @@ fun KeyboardScreen(
                                     Spacer(modifier = Modifier.width(22.dp))
                                 }
                                 Text(
-                                    text = mode.displayName,
+                                    text = mode.localizedDisplayName(),
                                     fontSize = 13.sp,
                                     fontWeight = if (isCurrent) FontWeight.SemiBold
                                         else FontWeight.Normal,

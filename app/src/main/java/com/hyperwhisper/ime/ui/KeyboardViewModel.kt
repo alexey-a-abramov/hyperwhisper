@@ -308,7 +308,12 @@ class KeyboardViewModel @Inject constructor(
         val settings = apiSettings.value
         val mode = selectedMode.value
         val appearance = appearanceSettings.value
-        val shouldSaveAudio = appearance.saveOriginalAudioFiles
+        // Always persist the source audio during processing so a failed
+        // transcription / post-processing run can be reprocessed from history.
+        // The original `saveOriginalAudioFiles` setting now governs whether
+        // audio is *retained* after a successful run (cleanup happens below).
+        val shouldSaveAudio = true
+        val keepAudioAfterSuccess = appearance.saveOriginalAudioFiles
         settingsRepository.trackProviderModelUsage(settings.provider, settings.modelId)
 
         if (mode == null) {
@@ -351,7 +356,13 @@ class KeyboardViewModel @Inject constructor(
                 soundManager.playSuccessSound()
                 recordingViewModel.setIdle()
                 if (!inWalkieTalkieMode) {
-                    historyViewModel.addToHistory(text, savedAudioPath)
+                    // Honour the user's "save original audio files" setting on
+                    // success: if they opted out, drop the audio path before
+                    // recording history (the file gets cleaned up by the temp
+                    // delete below).
+                    val historyAudioPath = if (keepAudioAfterSuccess) savedAudioPath else null
+                    if (!keepAudioAfterSuccess) savedAudioPath?.let { runCatching { java.io.File(it).delete() } }
+                    historyViewModel.addToHistory(text, historyAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished successfully with text")
             }
@@ -477,7 +488,47 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Bind a new mode to the configurable third slot of the top strip.
+     */
+    fun setPresetKeyboardMode(mode: com.hyperwhisper.data.KeyboardInputMode) {
+        viewModelScope.launch {
+            val current = appearanceSettings.value
+            settingsRepository.saveAppearanceSettings(
+                current.copy(presetKeyboardMode = mode)
+            )
+            Log.d(TAG, "Preset keyboard mode set to $mode")
+        }
+    }
+
+    /**
+     * Update the LLM post-processing provider + model from the keyboard's
+     * inline picker. API key and custom base URL persist — the user manages
+     * those in Settings, since the data model holds a single LlmConfig
+     * (no per-provider key map yet).
+     */
+    fun setLlmProviderAndModel(provider: com.hyperwhisper.data.LlmProvider, modelId: String) {
+        viewModelScope.launch {
+            val current = apiSettings.value
+            val updated = current.copy(
+                llmConfig = current.llmConfig.copy(
+                    provider = provider,
+                    modelId = modelId
+                )
+            )
+            settingsRepository.saveApiSettings(updated)
+            Log.d(TAG, "LLM config changed to: ${provider.name} / $modelId")
+        }
+    }
+
+    /**
      * Set provider and model from quick picker.
+     *
+     * Also toggles `localModelSettings.useLocalWhisper` to match the chosen
+     * provider — picking [ApiProvider.LOCAL_WHISPER] enables on-device mode,
+     * picking anything else falls back to cloud routing. Without this the
+     * router gets a mismatched (provider, useLocalWhisper) pair and either
+     * asks for an API key when the user wanted local, or tries to load a
+     * local model file when they wanted cloud.
      */
     fun setProviderAndModel(provider: ApiProvider, modelId: String) {
         viewModelScope.launch {
@@ -486,14 +537,19 @@ class KeyboardViewModel @Inject constructor(
                 ?.customBaseUrl
                 ?.ifEmpty { provider.defaultEndpoint }
                 ?: provider.defaultEndpoint
+            val pickingLocal = provider == ApiProvider.LOCAL_WHISPER
+            val updatedLocalSettings = currentSettings.localModelSettings.copy(
+                useLocalWhisper = pickingLocal
+            )
             val updatedSettings = currentSettings.copy(
                 provider = provider,
                 baseUrl = providerBaseUrl,
-                modelId = modelId
+                modelId = modelId,
+                localModelSettings = updatedLocalSettings
             )
             settingsRepository.saveApiSettings(updatedSettings)
             settingsRepository.trackProviderModelUsage(provider, modelId)
-            Log.d(TAG, "Provider/model changed to: ${provider.displayName} / $modelId")
+            Log.d(TAG, "Provider/model changed to: ${provider.displayName} / $modelId (local=$pickingLocal)")
         }
     }
 
