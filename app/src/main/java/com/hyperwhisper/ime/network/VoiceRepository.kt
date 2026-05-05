@@ -14,6 +14,7 @@ import javax.inject.Singleton
 class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
+    private val localProcessingStrategy: LocalProcessingStrategy,
     private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
     private val settingsRepository: SettingsRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
@@ -86,14 +87,24 @@ class VoiceRepository @Inject constructor(
                 // Step 1: Transcribe audio
                 Log.d(TAG, "Using two-step processing: transcribe + post-process")
                 val transcriptionStartTime = System.currentTimeMillis()
-                val transcriptionResult = transcriptionStrategy.processAudio(
+                // Honour useLocalWhisper for the transcription leg too — without
+                // this, on-device Whisper + a non-verbatim mode would silently
+                // route stage 1 through the cloud HTTP strategy and fail with
+                // a "Failed to connect to localhost:80" against the dummy
+                // LOCAL_WHISPER endpoint.
+                val transcriptionStep = if (apiSettings.localModelSettings.useLocalWhisper) {
+                    localProcessingStrategy
+                } else {
+                    transcriptionStrategy
+                }
+                val transcriptionResult = transcriptionStep.processAudio(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode.copy(systemPrompt = "Transcribe the audio exactly as spoken."),
                     modelId = apiSettings.modelId
                 )
                 val transcriptionTimeMs = System.currentTimeMillis() - transcriptionStartTime
-                Log.d(TAG, "Transcription completed in ${transcriptionTimeMs}ms")
+                Log.d(TAG, "Transcription completed in ${transcriptionTimeMs}ms (strategy=${if (apiSettings.localModelSettings.useLocalWhisper) "local" else "cloud"})")
 
                 when (transcriptionResult) {
                     is ApiResult.Success -> {
@@ -256,15 +267,27 @@ class VoiceRepository @Inject constructor(
     /**
      * Validate provider/LLM/model setup. Returns null when OK, or a user-facing
      * error string. Never logs the API key.
+     *
+     * Cloud transcription checks (URL/API key) are skipped when on-device
+     * Whisper is active — those settings are irrelevant for local processing,
+     * and demanding them blocks local-only setups that never configured a
+     * cloud provider.
      */
     private fun validateConfig(voiceMode: VoiceMode, s: ApiSettings): String? {
-        if (s.modelId.isBlank()) return "Transcription model is not configured. Open Settings → Transcription."
-        val baseUrl = s.getCurrentBaseUrl()
-        if (baseUrl.isBlank() && s.provider != ApiProvider.SELFHOSTED_WHISPER) {
-            return "Provider base URL is empty for ${s.provider.displayName}."
-        }
-        if (s.getCurrentRequiresAuth() && s.getCurrentApiKey().isBlank()) {
-            return "API key for ${s.provider.displayName} is missing."
+        val useLocal = s.localModelSettings.useLocalWhisper
+        if (useLocal) {
+            if (s.localModelSettings.whisperModelPath.isBlank()) {
+                return "On-device Whisper is enabled but no model file is selected. Open Settings → Transcription → On-device."
+            }
+        } else {
+            if (s.modelId.isBlank()) return "Transcription model is not configured. Open Settings → Transcription."
+            val baseUrl = s.getCurrentBaseUrl()
+            if (baseUrl.isBlank() && s.provider != ApiProvider.SELFHOSTED_WHISPER) {
+                return "Provider base URL is empty for ${s.provider.displayName}."
+            }
+            if (s.getCurrentRequiresAuth() && s.getCurrentApiKey().isBlank()) {
+                return "API key for ${s.provider.displayName} is missing."
+            }
         }
 
         val llm = s.llmConfig

@@ -85,8 +85,10 @@ class HistoryViewModel(
                     return@launch
                 }
 
-                // Validate settings
-                if (currentSettings.getCurrentApiKey().isBlank()) {
+                // Skip the cloud-key gate when on-device Whisper is active —
+                // local processing doesn't need a cloud key.
+                if (!currentSettings.localModelSettings.useLocalWhisper &&
+                    currentSettings.getCurrentApiKey().isBlank()) {
                     _errorMessage.value = "Please configure API key for ${currentSettings.provider.displayName} in settings"
                     return@launch
                 }
@@ -154,8 +156,8 @@ class HistoryViewModel(
                     return@launch
                 }
 
-                // Validate settings
-                if (newSettings.getCurrentApiKey().isBlank()) {
+                if (!newSettings.localModelSettings.useLocalWhisper &&
+                    newSettings.getCurrentApiKey().isBlank()) {
                     _errorMessage.value = "Please configure API key for ${newSettings.provider.displayName}"
                     return@launch
                 }

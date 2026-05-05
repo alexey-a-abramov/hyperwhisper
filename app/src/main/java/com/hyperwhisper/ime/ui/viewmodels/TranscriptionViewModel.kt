@@ -81,8 +81,12 @@ class TranscriptionViewModel(
             _lastAudioDuration.value = calculateAudioDuration(audioFile)
             Log.d(TAG, "Audio file info: size=${audioFile.length()} bytes, est duration=${_lastAudioDuration.value}s")
 
-            // Validate settings
-            if (settings.getCurrentApiKey().isBlank()) {
+            // Validate settings — but skip the API-key gate when on-device
+            // Whisper is active. Local processing never hits the cloud, so
+            // demanding a cloud key there would block a fully-configured
+            // local-only setup.
+            val useLocal = settings.localModelSettings.useLocalWhisper
+            if (!useLocal && settings.getCurrentApiKey().isBlank()) {
                 _errorMessage.value = "Please configure API key for ${settings.provider.displayName} in settings"
                 return null
             }
