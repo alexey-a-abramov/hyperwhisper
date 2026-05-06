@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.LlmProvider
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.formatTestedAgo
 import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
@@ -56,6 +57,7 @@ fun LlmModelSelectorDialog(
     currentProvider: LlmProvider,
     currentModelId: String,
     apiKeys: Map<LlmProvider, String>,
+    lastTestedAt: Map<LlmProvider, Long> = emptyMap(),
     onProviderModelSelected: (LlmProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -150,7 +152,12 @@ fun LlmModelSelectorDialog(
                                         MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.weight(1f)
                                 )
+                                TestedBadge(
+                                    label = formatTestedAgo(lastTestedAt[provider]),
+                                    isCurrent = isCurrent,
+                                )
                                 if (isCurrent) {
+                                    Spacer(Modifier.size(6.dp))
                                     Text(
                                         text = currentModelId,
                                         fontSize = 11.sp,
@@ -226,6 +233,46 @@ fun LlmModelSelectorDialog(
             ) {
                 Text(strings.cancel.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+/** Compact "✓ Nm/h/d" / "stale" pill rendered next to a provider row. Hidden
+ *  when the provider has never been tested — caller passes null in that
+ *  case. Color shifts to error tone for stale; primary for fresh. */
+@Composable
+private fun TestedBadge(label: String?, isCurrent: Boolean) {
+    if (label == null) return
+    val isStale = label == "stale"
+    val containerColor = when {
+        isStale -> MaterialTheme.colorScheme.errorContainer
+        isCurrent -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val contentColor = when {
+        isStale -> MaterialTheme.colorScheme.onErrorContainer
+        isCurrent -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(4.dp),
+        modifier = Modifier.padding(horizontal = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isStale) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp)
+                )
+                Spacer(Modifier.size(2.dp))
+            }
+            Text(text = label, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

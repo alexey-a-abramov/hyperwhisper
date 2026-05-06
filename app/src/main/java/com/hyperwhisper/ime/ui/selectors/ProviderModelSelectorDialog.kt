@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ProviderModelSelection
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.util.formatTestedAgo
 import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
@@ -58,6 +59,7 @@ fun ProviderModelSelectorDialog(
     currentModelId: String,
     configuredProviders: List<ApiProvider>,
     recentSelections: List<ProviderModelSelection>,
+    lastTestedAt: Map<ApiProvider, Long> = emptyMap(),
     onProviderModelSelected: (ApiProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -185,6 +187,10 @@ fun ProviderModelSelectorDialog(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
+                                TestedBadge(
+                                    label = formatTestedAgo(lastTestedAt[provider]),
+                                    isCurrent = isCurrent,
+                                )
                                 if (hasMultiple) {
                                     Icon(
                                         imageVector = Icons.Default.ChevronRight,
@@ -269,6 +275,44 @@ fun ProviderModelSelectorDialog(
             ) {
                 Text(strings.cancel.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+/** Compact "✓ Nm/h/d" / "stale" pill for the per-provider tested badge. */
+@Composable
+private fun TestedBadge(label: String?, isCurrent: Boolean) {
+    if (label == null) return
+    val isStale = label == "stale"
+    val containerColor = when {
+        isStale -> MaterialTheme.colorScheme.errorContainer
+        isCurrent -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val contentColor = when {
+        isStale -> MaterialTheme.colorScheme.onErrorContainer
+        isCurrent -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(4.dp),
+        modifier = Modifier.padding(horizontal = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isStale) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(10.dp)
+                )
+                Spacer(Modifier.size(2.dp))
+            }
+            Text(text = label, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

@@ -593,6 +593,7 @@ fun KeyboardScreen(
                 currentModelId = apiSettings.modelId,
                 configuredProviders = configuredProviders,
                 recentSelections = recentlyUsedProviderModels,
+                lastTestedAt = apiSettings.lastTestedAt,
                 onProviderModelSelected = { provider, modelId ->
                     viewModel.setProviderAndModel(provider, modelId)
                     showProviderModelDialog = false
@@ -654,6 +655,7 @@ fun KeyboardScreen(
                 currentProvider = apiSettings.llmConfig.provider,
                 currentModelId = apiSettings.llmConfig.modelId,
                 apiKeys = apiSettings.llmConfig.apiKeys,
+                lastTestedAt = apiSettings.llmConfig.lastTestedAt,
                 onProviderModelSelected = { provider, modelId ->
                     viewModel.setLlmProviderAndModel(provider, modelId)
                     showLlmModelDialog = false
