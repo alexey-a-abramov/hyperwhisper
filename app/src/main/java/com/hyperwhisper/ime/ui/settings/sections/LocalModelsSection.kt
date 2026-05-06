@@ -1,14 +1,18 @@
 package com.hyperwhisper.ui.settings.sections
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -16,6 +20,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,6 +76,8 @@ fun LocalModelsSection(
     onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showTechnicalDetails by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -85,10 +92,35 @@ fun LocalModelsSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        // One toggle gates every "exact filename / install path / repo URL"
+        // line across both download cards and the on-disk discovery list.
+        // Off by default — friendly names cover the 95% case; the technical
+        // strings only matter when the user is debugging or hand-managing
+        // files via Termux.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Show technical details",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Filenames, install paths, and other technical metadata",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = showTechnicalDetails,
+                onCheckedChange = { showTechnicalDetails = it },
+            )
+        }
+
         WhisperDownloadCard(
             states = whisperStates,
             activePath = activeWhisperPath,
             useLocal = useLocalWhisper,
+            showTechnicalDetails = showTechnicalDetails,
             onDownload = onStartWhisperDownload,
             onCancel = onCancelWhisperDownload,
             onDelete = onDeleteWhisperDownload,
@@ -99,6 +131,7 @@ fun LocalModelsSection(
             states = gemmaStates,
             activePath = activeGemmaPath,
             useLocal = useLocalGemma,
+            showTechnicalDetails = showTechnicalDetails,
             onDownload = onStartGemmaDownload,
             onCancel = onCancelGemmaDownload,
             onDelete = onDeleteGemmaDownload,
@@ -276,6 +309,22 @@ private fun buildIntegrationResultsJson(
 
 // endregion
 
+// region Active-model color tokens
+//
+// "Active" rows use a soft green container with a saturated green left
+// accent stripe + an "ACTIVE" pill. Picked outside the Material primary
+// palette (which is purple in this theme) so the active model is
+// instantly distinguishable from the other "selectable" rows. Tokens are
+// const Color values rather than theme entries because the active state
+// has a fixed semantic meaning here — varying it by light/dark theme
+// would dilute the cue.
+private val ActiveContainer = Color(0xFFD7F2D8)   // material green 100-ish
+private val ActiveAccent = Color(0xFF2E7D32)     // material green 800
+private val ActiveOnAccent = Color(0xFFFFFFFF)
+private val ActiveOnContainer = Color(0xFF1B5E20) // dark green for foreground text
+
+// endregion
+
 // region Whisper
 
 @Composable
@@ -283,6 +332,7 @@ private fun WhisperDownloadCard(
     states: Map<String, WhisperDownloadState>,
     activePath: String,
     useLocal: Boolean,
+    showTechnicalDetails: Boolean,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -329,6 +379,7 @@ private fun WhisperDownloadCard(
                     entry = entry,
                     state = states[entry.id] ?: WhisperDownloadState.Idle,
                     isActive = useLocal && activePath.endsWith("/${entry.fileName}"),
+                    showTechnicalDetails = showTechnicalDetails,
                     onDownload = { onDownload(entry.id) },
                     onCancel = { onCancel(entry.id) },
                     onDelete = { onDelete(entry.id) },
@@ -344,18 +395,13 @@ private fun WhisperRow(
     entry: WhisperModelEntry,
     state: WhisperDownloadState,
     isActive: Boolean,
+    showTechnicalDetails: Boolean,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    ActiveAccentSurface(isActive = isActive) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -365,9 +411,10 @@ private fun WhisperRow(
                     append(if (entry.multilingual) "Multilingual" else "English-only")
                     entry.notes?.let { append(" · "); append(it) }
                 },
+                technicalLine = entry.fileName.takeIf { showTechnicalDetails },
                 isActive = isActive
             )
-            ProgressBlock(state, entry.sizeBytes)
+            ProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
             ActionRow(
                 state = state,
                 isActive = isActive,
@@ -385,7 +432,11 @@ private fun WhisperRow(
 }
 
 @Composable
-private fun ProgressBlock(state: WhisperDownloadState, totalSize: Long) {
+private fun ProgressBlock(
+    state: WhisperDownloadState,
+    totalSize: Long,
+    showTechnicalDetails: Boolean,
+) {
     when (state) {
         is WhisperDownloadState.Downloading -> {
             val frac = if (state.totalBytes > 0)
@@ -431,11 +482,19 @@ private fun ProgressBlock(state: WhisperDownloadState, totalSize: Long) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.error
         )
-        is WhisperDownloadState.Completed -> Text(
-            "Installed at ${state.path.substringBeforeLast('/')}/",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        is WhisperDownloadState.Completed -> {
+            // Installed-path line is verbose and identical for every model
+            // in the catalog; surface it only when the user opts into the
+            // technical details switch.
+            if (showTechnicalDetails) {
+                Text(
+                    "Installed at ${state.path.substringBeforeLast('/')}/",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         else -> {}
     }
 }
@@ -449,6 +508,7 @@ private fun GemmaDownloadCard(
     states: Map<String, GemmaDownloadState>,
     activePath: String,
     useLocal: Boolean,
+    showTechnicalDetails: Boolean,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -482,6 +542,7 @@ private fun GemmaDownloadCard(
                     entry = entry,
                     state = states[entry.id] ?: GemmaDownloadState.Idle,
                     isActive = useLocal && activePath.endsWith("/${entry.fileName}"),
+                    showTechnicalDetails = showTechnicalDetails,
                     onDownload = { onDownload(entry.id) },
                     onCancel = { onCancel(entry.id) },
                     onDelete = { onDelete(entry.id) },
@@ -493,6 +554,7 @@ private fun GemmaDownloadCard(
                 detected = detectedFiles,
                 activePath = activePath,
                 useLocal = useLocal,
+                showTechnicalDetails = showTechnicalDetails,
                 onSetActive = onSetActive,
                 onDeleteFile = onDeleteOnDiskFile,
                 onRescan = onRescan
@@ -531,6 +593,7 @@ private fun DetectedOnDiskBlock(
     detected: List<LocalModelInfo>,
     activePath: String,
     useLocal: Boolean,
+    showTechnicalDetails: Boolean,
     onSetActive: (String) -> Unit,
     onDeleteFile: (String) -> Unit,
     onRescan: () -> Unit
@@ -556,6 +619,7 @@ private fun DetectedOnDiskBlock(
             DetectedRow(
                 info = info,
                 isActive = useLocal && activePath == info.path,
+                showTechnicalDetails = showTechnicalDetails,
                 statusLine = "MediaPipe-loadable · ${formatBytes(info.sizeBytes)}",
                 primaryActionLabel = if (useLocal && activePath == info.path) null else "Set active",
                 onPrimary = { onSetActive(info.path) },
@@ -566,6 +630,7 @@ private fun DetectedOnDiskBlock(
             DetectedRow(
                 info = info,
                 isActive = false,
+                showTechnicalDetails = showTechnicalDetails,
                 statusLine = "Incompatible (GGUF — needs .litertlm from litert-community) · " +
                     formatBytes(info.sizeBytes),
                 statusIsError = true,
@@ -581,6 +646,7 @@ private fun DetectedOnDiskBlock(
 private fun DetectedRow(
     info: LocalModelInfo,
     isActive: Boolean,
+    showTechnicalDetails: Boolean,
     statusLine: String,
     statusIsError: Boolean = false,
     primaryActionLabel: String?,
@@ -588,23 +654,14 @@ private fun DetectedRow(
     onDelete: () -> Unit
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    ActiveAccentSurface(isActive = isActive) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            ModelHeader(title = info.name, subtitle = statusLine, isActive = isActive)
-            if (statusIsError) {
-                Text(
-                    info.path,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+            ModelHeader(
+                title = info.name,
+                subtitle = statusLine,
+                technicalLine = info.path.takeIf { showTechnicalDetails || statusIsError },
+                isActive = isActive,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (primaryActionLabel != null) {
                     Button(onClick = onPrimary, modifier = Modifier.weight(1f)) {
@@ -672,18 +729,13 @@ private fun GemmaRow(
     entry: GemmaModelEntry,
     state: GemmaDownloadState,
     isActive: Boolean,
+    showTechnicalDetails: Boolean,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    ActiveAccentSurface(isActive = isActive) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -691,9 +743,10 @@ private fun GemmaRow(
                     append(formatBytes(entry.sizeBytes))
                     entry.notes?.let { append(" · "); append(it) }
                 },
-                isActive = isActive
+                technicalLine = entry.fileName.takeIf { showTechnicalDetails },
+                isActive = isActive,
             )
-            GemmaProgressBlock(state, entry.sizeBytes)
+            GemmaProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
             GemmaActionRow(
                 state = state,
                 isActive = isActive,
@@ -711,7 +764,11 @@ private fun GemmaRow(
 }
 
 @Composable
-private fun GemmaProgressBlock(state: GemmaDownloadState, totalSize: Long) {
+private fun GemmaProgressBlock(
+    state: GemmaDownloadState,
+    totalSize: Long,
+    showTechnicalDetails: Boolean,
+) {
     when (state) {
         is GemmaDownloadState.Downloading -> {
             val frac = if (state.totalBytes > 0)
@@ -757,11 +814,16 @@ private fun GemmaProgressBlock(state: GemmaDownloadState, totalSize: Long) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.error
         )
-        is GemmaDownloadState.Completed -> Text(
-            "Installed at ${state.path.substringBeforeLast('/')}/",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        is GemmaDownloadState.Completed -> {
+            if (showTechnicalDetails) {
+                Text(
+                    "Installed at ${state.path.substringBeforeLast('/')}/",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         else -> {}
     }
 }
@@ -814,21 +876,65 @@ private fun GemmaActionRow(
 
 // region Shared helpers
 
+/**
+ * Container surface for a model row. When [isActive] is true, paints the
+ * row with the soft green container plus a saturated green left-edge
+ * accent stripe so the active model is unambiguous at a glance — the
+ * accent shows through even when the row sits inside the surrounding card
+ * tint. Inactive rows fall back to the regular surface tonal elevation.
+ */
 @Composable
-private fun ModelHeader(title: String, subtitle: String, isActive: Boolean) {
+private fun ActiveAccentSurface(
+    isActive: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (isActive) ActiveContainer else MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (isActive) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(ActiveAccent)
+                )
+                Box(modifier = Modifier.weight(1f)) { content() }
+            }
+        } else {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ModelHeader(
+    title: String,
+    subtitle: String,
+    technicalLine: String?,
+    isActive: Boolean,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(
+                    title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = if (isActive) ActiveOnContainer else Color.Unspecified,
+                )
                 if (isActive) {
                     Spacer(Modifier.width(8.dp))
                     Surface(
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = MaterialTheme.shapes.small
+                        color = ActiveAccent,
+                        contentColor = ActiveOnAccent,
+                        shape = RoundedCornerShape(4.dp),
                     ) {
                         Text(
-                            "Active",
+                            "ACTIVE",
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -839,8 +945,18 @@ private fun ModelHeader(title: String, subtitle: String, isActive: Boolean) {
             Text(
                 subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isActive) ActiveOnContainer.copy(alpha = 0.85f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (technicalLine != null) {
+                Text(
+                    technicalLine,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (isActive) ActiveOnContainer.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
         }
     }
 }
