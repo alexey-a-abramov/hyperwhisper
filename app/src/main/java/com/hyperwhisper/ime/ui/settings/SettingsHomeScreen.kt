@@ -163,6 +163,10 @@ private fun RetestRow(key: String, state: ConnectionTester.RetestRowState) {
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
         modifier = Modifier.fillMaxWidth()
     ) {
+        // Stack the name + (optional) error message in a Column so a long
+        // provider name (e.g. "OpenAI-Compatible") doesn't get squeezed into
+        // a one-character-per-line column when paired with a long error
+        // string. Status icon stays right-aligned.
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -174,11 +178,24 @@ private fun RetestRow(key: String, state: ConnectionTester.RetestRowState) {
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.width(28.dp)
             )
-            Text(
-                displayName,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    displayName,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                if (state is ConnectionTester.RetestRowState.Error) {
+                    Text(
+                        state.message?.take(80) ?: "failed",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
             when (state) {
                 is ConnectionTester.RetestRowState.Pending -> Text(
                     "queued",
@@ -197,20 +214,13 @@ private fun RetestRow(key: String, state: ConnectionTester.RetestRowState) {
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(16.dp)
                     )
-                is ConnectionTester.RetestRowState.Error -> {
-                    Text(
-                        state.message?.take(40) ?: "failed",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(end = 6.dp)
-                    )
+                is ConnectionTester.RetestRowState.Error ->
                     Icon(
                         imageVector = Icons.Filled.Cancel,
                         contentDescription = "failed",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(16.dp)
                     )
-                }
             }
         }
     }
