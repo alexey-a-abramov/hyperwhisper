@@ -24,9 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.sections.KeyboardBottomBar
 import com.hyperwhisper.ui.util.localizedDisplayName
-import com.hyperwhisper.ui.util.repeatOnHold
 
 @Composable
 fun EmojiKeyboard(
@@ -34,12 +35,16 @@ fun EmojiKeyboard(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onEmojiSelected: (String) -> Unit,
-    onBackspace: () -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onReturnToDictation: () -> Unit,
     onModeChange: (com.hyperwhisper.data.KeyboardInputMode) -> Unit,
     currentMode: com.hyperwhisper.data.KeyboardInputMode,
+    lastTranscribedText: String,
+    transcriptionHistory: List<TranscriptionHistoryItem>,
+    enableHistoryPanel: Boolean,
+    onPasteText: (String) -> Unit,
+    onShowHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -132,74 +137,17 @@ fun EmojiKeyboard(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Bottom control row
-        Row(
-            modifier = Modifier.fillMaxWidth().height(45.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            // Mode switching now lives in the universal top strip; no
-            // redundant inline switcher here.
-
-            // Space
-            Surface(
-                onClick = onSpace,
-                modifier = Modifier.weight(4.5f).fillMaxHeight(),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFFFEB3B)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "space",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Black
-                    )
-                }
-            }
-
-            // Backspace
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .repeatOnHold(onTrigger = onBackspace),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFD32F2F)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Backspace,
-                        contentDescription = strings.keyboardBackspaceDesc,
-                        tint = Color.White
-                    )
-                }
-            }
-
-            // Enter
-            Surface(
-                onClick = onEnter,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF00C853)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardReturn,
-                        contentDescription = strings.keyboardEnterDesc,
-                        tint = Color.White
-                    )
-                }
-            }
-        }
+        // Universal bottom bar — paste-last / space / enter, identical to
+        // every other layout. Backspace lives in the top strip.
+        KeyboardBottomBar(
+            lastTranscribedText = lastTranscribedText,
+            transcriptionHistory = transcriptionHistory,
+            enableHistoryPanel = enableHistoryPanel,
+            onPasteText = onPasteText,
+            onShowHistory = onShowHistory,
+            onSpace = onSpace,
+            onEnter = onEnter
+        )
     }
 }
 

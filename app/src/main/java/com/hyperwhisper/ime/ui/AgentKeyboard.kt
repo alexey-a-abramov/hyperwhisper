@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,13 +17,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardReturn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,15 +38,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.AgentCategory
 import com.hyperwhisper.data.AgentCommand
+import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.components.LongPressIndicator
-import com.hyperwhisper.ui.util.repeatOnHold
+import com.hyperwhisper.ui.sections.KeyboardBottomBar
 
 /**
  * Generic agent quick-command keyboard. Renders a list of [AgentCommand] as
- * a tap-to-insert grid plus the canonical bottom row (space / enter / bksp).
- * The same composable powers Claude Code, OpenCode, Gemini and Codex modes —
- * only the command list differs.
+ * a tap-to-insert grid plus the universal [KeyboardBottomBar] (paste-last /
+ * space / enter). Backspace lives in the universal top strip on every
+ * layout, so it's no longer duplicated here. The same composable powers
+ * Claude Code, OpenCode, Gemini and Codex modes — only the command list
+ * differs.
  */
 @Composable
 fun AgentKeyboard(
@@ -60,8 +58,11 @@ fun AgentKeyboard(
     onInsert: (String) -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
-    onDelete: () -> Unit,
-    lastSentText: String = "",
+    lastTranscribedText: String,
+    transcriptionHistory: List<TranscriptionHistoryItem>,
+    enableHistoryPanel: Boolean,
+    onPasteText: (String) -> Unit,
+    onShowHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -100,9 +101,9 @@ fun AgentKeyboard(
                     color = Color(0xFFB0B0B0),
                     modifier = Modifier.padding(start = 6.dp).weight(1f)
                 )
-                if (lastSentText.isNotEmpty()) {
+                if (lastTranscribedText.isNotEmpty()) {
                     Surface(
-                        onClick = { onInsert(lastSentText) },
+                        onClick = { onInsert(lastTranscribedText) },
                         shape = RoundedCornerShape(4.dp),
                         color = Color.Transparent,
                         modifier = Modifier.padding(end = 4.dp).size(18.dp)
@@ -170,38 +171,17 @@ fun AgentKeyboard(
                 }
             }
 
-            // Standard bottom row — same shape/colors as every other layout's
-            // action keys so muscle memory transfers. Space yellow, enter green,
-            // backspace red.
-            Row(
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                ActionKey(
-                    label = "space",
-                    weight = 3f,
-                    bg = KeyboardSpaceColor,
-                    fg = Color.Black,
-                    onClick = onSpace
-                )
-                ActionIconKey(
-                    icon = Icons.Default.KeyboardReturn,
-                    desc = strings.keyboardEnterDesc,
-                    weight = 1f,
-                    bg = KeyboardEnterColor,
-                    fg = Color.White,
-                    onClick = onEnter
-                )
-                ActionIconKey(
-                    icon = Icons.Default.Backspace,
-                    desc = strings.keyboardBackspaceDesc,
-                    weight = 1f,
-                    bg = KeyboardBackspaceColor,
-                    fg = Color.White,
-                    onClick = onDelete,
-                    repeatOnHold = true
-                )
-            }
+            // Universal bottom bar — same paste-last/space/enter as every
+            // other layout. Backspace is in the top strip.
+            KeyboardBottomBar(
+                lastTranscribedText = lastTranscribedText,
+                transcriptionHistory = transcriptionHistory,
+                enableHistoryPanel = enableHistoryPanel,
+                onPasteText = onPasteText,
+                onShowHistory = onShowHistory,
+                onSpace = onSpace,
+                onEnter = onEnter
+            )
         }
     }
 }
@@ -290,57 +270,3 @@ private fun AgentCommandKey(
     }
 }
 
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.ActionKey(
-    label: String,
-    weight: Float,
-    bg: Color,
-    fg: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = bg,
-        modifier = Modifier.weight(weight).fillMaxHeight()
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = fg)
-        }
-    }
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.ActionIconKey(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    desc: String,
-    weight: Float,
-    bg: Color,
-    fg: Color,
-    onClick: () -> Unit,
-    repeatOnHold: Boolean = false
-) {
-    val baseModifier = Modifier.weight(weight).fillMaxHeight()
-    if (repeatOnHold) {
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = bg,
-            modifier = baseModifier.repeatOnHold(onTrigger = onClick)
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = desc, tint = fg, modifier = Modifier.size(18.dp))
-            }
-        }
-    } else {
-        Surface(
-            onClick = onClick,
-            shape = RoundedCornerShape(6.dp),
-            color = bg,
-            modifier = baseModifier
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = desc, tint = fg, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}

@@ -441,8 +441,11 @@ fun KeyboardScreen(
                     },
                     onSpace = handleSpacePress,
                     onEnter = onEnter,
-                    onDelete = onDelete,
-                    lastSentText = lastTranscribedText,
+                    lastTranscribedText = lastTranscribedText,
+                    transcriptionHistory = transcriptionHistory,
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPasteText = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true },
                     modifier = Modifier.weight(1f)
                 )
             } else if (keyboardInputMode == KeyboardInputMode.EMOJI) {
@@ -460,12 +463,16 @@ fun KeyboardScreen(
                         val updatedSettings = appearanceSettings.copy(recentEmojis = updatedRecents)
                         viewModel.updateRecentEmojis(updatedSettings)
                     },
-                    onBackspace = onDelete,
                     onSpace = handleSpacePress,
                     onEnter = onEnter,
                     onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
                     onModeChange = { keyboardInputMode = it },
                     currentMode = keyboardInputMode,
+                    lastTranscribedText = lastTranscribedText,
+                    transcriptionHistory = transcriptionHistory,
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPasteText = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true },
                     modifier = Modifier.weight(1f)
                 )
             } else {
