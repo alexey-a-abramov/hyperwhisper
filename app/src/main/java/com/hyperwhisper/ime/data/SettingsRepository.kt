@@ -53,6 +53,12 @@ class SettingsRepository @Inject constructor(
         requiresAuth: Boolean?,
     ) = apiSettingsRepository.updateLlmProviderConfig(provider, customBaseUrl, requiresAuth)
 
+    suspend fun recordProviderTested(provider: ApiProvider, timestampMillis: Long) =
+        apiSettingsRepository.recordProviderTested(provider, timestampMillis)
+
+    suspend fun recordLlmProviderTested(provider: LlmProvider, timestampMillis: Long) =
+        apiSettingsRepository.recordLlmProviderTested(provider, timestampMillis)
+
     suspend fun updateLocalModelSettings(settings: LocalModelSettings) =
         apiSettingsRepository.updateLocalModelSettings(settings)
 

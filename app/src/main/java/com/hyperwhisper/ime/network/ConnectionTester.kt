@@ -127,6 +127,7 @@ class ConnectionTester @Inject constructor(
                     val ms = (System.nanoTime() - started) / 1_000_000
                     if (response.isSuccessful) {
                         appendTranscriptionLog(TestLogLevel.OK, "HTTP 200 in ${ms} ms")
+                        settingsRepository.recordProviderTested(provider, System.currentTimeMillis())
                         _connectionTestState.value = ConnectionTestState.Success(
                             "Local whisper.cpp server is responding."
                         )
@@ -202,6 +203,7 @@ class ConnectionTester @Inject constructor(
                 append("Transcribed: $preview")
                 if (speedDetail != null) append("  ·  $speedDetail")
             }
+            settingsRepository.recordProviderTested(provider, System.currentTimeMillis())
             _connectionTestState.value = ConnectionTestState.Success(successMsg)
             Log.d(TAG, "Transcription test ok; len=${text.length}")
         } catch (e: Exception) {
@@ -310,6 +312,7 @@ class ConnectionTester @Inject constructor(
                 append("Transcribed: $preview")
                 if (speedDetail != null) append("  ·  $speedDetail")
             }
+            settingsRepository.recordProviderTested(provider, System.currentTimeMillis())
             _connectionTestState.value = ConnectionTestState.Success(successMsg)
             Log.d(TAG, "Chat-audio test ok; provider=${provider.name} len=${text.length}")
         } catch (e: Exception) {
@@ -475,6 +478,9 @@ class ConnectionTester @Inject constructor(
                 append("On-device transcription: $preview")
                 if (speedDetail != null) append("  ·  $speedDetail")
             }
+            settingsRepository.recordProviderTested(
+                ApiProvider.LOCAL_WHISPER, System.currentTimeMillis()
+            )
             _connectionTestState.value = ConnectionTestState.Success(msg)
         } catch (t: Throwable) {
             Log.e(TAG, "Local whisper test failed", t)
@@ -616,6 +622,7 @@ class ConnectionTester @Inject constructor(
             val preview = "“${out.take(160)}${if (out.length > 160) "…" else ""}”"
             appendPostProcessingLog(TestLogLevel.OK, "Completion returned", "${out.length} chars")
             appendPostProcessingLog(TestLogLevel.INFO, preview)
+            settingsRepository.recordLlmProviderTested(llm.provider, System.currentTimeMillis())
             _postProcessingTestState.value = ConnectionTestState.Success("Sample → $preview")
             Log.d(TAG, "Post-processing test ok; len=${out.length}")
         } catch (e: Exception) {
@@ -686,6 +693,9 @@ class ConnectionTester @Inject constructor(
             }
             val preview = "“${out.take(160)}${if (out.length > 160) "…" else ""}”"
             appendPostProcessingLog(TestLogLevel.INFO, preview)
+            settingsRepository.recordLlmProviderTested(
+                LlmProvider.LOCAL_GEMMA, System.currentTimeMillis()
+            )
             _postProcessingTestState.value = ConnectionTestState.Success("Sample → $preview")
         } catch (t: Throwable) {
             Log.w(TAG, "Local Gemma test failed", t)

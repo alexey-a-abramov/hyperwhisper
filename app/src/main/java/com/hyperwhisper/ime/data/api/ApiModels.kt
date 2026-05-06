@@ -113,7 +113,11 @@ data class ApiSettings(
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
     val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
     val llmConfig: LlmConfig = LlmConfig(), // LLM configuration for post-processing
-    val localModelSettings: LocalModelSettings = LocalModelSettings() // Local model configuration
+    val localModelSettings: LocalModelSettings = LocalModelSettings(), // Local model configuration
+    /** Per-provider epoch-millis of the most recent successful Settings-side
+     *  connection test. Used to badge providers as ✓-tested vs untested vs
+     *  stale (>7d) in pickers and settings. Updated by [ConnectionTester]. */
+    val lastTestedAt: Map<ApiProvider, Long> = emptyMap()
 ) {
     // Helper to get API key for current provider
     fun getCurrentApiKey(): String = apiKeys[provider] ?: ""
@@ -262,7 +266,10 @@ data class LlmConfig(
     val modelId: String = "gpt-4o-mini",
     val requiresAuth: Boolean = true, // Deprecated: mirror of getCurrentRequiresAuth()
     val apiKeys: Map<LlmProvider, String> = emptyMap(),
-    val providerConfigs: Map<LlmProvider, LlmProviderConfig> = emptyMap()
+    val providerConfigs: Map<LlmProvider, LlmProviderConfig> = emptyMap(),
+    /** Per-provider epoch-millis of the most recent successful post-processing
+     *  test (mirror of [ApiSettings.lastTestedAt] for the LLM side). */
+    val lastTestedAt: Map<LlmProvider, Long> = emptyMap()
 ) {
     fun getBaseUrl(): String = getCurrentBaseUrl()
 

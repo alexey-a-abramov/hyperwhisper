@@ -54,6 +54,8 @@ class ApiSettingsRepository(
         private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config")
         private val LLM_PROVIDER_CONFIGS_KEY = stringPreferencesKey("llm_provider_configs")
         private val LOCAL_MODEL_SETTINGS_KEY = stringPreferencesKey("local_model_settings")
+        private val LAST_TESTED_AT_KEY = stringPreferencesKey("last_tested_at")
+        private val LLM_LAST_TESTED_AT_KEY = stringPreferencesKey("llm_last_tested_at")
 
         // Legacy plaintext keys — read once during migration, then deleted.
         private val LEGACY_API_KEYS_MAP_KEY = stringPreferencesKey("api_keys_map")
@@ -184,6 +186,13 @@ class ApiSettingsRepository(
             LocalModelSettings()
         }
 
+        val lastTestedAt = readLongMap<ApiProvider>(
+            preferences[LAST_TESTED_AT_KEY],
+        ) { ApiProvider.valueOf(it) }
+        val llmLastTestedAt = readLongMap<LlmProvider>(
+            preferences[LLM_LAST_TESTED_AT_KEY],
+        ) { LlmProvider.valueOf(it) }
+
         return ApiSettings(
             provider = provider,
             baseUrl = preferences[BASE_URL_KEY] ?: provider.defaultEndpoint,
@@ -192,9 +201,33 @@ class ApiSettingsRepository(
             modelId = preferences[MODEL_ID_KEY] ?: provider.defaultModels.firstOrNull() ?: "whisper-1",
             inputLanguage = preferences[INPUT_LANGUAGE_KEY] ?: "",
             outputLanguage = preferences[OUTPUT_LANGUAGE_KEY] ?: "",
-            llmConfig = llmConfig,
+            llmConfig = llmConfig.copy(lastTestedAt = llmLastTestedAt),
             localModelSettings = localModelSettings,
+            lastTestedAt = lastTestedAt,
         )
+    }
+
+    private inline fun <K> readLongMap(
+        json: String?,
+        keyOf: (String) -> K,
+    ): Map<K, Long> = try {
+        if (json.isNullOrEmpty()) emptyMap()
+        else {
+            val type = object : TypeToken<Map<String, Long>>() {}.type
+            val raw: Map<String, Long> = gson.fromJson(json, type)
+            raw.mapNotNull { (k, v) ->
+                try {
+                    keyOf(k) to v
+                } catch (_: IllegalArgumentException) {
+                    // Stored key isn't a known enum (e.g. provider removed in
+                    // a later release) — silently drop rather than crash the
+                    // settings flow.
+                    null
+                }
+            }.toMap()
+        }
+    } catch (_: Exception) {
+        emptyMap()
     }
 
     /**
@@ -356,7 +389,20 @@ class ApiSettingsRepository(
             preferences[MODEL_ID_KEY] = settings.modelId
             preferences[INPUT_LANGUAGE_KEY] = settings.inputLanguage
             preferences[OUTPUT_LANGUAGE_KEY] = settings.outputLanguage
+
+            writeLongMap(preferences, LAST_TESTED_AT_KEY, settings.lastTestedAt) { it.name }
+            writeLongMap(preferences, LLM_LAST_TESTED_AT_KEY, settings.llmConfig.lastTestedAt) { it.name }
         }
+    }
+
+    private inline fun <K> writeLongMap(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        key: androidx.datastore.preferences.core.Preferences.Key<String>,
+        map: Map<K, Long>,
+        nameOf: (K) -> String,
+    ) {
+        val stringMap = map.mapKeys { nameOf(it.key) }
+        preferences[key] = gson.toJson(stringMap)
     }
 
     /** Update local model configuration */
@@ -426,6 +472,31 @@ class ApiSettingsRepository(
         val currentActive = apiSettings.first().llmConfig.provider
         if (currentActive == provider) {
             secretsRepository.put(SecretSlot.Llm, apiKey)
+        }
+    }
+
+    /** Record a successful Settings-side test for a transcription provider.
+     *  Timestamp is epoch-millis from [System.currentTimeMillis] for portable
+     *  duration math (no calendar / TZ awareness). Failed / cancelled tests
+     *  must not call this — staleness is meaningful only for last *success*. */
+    suspend fun recordProviderTested(provider: ApiProvider, timestampMillis: Long) {
+        dataStore.edit { preferences ->
+            val current = readLongMap<ApiProvider>(preferences[LAST_TESTED_AT_KEY]) {
+                ApiProvider.valueOf(it)
+            }.toMutableMap()
+            current[provider] = timestampMillis
+            writeLongMap(preferences, LAST_TESTED_AT_KEY, current) { it.name }
+        }
+    }
+
+    /** Mirror of [recordProviderTested] for the LLM post-processing side. */
+    suspend fun recordLlmProviderTested(provider: LlmProvider, timestampMillis: Long) {
+        dataStore.edit { preferences ->
+            val current = readLongMap<LlmProvider>(preferences[LLM_LAST_TESTED_AT_KEY]) {
+                LlmProvider.valueOf(it)
+            }.toMutableMap()
+            current[provider] = timestampMillis
+            writeLongMap(preferences, LLM_LAST_TESTED_AT_KEY, current) { it.name }
         }
     }
 
