@@ -331,6 +331,7 @@ fun SettingsScreen(
                                 val gemmaStates by viewModel.gemmaDownloadStates.collectAsState()
                                 val integrationResults by viewModel.integrationResults.collectAsState()
                                 val integrationRunning by viewModel.integrationRunning.collectAsState()
+                                val discoveredModels by viewModel.discoveredModels.collectAsState()
                                 com.hyperwhisper.ui.settings.sections.LocalModelsSection(
                                     whisperStates = whisperDownloadStates,
                                     gemmaStates = gemmaStates,
@@ -346,6 +347,11 @@ fun SettingsScreen(
                                     onCancelGemmaDownload = { viewModel.cancelGemmaDownload(it) },
                                     onDeleteGemmaDownload = { viewModel.deleteDownloadedGemmaModel(it) },
                                     onSetActiveGemma = { viewModel.setActiveGemmaModel(it) },
+                                    detectedGemmaFiles = discoveredModels.filter {
+                                        it.type == com.hyperwhisper.data.LocalModelType.GEMMA
+                                    },
+                                    onDeleteOnDiskFile = { viewModel.deleteOnDiskFile(it) },
+                                    onRescanOnDisk = { viewModel.discoverModels() },
                                     integrationResults = integrationResults,
                                     integrationRunning = integrationRunning,
                                     onRunIntegrationTests = { viewModel.runIntegrationTests() },

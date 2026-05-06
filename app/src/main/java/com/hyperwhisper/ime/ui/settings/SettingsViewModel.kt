@@ -129,6 +129,29 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Delete an on-disk model file that the user no longer wants. Used by the
+     * "Detected on disk" section to clean up incompatible (e.g. .gguf) files.
+     * If the deleted file was the active Gemma path, clear that too so the
+     * settings don't keep pointing at a missing file.
+     */
+    fun deleteOnDiskFile(path: String) {
+        viewModelScope.launch {
+            try {
+                java.io.File(path).takeIf { it.exists() }?.delete()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to delete on-disk file $path", t)
+            }
+            val s = apiSettings.value.localModelSettings
+            if (s.gemmaModelPath == path) {
+                settingsRepository.updateLocalModelSettings(
+                    s.copy(gemmaModelPath = "", useLocalGemma = false)
+                )
+            }
+            discoverModels()
+        }
+    }
+
     // OpenRouter discovery is owned by OpenRouterDiscoveryService; same
     // re-expose pattern as the test state above.
     val openRouterModels: StateFlow<List<com.hyperwhisper.network.OpenRouterModelInfo>> =

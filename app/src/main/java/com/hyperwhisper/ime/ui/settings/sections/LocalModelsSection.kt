@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.GemmaDownloadState
 import com.hyperwhisper.data.GemmaModelCatalog
 import com.hyperwhisper.data.GemmaModelEntry
+import com.hyperwhisper.data.LocalModelInfo
+import com.hyperwhisper.data.LocalModelType
 import com.hyperwhisper.data.WhisperDownloadState
 import com.hyperwhisper.data.WhisperModelCatalog
 import com.hyperwhisper.data.WhisperModelEntry
@@ -60,6 +62,9 @@ fun LocalModelsSection(
     onCancelGemmaDownload: (String) -> Unit,
     onDeleteGemmaDownload: (String) -> Unit,
     onSetActiveGemma: (String) -> Unit,
+    detectedGemmaFiles: List<LocalModelInfo> = emptyList(),
+    onDeleteOnDiskFile: (String) -> Unit = {},
+    onRescanOnDisk: () -> Unit = {},
     integrationResults: List<com.hyperwhisper.ui.about.ProviderIntegrationResult> = emptyList(),
     integrationRunning: Boolean = false,
     onRunIntegrationTests: () -> Unit = {},
@@ -97,7 +102,10 @@ fun LocalModelsSection(
             onDownload = onStartGemmaDownload,
             onCancel = onCancelGemmaDownload,
             onDelete = onDeleteGemmaDownload,
-            onSetActive = onSetActiveGemma
+            onSetActive = onSetActiveGemma,
+            detectedFiles = detectedGemmaFiles,
+            onDeleteOnDiskFile = onDeleteOnDiskFile,
+            onRescan = onRescanOnDisk
         )
 
         IntegrationTestCard(
@@ -444,8 +452,12 @@ private fun GemmaDownloadCard(
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onSetActive: (String) -> Unit
+    onSetActive: (String) -> Unit,
+    detectedFiles: List<LocalModelInfo>,
+    onDeleteOnDiskFile: (String) -> Unit,
+    onRescan: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -459,8 +471,9 @@ private fun GemmaDownloadCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                "MediaPipe-converted .bin / .task files from huggingface.co/litert-community · saved " +
-                    "to /sdcard/LLM/Gemma/. Standard llama.cpp GGUF files won't load — use these.",
+                "MediaPipe-converted .task / .litertlm files from huggingface.co/litert-community · " +
+                    "saved to /sdcard/LLM/Gemma/. Standard llama.cpp GGUF files won't load — use these. " +
+                    "All listed repos are gated; accept the Gemma license on HF (logged in) before downloading.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -475,8 +488,183 @@ private fun GemmaDownloadCard(
                     onSetActive = onSetActive
                 )
             }
+
+            DetectedOnDiskBlock(
+                detected = detectedFiles,
+                activePath = activePath,
+                useLocal = useLocal,
+                onSetActive = onSetActive,
+                onDeleteFile = onDeleteOnDiskFile,
+                onRescan = onRescan
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://huggingface.co/litert-community")
+                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Browse on Hugging Face", fontSize = 12.sp) }
+                OutlinedButton(
+                    onClick = onRescan,
+                    modifier = Modifier.weight(1f)
+                ) { Text("Rescan disk", fontSize = 12.sp) }
+            }
         }
     }
+}
+
+/**
+ * Shows files we found on disk that aren't part of the curated catalog. Two
+ * buckets: loadable (.task / .litertlm / non-gguf .bin) get a "Set active"
+ * action; incompatible (.gguf) get a clear explanation + one-tap delete so
+ * the user can free the (often multi-GB) disk space without going through a
+ * file manager. The user has 8+ GB of GGUF Gemma 4 files from confusing
+ * `gguf` with `litertlm` — surfacing them here is the whole point.
+ */
+@Composable
+private fun DetectedOnDiskBlock(
+    detected: List<LocalModelInfo>,
+    activePath: String,
+    useLocal: Boolean,
+    onSetActive: (String) -> Unit,
+    onDeleteFile: (String) -> Unit,
+    onRescan: () -> Unit
+) {
+    // Hide files already represented by a catalog row (they get their own UI).
+    val orphans = remember(detected) {
+        detected.filter {
+            it.type == LocalModelType.GEMMA &&
+                it.name !in GemmaModelCatalog.knownFileNames
+        }
+    }
+    if (orphans.isEmpty()) return
+
+    val (loadable, incompatible) = orphans.partition { isLoadableByMediaPipe(it.name) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "DETECTED ON DISK · ${orphans.size}",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        loadable.forEach { info ->
+            DetectedRow(
+                info = info,
+                isActive = useLocal && activePath == info.path,
+                statusLine = "MediaPipe-loadable · ${formatBytes(info.sizeBytes)}",
+                primaryActionLabel = if (useLocal && activePath == info.path) null else "Set active",
+                onPrimary = { onSetActive(info.path) },
+                onDelete = { onDeleteFile(info.path) }
+            )
+        }
+        incompatible.forEach { info ->
+            DetectedRow(
+                info = info,
+                isActive = false,
+                statusLine = "Incompatible (GGUF — needs .litertlm from litert-community) · " +
+                    formatBytes(info.sizeBytes),
+                statusIsError = true,
+                primaryActionLabel = null,
+                onPrimary = {},
+                onDelete = { onDeleteFile(info.path) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetectedRow(
+    info: LocalModelInfo,
+    isActive: Boolean,
+    statusLine: String,
+    statusIsError: Boolean = false,
+    primaryActionLabel: String?,
+    onPrimary: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ModelHeader(title = info.name, subtitle = statusLine, isActive = isActive)
+            if (statusIsError) {
+                Text(
+                    info.path,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (primaryActionLabel != null) {
+                    Button(onClick = onPrimary, modifier = Modifier.weight(1f)) {
+                        Text(primaryActionLabel)
+                    }
+                }
+                OutlinedButton(
+                    onClick = { confirmDelete = true },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Delete") }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete file?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(info.name, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        info.path,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Frees ${formatBytes(info.sizeBytes)}. This cannot be undone.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    confirmDelete = false
+                    onDelete()
+                }) {
+                    Text(
+                        "Delete",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+/** Mirrors the runtime check in GemmaInferenceEngine — only .gguf is rejected
+ *  outright; .task / .litertlm / .bin can all be attempted by tasks-genai. */
+private fun isLoadableByMediaPipe(fileName: String): Boolean {
+    val lower = fileName.lowercase()
+    if (lower.endsWith(".gguf")) return false
+    return lower.endsWith(".task") || lower.endsWith(".litertlm") || lower.endsWith(".bin")
 }
 
 @Composable
