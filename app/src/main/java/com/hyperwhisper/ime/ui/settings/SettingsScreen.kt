@@ -489,19 +489,37 @@ private fun PostProcessingDetail(
 ) {
     val cfg = apiSettings.llmConfig
     var llmProvider by remember(cfg) { mutableStateOf(cfg.provider) }
-    var llmBaseUrl by remember(cfg) { mutableStateOf(cfg.customBaseUrl) }
-    var llmApiKey by remember(cfg) { mutableStateOf(cfg.apiKey) }
-    var llmRequiresAuth by remember(cfg) { mutableStateOf(cfg.requiresAuth) }
+    var llmBaseUrl by remember(cfg) { mutableStateOf(cfg.getCurrentBaseUrl()) }
+    var llmApiKey by remember(cfg) { mutableStateOf(cfg.getCurrentApiKey()) }
+    var llmRequiresAuth by remember(cfg) { mutableStateOf(cfg.getCurrentRequiresAuth()) }
     var llmModelId by remember(cfg) { mutableStateOf(cfg.modelId) }
 
+    // Compose the per-provider maps for save: the local fields shown in the UI
+    // belong to the currently active LLM provider — fold them into the persisted
+    // maps so previously-entered keys for other providers survive switching.
     fun persist() {
+        val updatedKeys = cfg.apiKeys.toMutableMap().apply {
+            val trimmed = llmApiKey.trim()
+            if (trimmed.isEmpty()) remove(llmProvider) else put(llmProvider, trimmed)
+        }
+        val updatedConfigs = cfg.providerConfigs.toMutableMap().apply {
+            val normalizedUrl = if (llmBaseUrl.isNotEmpty() && !llmBaseUrl.endsWith("/"))
+                llmBaseUrl + "/" else llmBaseUrl
+            put(llmProvider, com.hyperwhisper.data.LlmProviderConfig(
+                customBaseUrl = normalizedUrl,
+                requiresAuth = if (llmRequiresAuth == llmProvider.requiresAuth) null
+                    else llmRequiresAuth,
+            ))
+        }
         onConfigChange(
             LlmConfig(
                 provider = llmProvider,
                 customBaseUrl = llmBaseUrl,
                 apiKey = llmApiKey,
                 requiresAuth = llmRequiresAuth,
-                modelId = llmModelId
+                modelId = llmModelId,
+                apiKeys = updatedKeys,
+                providerConfigs = updatedConfigs,
             )
         )
     }
@@ -521,16 +539,48 @@ private fun PostProcessingDetail(
                 val matched = llmToApiProviderMatch(llmProvider)
                 matched?.let { apiSettings.apiKeys[it].orEmpty() }.orEmpty()
             },
-            onLlmProviderChange = {
-                llmProvider = it
-                if (llmBaseUrl.isEmpty() || llmBaseUrl == cfg.provider.defaultEndpoint) {
-                    llmBaseUrl = it.defaultEndpoint
+            onLlmProviderChange = { newProvider ->
+                // Save the current view's edits into the per-provider maps for
+                // the OLD provider before swapping to the NEW provider's stored
+                // values. Without this step a user editing a key and then
+                // switching provider would silently lose the unflushed edit.
+                val savedKeys = cfg.apiKeys.toMutableMap().apply {
+                    val trimmed = llmApiKey.trim()
+                    if (trimmed.isEmpty()) remove(llmProvider) else put(llmProvider, trimmed)
                 }
-                llmRequiresAuth = it.requiresAuth
-                if (llmModelId.isEmpty() || !it.defaultModels.contains(llmModelId)) {
-                    llmModelId = it.defaultModels.firstOrNull() ?: llmModelId
+                val savedConfigs = cfg.providerConfigs.toMutableMap().apply {
+                    val normalizedUrl = if (llmBaseUrl.isNotEmpty() && !llmBaseUrl.endsWith("/"))
+                        llmBaseUrl + "/" else llmBaseUrl
+                    put(llmProvider, com.hyperwhisper.data.LlmProviderConfig(
+                        customBaseUrl = normalizedUrl,
+                        requiresAuth = if (llmRequiresAuth == llmProvider.requiresAuth) null
+                            else llmRequiresAuth,
+                    ))
                 }
-                persist()
+
+                llmProvider = newProvider
+                // Load the NEW provider's stored values, falling back to the
+                // provider's defaults when nothing is stored yet.
+                llmApiKey = savedKeys[newProvider].orEmpty()
+                val storedConfig = savedConfigs[newProvider]
+                llmBaseUrl = storedConfig?.customBaseUrl?.takeIf { it.isNotEmpty() }
+                    ?: newProvider.defaultEndpoint
+                llmRequiresAuth = storedConfig?.requiresAuth ?: newProvider.requiresAuth
+                if (llmModelId.isEmpty() || !newProvider.defaultModels.contains(llmModelId)) {
+                    llmModelId = newProvider.defaultModels.firstOrNull() ?: llmModelId
+                }
+
+                onConfigChange(
+                    LlmConfig(
+                        provider = newProvider,
+                        customBaseUrl = llmBaseUrl,
+                        apiKey = llmApiKey,
+                        requiresAuth = llmRequiresAuth,
+                        modelId = llmModelId,
+                        apiKeys = savedKeys,
+                        providerConfigs = savedConfigs,
+                    )
+                )
             },
             onLlmBaseUrlChange = { llmBaseUrl = it; persist() },
             onLlmApiKeyChange = { llmApiKey = it; persist() },

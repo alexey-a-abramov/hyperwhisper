@@ -156,8 +156,12 @@ class ApiSettingsRepository(
             // keep working without a refactor.
             val activeKey = llmApiKeysMap[parsed.provider]
                 ?: secrets[SecretSlot.Llm.storageKey].orEmpty()
+            val activeConfig = llmProviderConfigs[parsed.provider]
             parsed.copy(
                 apiKey = activeKey,
+                customBaseUrl = activeConfig?.customBaseUrl
+                    ?.takeIf { it.isNotEmpty() } ?: parsed.customBaseUrl,
+                requiresAuth = activeConfig?.requiresAuth ?: parsed.requiresAuth,
                 apiKeys = llmApiKeysMap,
                 providerConfigs = llmProviderConfigs,
             )
