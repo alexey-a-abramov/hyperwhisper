@@ -52,6 +52,7 @@ class ApiSettingsRepository(
         private val INPUT_LANGUAGE_KEY = stringPreferencesKey("input_language")
         private val OUTPUT_LANGUAGE_KEY = stringPreferencesKey("output_language")
         private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config")
+        private val LLM_PROVIDER_CONFIGS_KEY = stringPreferencesKey("llm_provider_configs")
         private val LOCAL_MODEL_SETTINGS_KEY = stringPreferencesKey("local_model_settings")
 
         // Legacy plaintext keys — read once during migration, then deleted.
@@ -60,6 +61,11 @@ class ApiSettingsRepository(
 
         // Sentinel marking that plaintext → encrypted migration has run.
         private val SECRETS_MIGRATED_V1 = booleanPreferencesKey("secrets_migrated_v1")
+
+        // Sentinel marking that the legacy single-LLM-key has been promoted
+        // into the per-provider [SecretSlot.LlmProvider] map.
+        private val LLM_PER_PROVIDER_KEYS_MIGRATED_V1 =
+            booleanPreferencesKey("llm_per_provider_keys_migrated_v1")
     }
 
     /**
@@ -90,6 +96,7 @@ class ApiSettingsRepository(
     init {
         scope.launch {
             migratePlaintextSecretsIfNeeded()
+            migrateLlmKeyToPerProviderIfNeeded()
             apiSettings.collect { _apiSettingsState.value = it }
         }
     }
@@ -120,14 +127,49 @@ class ApiSettingsRepository(
             emptyMap()
         }
 
+        val llmProviderConfigs = try {
+            val json = preferences[LLM_PROVIDER_CONFIGS_KEY]
+            if (json.isNullOrEmpty()) {
+                emptyMap()
+            } else {
+                val type = object : TypeToken<Map<String, LlmProviderConfig>>() {}.type
+                val stringMap: Map<String, LlmProviderConfig> = gson.fromJson(json, type)
+                stringMap.mapKeys { LlmProvider.valueOf(it.key) }
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+
+        val llmApiKeysMap: Map<LlmProvider, String> = LlmProvider.entries.mapNotNull { p ->
+            val key = secrets[SecretSlot.LlmProvider(p.name).storageKey] ?: return@mapNotNull null
+            if (key.isEmpty()) null else p to key
+        }.toMap()
+
         val llmConfig = try {
             val json = preferences[LLM_CONFIG_KEY]
             val parsed = if (json.isNullOrEmpty()) LlmConfig() else gson.fromJson(json, LlmConfig::class.java)
-            // The persisted JSON never contains `apiKey` going forward — sourced
-            // from SecretsRepository instead.
-            parsed.copy(apiKey = secrets[SecretSlot.Llm.storageKey].orEmpty())
+            // The persisted JSON never carries `apiKey`, `apiKeys`, or
+            // `providerConfigs` going forward — those live in SecretsRepository
+            // and the LLM_PROVIDER_CONFIGS_KEY prefs entry respectively. Mirror
+            // the active provider's key into the legacy [apiKey] field so older
+            // readers (LlmServiceFactory, ConnectionTester, VoiceRepository)
+            // keep working without a refactor.
+            val activeKey = llmApiKeysMap[parsed.provider]
+                ?: secrets[SecretSlot.Llm.storageKey].orEmpty()
+            parsed.copy(
+                apiKey = activeKey,
+                apiKeys = llmApiKeysMap,
+                providerConfigs = llmProviderConfigs,
+            )
         } catch (e: Exception) {
-            LlmConfig(apiKey = secrets[SecretSlot.Llm.storageKey].orEmpty())
+            val fallbackProvider = LlmConfig().provider
+            val fallbackKey = llmApiKeysMap[fallbackProvider]
+                ?: secrets[SecretSlot.Llm.storageKey].orEmpty()
+            LlmConfig(
+                apiKey = fallbackKey,
+                apiKeys = llmApiKeysMap,
+                providerConfigs = llmProviderConfigs,
+            )
         }
 
         val localModelSettings = try {
@@ -223,6 +265,42 @@ class ApiSettingsRepository(
     }
 
     /**
+     * Promote the legacy single-LLM-key ([SecretSlot.Llm]) into the new
+     * per-provider [SecretSlot.LlmProvider] slot for whichever LlmProvider
+     * is currently active. The legacy slot is left in place — the read
+     * path mirrors the active per-provider key back into it for code that
+     * still reads it directly. Idempotent via the V1 sentinel.
+     */
+    private suspend fun migrateLlmKeyToPerProviderIfNeeded() {
+        val current = dataStore.data.first()
+        if (current[LLM_PER_PROVIDER_KEYS_MIGRATED_V1] == true) return
+
+        val secretsSnapshot = secretsRepository.secrets.first()
+        val legacyKey = secretsSnapshot[SecretSlot.Llm.storageKey].orEmpty()
+        if (legacyKey.isNotEmpty()) {
+            val activeLlmProvider = try {
+                val json = current[LLM_CONFIG_KEY]
+                if (json.isNullOrEmpty()) LlmConfig().provider
+                else gson.fromJson(json, LlmConfig::class.java).provider
+            } catch (_: Exception) {
+                LlmConfig().provider
+            }
+            // Don't overwrite if a per-provider key was already stored for this
+            // provider (e.g. set in a previous partial run).
+            val existing = secretsSnapshot[
+                SecretSlot.LlmProvider(activeLlmProvider.name).storageKey
+            ].orEmpty()
+            if (existing.isEmpty()) {
+                secretsRepository.put(SecretSlot.LlmProvider(activeLlmProvider.name), legacyKey)
+            }
+        }
+
+        dataStore.edit { prefs ->
+            prefs[LLM_PER_PROVIDER_KEYS_MIGRATED_V1] = true
+        }
+    }
+
+    /**
      * Save complete API settings configuration. API keys (per-provider and the
      * LLM key inside [ApiSettings.llmConfig]) are routed to [SecretsRepository];
      * everything else lands in DataStore.
@@ -234,7 +312,12 @@ class ApiSettingsRepository(
             settings.apiKeys.forEach { (provider, key) ->
                 put(SecretSlot.Provider(provider.name), key)
             }
-            put(SecretSlot.Llm, settings.llmConfig.apiKey)
+            settings.llmConfig.apiKeys.forEach { (provider, key) ->
+                put(SecretSlot.LlmProvider(provider.name), key)
+            }
+            // Mirror the active LLM key into the legacy slot so any code that
+            // still reads SecretSlot.Llm directly sees a consistent value.
+            put(SecretSlot.Llm, settings.llmConfig.getCurrentApiKey())
         }
         secretsRepository.putAll(newSecrets)
 
@@ -251,8 +334,18 @@ class ApiSettingsRepository(
             val configsStringMap = settings.providerConfigs.mapKeys { it.key.name }
             preferences[PROVIDER_CONFIGS_KEY] = gson.toJson(configsStringMap)
 
-            // Persist llmConfig WITHOUT the apiKey field — kept in SecretsRepository.
-            preferences[LLM_CONFIG_KEY] = gson.toJson(settings.llmConfig.copy(apiKey = ""))
+            val llmConfigsStringMap = settings.llmConfig.providerConfigs.mapKeys { it.key.name }
+            preferences[LLM_PROVIDER_CONFIGS_KEY] = gson.toJson(llmConfigsStringMap)
+
+            // Persist llmConfig WITHOUT secret/per-provider fields — those live
+            // in SecretsRepository and LLM_PROVIDER_CONFIGS_KEY respectively.
+            preferences[LLM_CONFIG_KEY] = gson.toJson(
+                settings.llmConfig.copy(
+                    apiKey = "",
+                    apiKeys = emptyMap(),
+                    providerConfigs = emptyMap(),
+                )
+            )
 
             preferences[LOCAL_MODEL_SETTINGS_KEY] = gson.toJson(settings.localModelSettings)
 
@@ -298,10 +391,59 @@ class ApiSettingsRepository(
 
     /** Update LLM configuration for post-processing */
     suspend fun updateLlmConfig(llmConfig: LlmConfig) {
-        // Split: plaintext apiKey to SecretsRepository, rest to DataStore.
-        secretsRepository.put(SecretSlot.Llm, llmConfig.apiKey)
+        // Split: per-provider keys → SecretsRepository, per-provider configs
+        // and the active provider/model → DataStore. Mirror the active key
+        // into the legacy slot for back-compat readers.
+        val secretsToPut: Map<SecretSlot, String> = buildMap {
+            llmConfig.apiKeys.forEach { (provider, key) ->
+                put(SecretSlot.LlmProvider(provider.name), key)
+            }
+            put(SecretSlot.Llm, llmConfig.getCurrentApiKey())
+        }
+        secretsRepository.putAll(secretsToPut)
         dataStore.edit { preferences ->
-            preferences[LLM_CONFIG_KEY] = gson.toJson(llmConfig.copy(apiKey = ""))
+            val llmConfigsStringMap = llmConfig.providerConfigs.mapKeys { it.key.name }
+            preferences[LLM_PROVIDER_CONFIGS_KEY] = gson.toJson(llmConfigsStringMap)
+            preferences[LLM_CONFIG_KEY] = gson.toJson(
+                llmConfig.copy(
+                    apiKey = "",
+                    apiKeys = emptyMap(),
+                    providerConfigs = emptyMap(),
+                )
+            )
+        }
+    }
+
+    /** Update API key for a specific LLM provider without affecting other settings. */
+    suspend fun updateLlmProviderApiKey(provider: LlmProvider, apiKey: String) {
+        secretsRepository.put(SecretSlot.LlmProvider(provider.name), apiKey)
+        // If the updated provider is the active one, refresh the legacy mirror
+        // so directly-reading callers don't see the old key.
+        val currentActive = apiSettings.first().llmConfig.provider
+        if (currentActive == provider) {
+            secretsRepository.put(SecretSlot.Llm, apiKey)
+        }
+    }
+
+    /** Update per-provider LLM configuration (custom base URL, requiresAuth override). */
+    suspend fun updateLlmProviderConfig(
+        provider: LlmProvider,
+        customBaseUrl: String,
+        requiresAuth: Boolean?,
+    ) {
+        dataStore.edit { preferences ->
+            val current = apiSettings.first().llmConfig.providerConfigs.toMutableMap()
+            val normalizedUrl = if (customBaseUrl.isNotEmpty() && !customBaseUrl.endsWith("/")) {
+                customBaseUrl + "/"
+            } else {
+                customBaseUrl
+            }
+            current[provider] = LlmProviderConfig(
+                customBaseUrl = normalizedUrl,
+                requiresAuth = requiresAuth,
+            )
+            val stringMap = current.mapKeys { it.key.name }
+            preferences[LLM_PROVIDER_CONFIGS_KEY] = gson.toJson(stringMap)
         }
     }
 

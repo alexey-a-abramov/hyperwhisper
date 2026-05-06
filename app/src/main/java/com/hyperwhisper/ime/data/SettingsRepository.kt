@@ -44,6 +44,15 @@ class SettingsRepository @Inject constructor(
     suspend fun updateLlmConfig(llmConfig: LlmConfig) =
         apiSettingsRepository.updateLlmConfig(llmConfig)
 
+    suspend fun updateLlmProviderApiKey(provider: LlmProvider, apiKey: String) =
+        apiSettingsRepository.updateLlmProviderApiKey(provider, apiKey)
+
+    suspend fun updateLlmProviderConfig(
+        provider: LlmProvider,
+        customBaseUrl: String,
+        requiresAuth: Boolean?,
+    ) = apiSettingsRepository.updateLlmProviderConfig(provider, customBaseUrl, requiresAuth)
+
     suspend fun updateLocalModelSettings(settings: LocalModelSettings) =
         apiSettingsRepository.updateLocalModelSettings(settings)
 

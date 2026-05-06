@@ -234,16 +234,49 @@ enum class LlmProvider(
 }
 
 /**
- * LLM configuration for post-processing
+ * Per-provider LLM configuration. Mirrors [ProviderConfig] on the ASR side.
+ * `requiresAuth = null` means "inherit from [LlmProvider.requiresAuth]".
+ */
+data class LlmProviderConfig(
+    val customBaseUrl: String = "",
+    val requiresAuth: Boolean? = null
+)
+
+/**
+ * LLM configuration for post-processing.
+ *
+ * Per-provider keys live in [apiKeys]; per-provider URL/auth overrides live
+ * in [providerConfigs]. The top-level [apiKey] / [customBaseUrl] /
+ * [requiresAuth] fields are kept as deprecated mirrors of the active
+ * provider's values so legacy readers (network layer, ConnectionTester,
+ * VoiceRepository) keep working unchanged.
+ *
+ * The repository (`ApiSettingsRepository`) is the only authoritative writer
+ * for the mirror fields — UI code should write per-provider via the new
+ * `updateLlmProviderApiKey` / `updateLlmProviderConfig` helpers.
  */
 data class LlmConfig(
     val provider: LlmProvider = LlmProvider.OPENAI,
-    val customBaseUrl: String = "", // Empty means use default
-    val apiKey: String = "",
+    val customBaseUrl: String = "", // Deprecated: mirror of providerConfigs[provider].customBaseUrl
+    val apiKey: String = "",        // Deprecated: mirror of apiKeys[provider]
     val modelId: String = "gpt-4o-mini",
-    val requiresAuth: Boolean = true
+    val requiresAuth: Boolean = true, // Deprecated: mirror of getCurrentRequiresAuth()
+    val apiKeys: Map<LlmProvider, String> = emptyMap(),
+    val providerConfigs: Map<LlmProvider, LlmProviderConfig> = emptyMap()
 ) {
-    fun getBaseUrl(): String = customBaseUrl.ifEmpty { provider.defaultEndpoint }
+    fun getBaseUrl(): String = getCurrentBaseUrl()
+
+    fun getCurrentApiKey(): String = apiKeys[provider] ?: apiKey
+
+    fun getCurrentBaseUrl(): String {
+        val perProvider = providerConfigs[provider]?.customBaseUrl?.takeIf { it.isNotEmpty() }
+        return perProvider
+            ?: customBaseUrl.takeIf { it.isNotEmpty() }
+            ?: provider.defaultEndpoint
+    }
+
+    fun getCurrentRequiresAuth(): Boolean =
+        providerConfigs[provider]?.requiresAuth ?: provider.requiresAuth
 }
 
 enum class ApiProvider(

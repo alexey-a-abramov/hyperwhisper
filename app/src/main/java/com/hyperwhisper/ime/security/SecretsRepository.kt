@@ -21,10 +21,17 @@ import kotlinx.coroutines.launch
  * without colliding.
  */
 sealed class SecretSlot(val storageKey: String) {
-    /** Per-provider transcription/LLM API key. [providerName] is `ApiProvider.name`. */
+    /** Per-provider transcription API key. [providerName] is `ApiProvider.name`. */
     data class Provider(val providerName: String) : SecretSlot("provider:$providerName")
 
-    /** Single LLM post-processing API key (not per-provider in the legacy model). */
+    /** Per-provider LLM API key. Separate prefix from [Provider] so an OpenAI
+     *  ASR key and an OpenAI LLM key (which may be different OpenRouter / OAI
+     *  account scopes) don't collide on the same name. */
+    data class LlmProvider(val providerName: String) : SecretSlot("llm_provider:$providerName")
+
+    /** Single LLM post-processing API key (legacy — pre-per-provider model).
+     *  Repository mirrors the active LlmProvider's key here for back-compat
+     *  with code paths that still read it directly. */
     object Llm : SecretSlot("llm")
 }
 
