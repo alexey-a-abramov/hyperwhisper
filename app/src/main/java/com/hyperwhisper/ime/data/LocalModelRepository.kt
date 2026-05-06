@@ -95,13 +95,16 @@ class LocalModelRepository @Inject constructor(
                     val fileName = file.name.lowercase()
                     val type = when {
                         // Whisper models are usually smaller and often have "ggml" or "whisper" in name
-                        fileName.endsWith(".bin") && 
-                        (fileName.contains("whisper") || fileName.contains("ggml") || file.length() < 600_000_000) -> 
+                        fileName.endsWith(".bin") &&
+                        (fileName.contains("whisper") || fileName.contains("ggml") || file.length() < 600_000_000) ->
                             LocalModelType.WHISPER
-                            
-                        // Gemma/Llama are usually .gguf or larger .bin
-                        fileName.endsWith(".gguf") || 
-                        (fileName.endsWith(".bin") && (fileName.contains("gemma") || fileName.contains("llama") || file.length() > 600_000_000)) -> 
+
+                        // Gemma: MediaPipe formats (.task, .litertlm), llama.cpp .gguf,
+                        // or large .bin files that look like an LLM by name/size.
+                        fileName.endsWith(".task") ||
+                        fileName.endsWith(".litertlm") ||
+                        fileName.endsWith(".gguf") ||
+                        (fileName.endsWith(".bin") && (fileName.contains("gemma") || fileName.contains("llama") || file.length() > 600_000_000)) ->
                             LocalModelType.GEMMA
                         else -> null
                     }
