@@ -801,9 +801,7 @@ private fun LocalWhisperPanel(
                 discoveredModels.forEach { model ->
                     LocalModelRow(
                         model = model,
-                        isSelected = model.path == settings.whisperModelPath,
-                        isActiveSource = localActive && model.path == settings.whisperModelPath,
-                        onSelect = { onUpdate(settings.copy(whisperModelPath = model.path)) },
+                        isActive = localActive && model.path == settings.whisperModelPath,
                         onSetActive = { onSetActiveLocalModel(model.path) },
                         onVerify = { onVerify(model.path) }
                     )
@@ -894,56 +892,46 @@ private fun LocalWhisperPanel(
 @Composable
 private fun LocalModelRow(
     model: LocalModelInfo,
-    isSelected: Boolean,
-    isActiveSource: Boolean,
-    onSelect: () -> Unit,
+    isActive: Boolean,
     onSetActive: () -> Unit,
     onVerify: () -> Unit
 ) {
     val strings = LocalStrings.current
     Surface(
-        onClick = onSelect,
-        color = when {
-            isActiveSource -> MaterialTheme.colorScheme.primaryContainer
-            isSelected -> MaterialTheme.colorScheme.surfaceVariant
-            else -> MaterialTheme.colorScheme.surface
-        },
+        onClick = onSetActive,
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface,
         shape = MaterialTheme.shapes.medium,
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = isSelected, onClick = onSelect)
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(model.name, fontWeight = FontWeight.SemiBold)
-                        if (isActiveSource) {
-                            Spacer(Modifier.width(8.dp))
-                            ActiveBadge()
-                        }
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = isActive, onClick = onSetActive)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(model.name, fontWeight = FontWeight.SemiBold)
+                    if (isActive) {
+                        Spacer(Modifier.width(8.dp))
+                        ActiveBadge()
                     }
-                    Text(
-                        "${model.sizeBytes / 1024 / 1024} MB · …${model.path.takeLast(28)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-                IconButton(onClick = onVerify) {
-                    Icon(
-                        Icons.Outlined.Verified,
-                        contentDescription = strings.transcriptionVerifyIntegrityDesc,
-                        tint = if (model.hash.isNotEmpty()) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Text(
+                    "${model.sizeBytes / 1024 / 1024} MB · …${model.path.takeLast(28)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            if (!isActiveSource) {
-                Button(
-                    onClick = onSetActive,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(strings.transcriptionUseThisModel) }
+            IconButton(onClick = onVerify) {
+                Icon(
+                    Icons.Outlined.Verified,
+                    contentDescription = strings.transcriptionVerifyIntegrityDesc,
+                    tint = if (model.hash.isNotEmpty()) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
