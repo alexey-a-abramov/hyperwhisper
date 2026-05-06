@@ -264,10 +264,17 @@ fun SettingsScreen(
                 label = "settings-route"
             ) { current ->
                 when (current) {
-                    is SettingsRoute.Home -> SettingsHomeScreen(
-                        apiSettings = apiSettings,
-                        onCategorySelected = { route = SettingsRoute.Detail(it) }
-                    )
+                    is SettingsRoute.Home -> {
+                        val retestProgress by viewModel.retestProgress.collectAsState()
+                        val retestRunning by viewModel.retestRunning.collectAsState()
+                        SettingsHomeScreen(
+                            apiSettings = apiSettings,
+                            retestProgress = retestProgress,
+                            retestRunning = retestRunning,
+                            onRetestAll = { viewModel.retestAllProviders() },
+                            onCategorySelected = { route = SettingsRoute.Detail(it) }
+                        )
+                    }
                     is SettingsRoute.Detail -> Box(
                         modifier = Modifier
                             .fillMaxSize()

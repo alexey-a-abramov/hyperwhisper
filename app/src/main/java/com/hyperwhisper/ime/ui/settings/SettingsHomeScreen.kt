@@ -15,12 +15,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -32,7 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.ApiProvider
 import com.hyperwhisper.data.ApiSettings
+import com.hyperwhisper.data.LlmProvider
+import com.hyperwhisper.network.ConnectionTester
+import com.hyperwhisper.ui.util.localizedDisplayName
 
 /**
  * Modern settings home: status hero on top, category list below.
@@ -42,7 +53,10 @@ import com.hyperwhisper.data.ApiSettings
 fun SettingsHomeScreen(
     apiSettings: ApiSettings,
     onCategorySelected: (SettingsCategory) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    retestProgress: Map<String, ConnectionTester.RetestRowState> = emptyMap(),
+    retestRunning: Boolean = false,
+    onRetestAll: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier
@@ -55,6 +69,13 @@ fun SettingsHomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { StatusHeroCard(apiSettings) }
+        item {
+            RetestAllCard(
+                running = retestRunning,
+                progress = retestProgress,
+                onRetestAll = onRetestAll,
+            )
+        }
         item { Spacer(Modifier.height(4.dp)) }
 
         items(SettingsCategory.values()) { category ->
@@ -63,6 +84,134 @@ fun SettingsHomeScreen(
                 trailing = trailingTextFor(category, apiSettings),
                 onClick = { onCategorySelected(category) }
             )
+        }
+    }
+}
+
+@Composable
+private fun RetestAllCard(
+    running: Boolean,
+    progress: Map<String, ConnectionTester.RetestRowState>,
+    onRetestAll: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Re-test all configured providers",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Runs the same connection probe Settings exposes per provider, " +
+                    "for every transcription + LLM provider with a stored key " +
+                    "(plus local providers when the model file is on disk). " +
+                    "Refreshes the green ✓ / stale badges in the keyboard pickers.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onRetestAll,
+                enabled = !running,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(if (running) "Retesting…" else "Re-test all")
+            }
+
+            if (progress.isNotEmpty()) {
+                progress.entries.sortedBy { it.key }.forEach { (key, state) ->
+                    RetestRow(key = key, state = state)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetestRow(key: String, state: ConnectionTester.RetestRowState) {
+    val (kind, name) = key.split(":", limit = 2).let {
+        if (it.size == 2) it[0] to it[1] else "" to key
+    }
+    val displayName = when (kind) {
+        "asr" -> ApiProvider.entries.firstOrNull { it.name == name }
+            ?.localizedDisplayName() ?: name
+        "llm" -> LlmProvider.entries.firstOrNull { it.name == name }
+            ?.localizedDisplayName() ?: name
+        else -> name
+    }
+    val kindLabel = when (kind) {
+        "asr" -> "ASR"
+        "llm" -> "LLM"
+        else -> ""
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                kindLabel,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.width(28.dp)
+            )
+            Text(
+                displayName,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f)
+            )
+            when (state) {
+                is ConnectionTester.RetestRowState.Pending -> Text(
+                    "queued",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                is ConnectionTester.RetestRowState.Running ->
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp)
+                    )
+                is ConnectionTester.RetestRowState.Ok ->
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = "ok",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                is ConnectionTester.RetestRowState.Error -> {
+                    Text(
+                        state.message?.take(40) ?: "failed",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Cancel,
+                        contentDescription = "failed",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

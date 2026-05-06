@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.hyperwhisper.R
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.data.ApiSettings
 import com.hyperwhisper.data.ChatCompletionRequest
 import com.hyperwhisper.data.ChatMessage
 import com.hyperwhisper.data.ContentPart
@@ -86,6 +87,145 @@ class ConnectionTester @Inject constructor(
     }
 
     /**
+     * State of an individual provider row during a retest-all run. The
+     * orchestrator advances each row PENDING → RUNNING → OK / ERROR. After
+     * a successful test the per-provider lastTestedAt timestamp is also
+     * refreshed (via the existing test functions' success path), so picker
+     * badges reflect the new state without any extra plumbing here.
+     */
+    sealed class RetestRowState {
+        object Pending : RetestRowState()
+        object Running : RetestRowState()
+        data class Ok(val message: String?) : RetestRowState()
+        data class Error(val message: String?) : RetestRowState()
+    }
+
+    private val _retestProgress = MutableStateFlow<Map<String, RetestRowState>>(emptyMap())
+    val retestProgress: StateFlow<Map<String, RetestRowState>> = _retestProgress.asStateFlow()
+
+    private val _retestRunning = MutableStateFlow(false)
+    val retestRunning: StateFlow<Boolean> = _retestRunning.asStateFlow()
+
+    /** Stable key for the progress map. Distinct namespaces for ASR / LLM
+     *  so an ApiProvider.OPENAI row doesn't collide with LlmProvider.OPENAI. */
+    fun asrKey(p: ApiProvider): String = "asr:${p.name}"
+    fun llmKey(p: LlmProvider): String = "llm:${p.name}"
+
+    fun resetRetestProgress() {
+        _retestProgress.value = emptyMap()
+    }
+
+    /**
+     * Sequentially re-test every configured ASR + LLM provider, refreshing
+     * the per-provider lastTestedAt timestamps that the picker badges read.
+     *
+     * Sequential rather than parallel: the existing test-flow side-effects
+     * (single-test state flow + log entries) aren't reentrancy-safe, and
+     * fanning out cloud + local provider tests in parallel risks OOM on
+     * mid-range devices when LOCAL_WHISPER and LOCAL_GEMMA both load model
+     * files. Per-row live progress is exposed via [retestProgress].
+     *
+     * "Configured" mirrors the picker filter from roadmap A: providers with
+     * a stored key OR providers that don't require auth. Local providers
+     * are skipped if their model file isn't present (the test would
+     * predictably fail with no actionable signal for the user).
+     */
+    suspend fun retestAll() {
+        if (_retestRunning.value) return
+        _retestRunning.value = true
+        try {
+            val settings = settingsRepository.apiSettings.first()
+
+            val asrTargets = ApiProvider.entries.filter { it.isConfiguredForRetest(settings) }
+            val llmTargets = LlmProvider.entries
+                .filter { it != LlmProvider.NONE }
+                .filter { it.isConfiguredForRetest(settings) }
+
+            val initial = buildMap<String, RetestRowState> {
+                asrTargets.forEach { put(asrKey(it), RetestRowState.Pending) }
+                llmTargets.forEach { put(llmKey(it), RetestRowState.Pending) }
+            }
+            _retestProgress.value = initial
+
+            for (provider in asrTargets) {
+                _retestProgress.value = _retestProgress.value +
+                    (asrKey(provider) to RetestRowState.Running)
+                val key = settings.apiKeys[provider].orEmpty()
+                val baseUrl = settings.providerConfigs[provider]?.customBaseUrl
+                    ?.takeIf { it.isNotEmpty() } ?: provider.defaultEndpoint
+                val modelId = provider.defaultModels.firstOrNull().orEmpty()
+
+                resetConnectionTestState()
+                runCatching { testConnection(provider, baseUrl, key, modelId) }
+                _retestProgress.value = _retestProgress.value + (asrKey(provider) to
+                    when (val state = _connectionTestState.value) {
+                        is ConnectionTestState.Success -> RetestRowState.Ok(state.message)
+                        is ConnectionTestState.Error -> RetestRowState.Error(state.message)
+                        else -> RetestRowState.Error("Test ended in unexpected state")
+                    })
+            }
+
+            for (provider in llmTargets) {
+                _retestProgress.value = _retestProgress.value +
+                    (llmKey(provider) to RetestRowState.Running)
+                val key = settings.llmConfig.apiKeys[provider].orEmpty()
+                val perCfg = settings.llmConfig.providerConfigs[provider]
+                val baseUrl = perCfg?.customBaseUrl?.takeIf { it.isNotEmpty() }
+                    ?: provider.defaultEndpoint
+                val requiresAuth = perCfg?.requiresAuth ?: provider.requiresAuth
+                val modelId = provider.defaultModels.firstOrNull().orEmpty()
+                val targetLlm = LlmConfig(
+                    provider = provider,
+                    customBaseUrl = baseUrl,
+                    apiKey = key,
+                    modelId = modelId,
+                    requiresAuth = requiresAuth,
+                )
+
+                resetPostProcessingTestState()
+                val syntheticVoiceMode = VoiceMode(
+                    id = "__retest_all__",
+                    name = "retest-all",
+                    systemPrompt = "",
+                )
+                runCatching { testPostProcessing(syntheticVoiceMode, overrideLlm = targetLlm) }
+                _retestProgress.value = _retestProgress.value + (llmKey(provider) to
+                    when (val state = _postProcessingTestState.value) {
+                        is ConnectionTestState.Success -> RetestRowState.Ok(state.message)
+                        is ConnectionTestState.Error -> RetestRowState.Error(state.message)
+                        else -> RetestRowState.Error("Test ended in unexpected state")
+                    })
+            }
+        } finally {
+            _retestRunning.value = false
+            // Leave the existing single-test flows in Idle so the per-section
+            // overlays don't show the last batched provider's result on next
+            // open.
+            resetConnectionTestState()
+            resetPostProcessingTestState()
+        }
+    }
+
+    private fun ApiProvider.isConfiguredForRetest(settings: ApiSettings): Boolean {
+        if (this == ApiProvider.LOCAL_WHISPER) {
+            // Local model file path lives in localModelSettings; skip if blank
+            // or missing on disk so the test doesn't fail for an unreachable-
+            // by-design reason.
+            val path = settings.localModelSettings.whisperModelPath
+            return path.isNotBlank() && java.io.File(path).exists()
+        }
+        return settings.apiKeys[this]?.isNotEmpty() == true || !this.requiresAuth
+    }
+
+    private fun LlmProvider.isConfiguredForRetest(settings: ApiSettings): Boolean {
+        if (this == LlmProvider.LOCAL_GEMMA) {
+            val path = settings.localModelSettings.gemmaModelPath
+            return path.isNotBlank() && java.io.File(path).exists()
+        }
+        return settings.llmConfig.apiKeys[this]?.isNotEmpty() == true || !this.requiresAuth
+    }
+
+    /**
      * Sends a real bundled speech sample (JFK clip, ~12s) to the configured
      * transcription endpoint and reports back the transcribed text. Emits
      * step-by-step entries to [transcriptionTestLog] so the UI can show
@@ -101,8 +241,13 @@ class ConnectionTester @Inject constructor(
         _transcriptionTestLog.value = emptyList()
         appendTranscriptionLog(TestLogLevel.RUNNING, "Starting transcription test")
 
+        // Route by provider, not the global useLocalWhisper toggle: the toggle
+        // governs production routing, but a Settings-side test should exercise
+        // the provider the user explicitly asked to test. Retest-all relies on
+        // this: it iterates per-provider and would otherwise short-circuit to
+        // local for every cloud provider whenever the toggle is on.
         val local = settingsRepository.apiSettings.first().localModelSettings
-        if (local.useLocalWhisper) {
+        if (provider == ApiProvider.LOCAL_WHISPER) {
             runLocalWhisperTest(local)
             return
         }
@@ -535,14 +680,21 @@ class ConnectionTester @Inject constructor(
      * Sends a sample text through the configured post-processing LLM with the
      * given voice mode prompt and reports the rewritten text. Exercises the
      * exact dynamic-LLM client path that production uses (without recording).
+     *
+     * [overrideLlm] lets retest-all aim the test at a specific LLM provider
+     * (with that provider's stored key/baseUrl/auth) without mutating the
+     * active selection. When null, the active LlmConfig is used.
      */
-    suspend fun testPostProcessing(voiceMode: VoiceMode) {
+    suspend fun testPostProcessing(
+        voiceMode: VoiceMode,
+        overrideLlm: LlmConfig? = null,
+    ) {
         _postProcessingTestState.value = ConnectionTestState.Testing
         _postProcessingTestLog.value = emptyList()
         appendPostProcessingLog(TestLogLevel.RUNNING, "Starting post-processing test")
         try {
             val settings = settingsRepository.apiSettings.first()
-            val llm = settings.llmConfig
+            val llm = overrideLlm ?: settings.llmConfig
             if (llm.provider == LlmProvider.NONE) {
                 appendPostProcessingLog(TestLogLevel.FAIL, "Provider = None", "post-processing disabled")
                 _postProcessingTestState.value = ConnectionTestState.Error(

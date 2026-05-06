@@ -80,6 +80,26 @@ class SettingsViewModel @Inject constructor(
     val transcriptionTestLog: StateFlow<List<TestLogEntry>> = connectionTester.transcriptionTestLog
     val postProcessingTestLog: StateFlow<List<TestLogEntry>> = connectionTester.postProcessingTestLog
 
+    val retestProgress: StateFlow<Map<String, ConnectionTester.RetestRowState>> =
+        connectionTester.retestProgress
+    val retestRunning: StateFlow<Boolean> = connectionTester.retestRunning
+
+    /** Re-run every configured ASR + LLM provider's connection test, refreshing
+     *  the per-provider lastTestedAt timestamps that the picker badges read. */
+    fun retestAllProviders() {
+        viewModelScope.launch {
+            try {
+                connectionTester.retestAll()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Retest-all failed", t)
+            }
+        }
+    }
+
+    fun resetRetestProgress() {
+        connectionTester.resetRetestProgress()
+    }
+
     private val _discoveredModels = MutableStateFlow<List<com.hyperwhisper.data.LocalModelInfo>>(emptyList())
     val discoveredModels: StateFlow<List<com.hyperwhisper.data.LocalModelInfo>> = _discoveredModels.asStateFlow()
 
