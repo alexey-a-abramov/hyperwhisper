@@ -1,13 +1,10 @@
 package com.hyperwhisper.ui.settings.sections
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -309,19 +306,73 @@ private fun buildIntegrationResultsJson(
 
 // endregion
 
-// region Active-model color tokens
+// region Status badges
 //
-// "Active" rows use a soft green container with a saturated green left
-// accent stripe + an "ACTIVE" pill. Picked outside the Material primary
-// palette (which is purple in this theme) so the active model is
-// instantly distinguishable from the other "selectable" rows. Tokens are
-// const Color values rather than theme entries because the active state
-// has a fixed semantic meaning here — varying it by light/dark theme
-// would dilute the cue.
-private val ActiveContainer = Color(0xFFD7F2D8)   // material green 100-ish
-private val ActiveAccent = Color(0xFF2E7D32)     // material green 800
-private val ActiveOnAccent = Color(0xFFFFFFFF)
-private val ActiveOnContainer = Color(0xFF1B5E20) // dark green for foreground text
+// Per-row state is communicated via a small badge in the title line —
+// rather than tinting the whole row — so the screen stays calm even when
+// several models are installed. Three states surface:
+//
+//   ACTIVE       — currently selected AND on-device toggle is on
+//   INSTALLED    — file is on disk but not the active selection
+//   DOWNLOADING  — download in progress (Downloading / Queued / Retrying)
+//
+// ACTIVE keeps a saturated green so it's the obvious "in-use" cue across
+// the screen; the other two use the theme's secondary/tertiary container
+// so they read as informational rather than action-required.
+private val ActiveBadgeColor = Color(0xFF2E7D32)        // material green 800
+private val ActiveBadgeOnColor = Color(0xFFFFFFFF)
+
+private enum class RowStatus { ACTIVE, INSTALLED, DOWNLOADING, NONE }
+
+@Composable
+private fun StatusBadge(status: RowStatus) {
+    val (label, container, content) = when (status) {
+        RowStatus.ACTIVE -> Triple("ACTIVE", ActiveBadgeColor, ActiveBadgeOnColor)
+        RowStatus.INSTALLED -> Triple(
+            "INSTALLED",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+        RowStatus.DOWNLOADING -> Triple(
+            "DOWNLOADING",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        RowStatus.NONE -> return
+    }
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(4.dp),
+    ) {
+        Text(
+            label,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+private fun whisperStatus(state: WhisperDownloadState, isActive: Boolean): RowStatus = when {
+    isActive -> RowStatus.ACTIVE
+    state is WhisperDownloadState.Downloading ||
+        state is WhisperDownloadState.Queued ||
+        state is WhisperDownloadState.Retrying -> RowStatus.DOWNLOADING
+    state is WhisperDownloadState.Completed ||
+        state is WhisperDownloadState.Paused -> RowStatus.INSTALLED
+    else -> RowStatus.NONE
+}
+
+private fun gemmaStatus(state: GemmaDownloadState, isActive: Boolean): RowStatus = when {
+    isActive -> RowStatus.ACTIVE
+    state is GemmaDownloadState.Downloading ||
+        state is GemmaDownloadState.Queued ||
+        state is GemmaDownloadState.Retrying -> RowStatus.DOWNLOADING
+    state is GemmaDownloadState.Completed ||
+        state is GemmaDownloadState.Paused -> RowStatus.INSTALLED
+    else -> RowStatus.NONE
+}
 
 // endregion
 
@@ -401,7 +452,7 @@ private fun WhisperRow(
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    ActiveAccentSurface(isActive = isActive) {
+    ModelRowSurface {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -412,7 +463,7 @@ private fun WhisperRow(
                     entry.notes?.let { append(" · "); append(it) }
                 },
                 technicalLine = entry.fileName.takeIf { showTechnicalDetails },
-                isActive = isActive
+                status = whisperStatus(state, isActive),
             )
             ProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
             ActionRow(
@@ -654,13 +705,13 @@ private fun DetectedRow(
     onDelete: () -> Unit
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-    ActiveAccentSurface(isActive = isActive) {
+    ModelRowSurface {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = info.name,
                 subtitle = statusLine,
                 technicalLine = info.path.takeIf { showTechnicalDetails || statusIsError },
-                isActive = isActive,
+                status = if (isActive) RowStatus.ACTIVE else RowStatus.INSTALLED,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (primaryActionLabel != null) {
@@ -735,7 +786,7 @@ private fun GemmaRow(
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    ActiveAccentSurface(isActive = isActive) {
+    ModelRowSurface {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -744,7 +795,7 @@ private fun GemmaRow(
                     entry.notes?.let { append(" · "); append(it) }
                 },
                 technicalLine = entry.fileName.takeIf { showTechnicalDetails },
-                isActive = isActive,
+                status = gemmaStatus(state, isActive),
             )
             GemmaProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
             GemmaActionRow(
@@ -877,36 +928,20 @@ private fun GemmaActionRow(
 // region Shared helpers
 
 /**
- * Container surface for a model row. When [isActive] is true, paints the
- * row with the soft green container plus a saturated green left-edge
- * accent stripe so the active model is unambiguous at a glance — the
- * accent shows through even when the row sits inside the surrounding card
- * tint. Inactive rows fall back to the regular surface tonal elevation.
+ * Container surface for a model row. Neutral background regardless of
+ * status — state is communicated via [StatusBadge] in the row header
+ * rather than by tinting the whole row, which kept the screen too busy
+ * when several models were installed at once.
  */
 @Composable
-private fun ActiveAccentSurface(
-    isActive: Boolean,
-    content: @Composable () -> Unit,
-) {
+private fun ModelRowSurface(content: @Composable () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = if (isActive) ActiveContainer else MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (isActive) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .background(ActiveAccent)
-                )
-                Box(modifier = Modifier.weight(1f)) { content() }
-            }
-        } else {
-            content()
-        }
+        content()
     }
 }
 
@@ -915,7 +950,7 @@ private fun ModelHeader(
     title: String,
     subtitle: String,
     technicalLine: String?,
-    isActive: Boolean,
+    status: RowStatus,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
@@ -924,37 +959,24 @@ private fun ModelHeader(
                     title,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
-                    color = if (isActive) ActiveOnContainer else Color.Unspecified,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                if (isActive) {
+                if (status != RowStatus.NONE) {
                     Spacer(Modifier.width(8.dp))
-                    Surface(
-                        color = ActiveAccent,
-                        contentColor = ActiveOnAccent,
-                        shape = RoundedCornerShape(4.dp),
-                    ) {
-                        Text(
-                            "ACTIVE",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
+                    StatusBadge(status)
                 }
             }
             Text(
                 subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = if (isActive) ActiveOnContainer.copy(alpha = 0.85f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (technicalLine != null) {
                 Text(
                     technicalLine,
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    color = if (isActive) ActiveOnContainer.copy(alpha = 0.7f)
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
             }
         }
