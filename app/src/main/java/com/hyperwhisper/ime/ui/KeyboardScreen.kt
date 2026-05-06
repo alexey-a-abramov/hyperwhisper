@@ -653,6 +653,7 @@ fun KeyboardScreen(
             LlmModelSelectorDialog(
                 currentProvider = apiSettings.llmConfig.provider,
                 currentModelId = apiSettings.llmConfig.modelId,
+                apiKeys = apiSettings.llmConfig.apiKeys,
                 onProviderModelSelected = { provider, modelId ->
                     viewModel.setLlmProviderAndModel(provider, modelId)
                     showLlmModelDialog = false

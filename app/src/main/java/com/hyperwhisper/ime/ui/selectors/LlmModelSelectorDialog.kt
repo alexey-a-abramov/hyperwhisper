@@ -55,18 +55,18 @@ import com.hyperwhisper.ui.util.localizedDisplayName
 fun LlmModelSelectorDialog(
     currentProvider: LlmProvider,
     currentModelId: String,
+    apiKeys: Map<LlmProvider, String>,
     onProviderModelSelected: (LlmProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = LocalStrings.current
     var expandedProvider by remember { mutableStateOf<LlmProvider?>(currentProvider) }
-    // "Configured" today means: providers that don't need a key (locals,
-    // OpenAI-compatible) plus the currently-selected provider (we know it
-    // has a key because it's the active one). Once per-provider LLM keys
-    // exist this filter expands to anything with a stored key.
-    val providers = remember(currentProvider) {
+    // "Configured" = a per-provider key is stored OR the provider doesn't
+    // need one (locals, OpenAI-compatible). NONE is hidden — picking it is
+    // equivalent to "no LLM" which the user expresses elsewhere.
+    val providers = remember(currentProvider, apiKeys) {
         LlmProvider.entries.filter {
-            it != LlmProvider.NONE && (it == currentProvider || !it.requiresAuth)
+            it != LlmProvider.NONE && (apiKeys[it]?.isNotEmpty() == true || !it.requiresAuth)
         }
     }
 
