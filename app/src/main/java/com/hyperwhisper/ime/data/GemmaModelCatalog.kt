@@ -5,8 +5,9 @@ package com.hyperwhisper.data
  *
  * MediaPipe LLM Inference (the engine wired up in
  * [com.hyperwhisper.ime.llm.GemmaInferenceEngine]) loads MediaPipe-converted
- * `.bin` / `.task` packages — *not* standard llama.cpp GGUF. Every entry here
- * points at a litert-community artifact that's confirmed compatible.
+ * `.task` and `.litertlm` packages — *not* standard llama.cpp GGUF. Every
+ * entry here points at a litert-community artifact that's confirmed
+ * compatible with `tasks-genai 0.10.27`.
  *
  * URL is constructed from [repo] + [fileName]; both must match the upstream
  * Hugging Face layout exactly. Sizes are approximate — the server's
@@ -37,70 +38,65 @@ data class GemmaModelEntry(
  * Curated list of MediaPipe-compatible Gemma builds from
  * [huggingface.co/litert-community](https://huggingface.co/litert-community).
  *
- * Only `.task` / `.bin` packages — never `.gguf` — see [GemmaModelEntry] kdoc.
- * Filename and size verified against the HF tree listing 2026-05-02; if the
- * upstream renames a file, the entry needs updating here.
+ * Only `.task` / `.litertlm` packages — never `.gguf` — see [GemmaModelEntry]
+ * kdoc. Filenames and sizes verified against the HF tree listing 2026-05-06.
+ *
+ * Curation policy: keep the list short. Headline = Gemma 4 (E2B / E4B). One
+ * Gemma 3 1B kept around for the small-fast-test slot. Gemma 2 retired
+ * (superseded by Gemma 3 / 4 — no reason to download it new).
  */
 object GemmaModelCatalog {
     val ALL: List<GemmaModelEntry> = listOf(
-        // ─── Gemma 3 1B (~700MB) ─────────────────────────────────────────
+        // ─── Gemma 4 E2B (~2.6–3.3 GB) ──────────────────────────────────
+        // Edge-2B variant tuned for phones. CPU `.litertlm` is the default;
+        // GPU variants are SoC-specific and only load on matching hardware.
         GemmaModelEntry(
-            id = "gemma3-1b-it-int4",
-            displayName = "Gemma 3 1B — int4 (CPU)",
-            sizeBytes = 555_000_000L,
-            repo = "litert-community/Gemma3-1B-IT",
-            fileName = "gemma3-1b-it-int4.task",
-            notes = "CPU · smallest (~555MB) · recommended starter"
+            id = "gemma4-e2b-it-cpu",
+            displayName = "Gemma 4 E2B — CPU",
+            sizeBytes = 2_590_000_000L,
+            repo = "litert-community/gemma-4-E2B-it-litert-lm",
+            fileName = "gemma-4-E2B-it.litertlm",
+            notes = "CPU · ~2.6 GB · runs on any phone"
         ),
         GemmaModelEntry(
-            id = "gemma3-1b-it-int4-web",
-            displayName = "Gemma 3 1B — int4 web",
-            sizeBytes = 700_000_000L,
-            repo = "litert-community/Gemma3-1B-IT",
-            fileName = "gemma3-1b-it-int4-web.task",
-            notes = "CPU · ~700MB · longer context"
-        ),
-        GemmaModelEntry(
-            id = "gemma3-1b-it-q4-sm8650",
-            displayName = "Gemma 3 1B — q4 GPU (Snapdragon 8 Gen 2)",
-            sizeBytes = 690_000_000L,
-            repo = "litert-community/Gemma3-1B-IT",
-            fileName = "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm",
-            notes = "GPU · Snapdragon SM8650 only"
-        ),
-        GemmaModelEntry(
-            id = "gemma3-1b-it-q4-sm8750",
-            displayName = "Gemma 3 1B — q4 GPU (Snapdragon 8 Gen 3)",
-            sizeBytes = 689_000_000L,
-            repo = "litert-community/Gemma3-1B-IT",
-            fileName = "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm",
-            notes = "GPU · Snapdragon SM8750 only"
+            id = "gemma4-e2b-it-gpu-sm8750",
+            displayName = "Gemma 4 E2B — GPU (Qualcomm sm8750)",
+            sizeBytes = 3_020_000_000L,
+            repo = "litert-community/gemma-4-E2B-it-litert-lm",
+            fileName = "gemma-4-E2B-it_qualcomm_sm8750.litertlm",
+            notes = "GPU · Qualcomm sm8750 only (won't load on other SoCs) · ~3.0 GB"
         ),
 
-        // ─── Gemma 2 2B (~1.5–2.7GB) ────────────────────────────────────
+        // ─── Gemma 4 E4B (~3.7 GB) ──────────────────────────────────────
+        // Edge-4B for higher-end devices with the RAM headroom; only CPU
+        // build is currently published in the litert-lm repo.
         GemmaModelEntry(
-            id = "gemma2-2b-it-int8",
-            displayName = "Gemma 2 2B — int8",
-            sizeBytes = 2_700_000_000L,
-            repo = "litert-community/Gemma2-2B-IT",
-            fileName = "Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280.task",
-            notes = "CPU · ~2.7GB · highest 2B quality"
+            id = "gemma4-e4b-it-cpu",
+            displayName = "Gemma 4 E4B — CPU",
+            sizeBytes = 3_660_000_000L,
+            repo = "litert-community/gemma-4-E4B-it-litert-lm",
+            fileName = "gemma-4-E4B-it.litertlm",
+            notes = "CPU · ~3.7 GB · best quality, needs ~6 GB RAM free"
         ),
 
-        // ─── Gemma 2 9B (~5GB) ──────────────────────────────────────────
-        // The 9B repo is gated and (as of 2026-05) not yet published as a
-        // single .task in litert-community. Filename below is the documented
-        // pattern; verify via the HF tree before relying on it. Kept as a
-        // placeholder so the UI shows the size tier.
+        // ─── Gemma 3 1B — single test entry ─────────────────────────────
+        // Kept as the "small fast" slot for exercising the post-processing
+        // path without burning 3 GB of bandwidth. q8 / 2K-context picked
+        // over the int4 builds because reasoning quality at this scale is
+        // already marginal — q4 makes it worse for ~half the size.
         GemmaModelEntry(
-            id = "gemma2-9b-it-int4",
-            displayName = "Gemma 2 9B — int4",
-            sizeBytes = 5_200_000_000L,
-            repo = "litert-community/Gemma2-9B-IT",
-            fileName = "gemma2-9b-it-int4.task",
-            notes = "CPU · ~5GB · slow on phones, tablets only"
+            id = "gemma3-1b-it-q8",
+            displayName = "Gemma 3 1B — q8 (test/small)",
+            sizeBytes = 1_070_000_000L,
+            repo = "litert-community/Gemma3-1B-IT",
+            fileName = "Gemma3-1B-IT_multi-prefill-seq_q8_ekv2048.task",
+            notes = "CPU · ~1.1 GB · 2K context · for smoke-testing"
         )
     )
 
     fun byId(id: String): GemmaModelEntry? = ALL.firstOrNull { it.id == id }
+
+    /** All known catalog filenames — used by UI to dedupe against
+     *  on-disk discovery so we don't list the same file twice. */
+    val knownFileNames: Set<String> = ALL.map { it.fileName }.toSet()
 }
