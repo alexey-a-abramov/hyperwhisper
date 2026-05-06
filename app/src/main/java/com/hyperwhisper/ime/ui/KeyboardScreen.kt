@@ -523,7 +523,12 @@ fun KeyboardScreen(
             ErrorOverlay(
                 errorMessage = error,
                 onDismiss = { viewModel.clearError() },
-                context = context
+                context = context,
+                providerName = apiSettings.provider.displayName,
+                onSwitchProvider = {
+                    viewModel.clearError()
+                    showProviderModelDialog = true
+                },
             )
         }
 

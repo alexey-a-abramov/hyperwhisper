@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,21 +37,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.ErrorKind
+import com.hyperwhisper.data.classifyErrorMessage
 import com.hyperwhisper.localization.LocalStrings
 
 /**
- * Full-screen error overlay
- * Shows error message with copy and dismiss actions
- * For permission errors, shows "Open Settings" button
+ * Full-screen error overlay shown over the IME.
+ *
+ * Renders a plain-language summary of what went wrong (derived from the
+ * raw [errorMessage]) and one suggested manual action — never auto-retries
+ * or fallback-routes (per roadmap §D, the user explicitly rejected
+ * automatic recovery). The raw message is still shown verbatim so the user
+ * can copy it for support / debugging.
  */
 @Composable
 fun ErrorOverlay(
     errorMessage: String,
     onDismiss: () -> Unit,
-    context: Context
+    context: Context,
+    providerName: String? = null,
+    onSwitchProvider: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     val isPermissionError = errorMessage.contains("permission", ignoreCase = true)
+    val kind = classifyErrorMessage(errorMessage)
+    val summary = plainLanguageSummary(kind, providerName)
 
     // Full-screen overlay within keyboard (not a separate Dialog window)
     Surface(
@@ -81,7 +92,18 @@ fun ErrorOverlay(
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
 
-                // Error message (scrollable with finger scrolling)
+                // Plain-language summary line — same color as title but
+                // unbolded so it reads as an explanation.
+                Text(
+                    text = summary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.92f),
+                    lineHeight = 17.sp
+                )
+
+                // Raw error message (scrollable). Kept verbatim because the
+                // user often needs to copy it for support / search.
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Top
@@ -89,43 +111,34 @@ fun ErrorOverlay(
                     item {
                         Text(
                             text = errorMessage,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            lineHeight = 18.sp
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.75f),
+                            lineHeight = 16.sp
                         )
                     }
                 }
 
-                // Open Settings button (for permission errors) - full width above buttons row
+                // Suggested-action button. One per kind, full width above
+                // the copy/dismiss row. Permission errors (orthogonal to
+                // the API kinds) keep their existing Settings shortcut.
                 if (isPermissionError) {
-                    Button(
+                    SuggestedActionButton(
+                        label = strings.openSettings,
+                        icon = Icons.Default.Settings,
                         onClick = {
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", context.packageName, null)
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             context.startActivity(intent)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                            contentColor = MaterialTheme.colorScheme.errorContainer
-                        ),
-                        contentPadding = PaddingValues(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            strings.openSettings,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        }
+                    )
+                } else {
+                    SuggestedActionForKind(
+                        kind = kind,
+                        context = context,
+                        onSwitchProvider = onSwitchProvider,
+                    )
                 }
 
                 // Action buttons row (Copy + Dismiss)
@@ -179,5 +192,98 @@ fun ErrorOverlay(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SuggestedActionForKind(
+    kind: ErrorKind,
+    context: Context,
+    onSwitchProvider: (() -> Unit)?,
+) {
+    val strings = LocalStrings.current
+    when (kind) {
+        ErrorKind.AUTH -> SuggestedActionButton(
+            label = strings.openSettings,
+            icon = Icons.Default.Settings,
+            onClick = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                runCatching { context.startActivity(intent) }
+            }
+        )
+        ErrorKind.MODEL_NOT_FOUND,
+        ErrorKind.PROVIDER_DOWN,
+        ErrorKind.RATE_LIMITED -> {
+            // "Switch provider" only when the caller wired up the picker.
+            // Otherwise no button — the summary text already tells the user
+            // what to do, and we don't want a dead-end button.
+            if (onSwitchProvider != null) {
+                SuggestedActionButton(
+                    label = "Switch provider",
+                    icon = Icons.Default.SwapHoriz,
+                    onClick = onSwitchProvider
+                )
+            }
+        }
+        ErrorKind.NETWORK,
+        ErrorKind.TIMEOUT,
+        ErrorKind.UNKNOWN -> {
+            // No action — these are transient or unclassifiable.
+            // The summary line already says "try again later".
+        }
+    }
+}
+
+@Composable
+private fun SuggestedActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.onErrorContainer,
+            contentColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        contentPadding = PaddingValues(8.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/** Short user-facing explanation per error kind. Kept English-only for now —
+ *  if these strings get localised, move them into the Strings table. */
+private fun plainLanguageSummary(kind: ErrorKind, providerName: String?): String {
+    val who = providerName?.takeIf { it.isNotBlank() }?.let { "$it" } ?: "the provider"
+    return when (kind) {
+        ErrorKind.AUTH ->
+            "$who rejected the API key. Open Settings and double-check the key is current and has access to the chosen model."
+        ErrorKind.MODEL_NOT_FOUND ->
+            "$who doesn't recognise the configured model. Pick a different model in the keyboard model picker, or update the model ID in Settings."
+        ErrorKind.RATE_LIMITED ->
+            "$who is rate-limiting requests. Wait a minute, or switch to a different provider via the keyboard picker."
+        ErrorKind.TIMEOUT ->
+            "The request to $who timed out. The provider may be slow right now — try again in a moment."
+        ErrorKind.PROVIDER_DOWN ->
+            "$who returned a server error. The service is likely having an outage — try again later or switch to a different provider."
+        ErrorKind.NETWORK ->
+            "Couldn't reach $who. Check your network connection and try again."
+        ErrorKind.UNKNOWN ->
+            "Something went wrong while talking to $who. The full error is below — copy it if you need to ask for help."
     }
 }
