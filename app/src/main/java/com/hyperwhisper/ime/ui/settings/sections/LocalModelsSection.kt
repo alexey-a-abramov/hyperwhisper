@@ -8,17 +8,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -310,24 +322,27 @@ private fun buildIntegrationResultsJson(
 //
 // Per-row state is communicated via a small badge in the title line —
 // rather than tinting the whole row — so the screen stays calm even when
-// several models are installed. Three states surface:
+// several models are installed. Four states surface:
 //
-//   ACTIVE       — currently selected AND on-device toggle is on
-//   INSTALLED    — file is on disk but not the active selection
-//   DOWNLOADING  — download in progress (Downloading / Queued / Retrying)
-//
-// ACTIVE keeps a saturated green so it's the obvious "in-use" cue across
-// the screen; the other two use the theme's secondary/tertiary container
-// so they read as informational rather than action-required.
+//   ACTIVE       — model is the configured selection AND on-device toggle
+//                  is on. Saturated green: this is what's actually running.
+//   SELECTED     — model is the configured selection BUT on-device toggle
+//                  is off. Amber nudge: "you picked this; flip the toggle
+//                  in Transcription/Post-processing settings to use it."
+//   INSTALLED    — file is on disk, neither active nor selected.
+//   DOWNLOADING  — download in progress (Downloading / Queued / Retrying).
 private val ActiveBadgeColor = Color(0xFF2E7D32)        // material green 800
 private val ActiveBadgeOnColor = Color(0xFFFFFFFF)
+private val SelectedBadgeColor = Color(0xFFEF6C00)      // material orange 800
+private val SelectedBadgeOnColor = Color(0xFFFFFFFF)
 
-private enum class RowStatus { ACTIVE, INSTALLED, DOWNLOADING, NONE }
+private enum class RowStatus { ACTIVE, SELECTED, INSTALLED, DOWNLOADING, NONE }
 
 @Composable
 private fun StatusBadge(status: RowStatus) {
     val (label, container, content) = when (status) {
         RowStatus.ACTIVE -> Triple("ACTIVE", ActiveBadgeColor, ActiveBadgeOnColor)
+        RowStatus.SELECTED -> Triple("SELECTED", SelectedBadgeColor, SelectedBadgeOnColor)
         RowStatus.INSTALLED -> Triple(
             "INSTALLED",
             MaterialTheme.colorScheme.secondaryContainer,
@@ -354,8 +369,14 @@ private fun StatusBadge(status: RowStatus) {
     }
 }
 
-private fun whisperStatus(state: WhisperDownloadState, isActive: Boolean): RowStatus = when {
+private fun whisperStatus(
+    state: WhisperDownloadState,
+    isActive: Boolean,
+    isSelected: Boolean,
+): RowStatus = when {
     isActive -> RowStatus.ACTIVE
+    isSelected && (state is WhisperDownloadState.Completed ||
+        state is WhisperDownloadState.Paused) -> RowStatus.SELECTED
     state is WhisperDownloadState.Downloading ||
         state is WhisperDownloadState.Queued ||
         state is WhisperDownloadState.Retrying -> RowStatus.DOWNLOADING
@@ -364,8 +385,14 @@ private fun whisperStatus(state: WhisperDownloadState, isActive: Boolean): RowSt
     else -> RowStatus.NONE
 }
 
-private fun gemmaStatus(state: GemmaDownloadState, isActive: Boolean): RowStatus = when {
+private fun gemmaStatus(
+    state: GemmaDownloadState,
+    isActive: Boolean,
+    isSelected: Boolean,
+): RowStatus = when {
     isActive -> RowStatus.ACTIVE
+    isSelected && (state is GemmaDownloadState.Completed ||
+        state is GemmaDownloadState.Paused) -> RowStatus.SELECTED
     state is GemmaDownloadState.Downloading ||
         state is GemmaDownloadState.Queued ||
         state is GemmaDownloadState.Retrying -> RowStatus.DOWNLOADING
@@ -426,10 +453,12 @@ private fun WhisperDownloadCard(
                 }
             }
             entries.forEach { entry ->
+                val pathMatches = activePath.endsWith("/${entry.fileName}")
                 WhisperRow(
                     entry = entry,
                     state = states[entry.id] ?: WhisperDownloadState.Idle,
-                    isActive = useLocal && activePath.endsWith("/${entry.fileName}"),
+                    isActive = useLocal && pathMatches,
+                    isSelected = !useLocal && pathMatches,
                     showTechnicalDetails = showTechnicalDetails,
                     onDownload = { onDownload(entry.id) },
                     onCancel = { onCancel(entry.id) },
@@ -446,13 +475,28 @@ private fun WhisperRow(
     entry: WhisperModelEntry,
     state: WhisperDownloadState,
     isActive: Boolean,
+    isSelected: Boolean,
     showTechnicalDetails: Boolean,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    ModelRowSurface {
+    var confirmDelete by remember { mutableStateOf(false) }
+    val completedPath = (state as? WhisperDownloadState.Completed)?.path
+
+    // Whole-row primary action: tap-to-set-active when installed-and-not-active,
+    // tap-to-download when idle. Active rows + in-flight downloads + failed
+    // states are inert at the row level; their actions live in the header.
+    val rowOnClick: (() -> Unit)? = when {
+        state is WhisperDownloadState.Completed && !isActive ->
+            completedPath?.let { p -> { onSetActive(p) } }
+        state is WhisperDownloadState.Idle || state is WhisperDownloadState.Cancelled ->
+            ({ onDownload() })
+        else -> null
+    }
+
+    ModelRowSurface(onClick = rowOnClick) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -463,21 +507,81 @@ private fun WhisperRow(
                     entry.notes?.let { append(" · "); append(it) }
                 },
                 technicalLine = entry.fileName.takeIf { showTechnicalDetails },
-                status = whisperStatus(state, isActive),
+                status = whisperStatus(state, isActive, isSelected),
+                actions = {
+                    WhisperRowActions(
+                        state = state,
+                        onDownload = onDownload,
+                        onCancel = onCancel,
+                        onRequestDelete = { confirmDelete = true },
+                    )
+                }
             )
             ProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
-            ActionRow(
-                state = state,
-                isActive = isActive,
-                completedPath = (state as? WhisperDownloadState.Completed)?.path,
-                resumableBytes = when (state) {
-                    is WhisperDownloadState.Failed -> state.resumableBytes
-                    is WhisperDownloadState.Paused -> state.resumableBytes
-                    else -> 0L
-                },
-                onDownload = onDownload, onCancel = onCancel, onDelete = onDelete,
-                onSetActive = onSetActive
+        }
+    }
+
+    DeleteConfirmDialog(
+        visible = confirmDelete,
+        title = "Delete model?",
+        message = "Remove ${entry.displayName} (${formatBytes(entry.sizeBytes)}) from disk. " +
+            "You can re-download it later.",
+        onConfirm = onDelete,
+        onDismiss = { confirmDelete = false },
+    )
+}
+
+/**
+ * Header-cluster icon buttons for a Whisper row. Mapping per state:
+ *   Idle / Cancelled         → Download
+ *   Downloading / Queued / Retrying → Cancel
+ *   Completed                → Delete (confirmed)
+ *   Paused                   → Resume + Delete (confirmed)
+ *   Failed                   → Retry/Resume + Delete (confirmed) when resumable
+ */
+@Composable
+private fun WhisperRowActions(
+    state: WhisperDownloadState,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onRequestDelete: () -> Unit,
+) {
+    when (state) {
+        is WhisperDownloadState.Idle,
+        is WhisperDownloadState.Cancelled ->
+            RowActionIcon(Icons.Default.Download, "Download", onDownload)
+
+        is WhisperDownloadState.Downloading,
+        is WhisperDownloadState.Queued,
+        is WhisperDownloadState.Retrying ->
+            RowActionIcon(Icons.Default.Close, "Cancel download", onCancel)
+
+        is WhisperDownloadState.Completed ->
+            RowActionIcon(
+                Icons.Default.Delete, "Delete", onRequestDelete,
+                tint = MaterialTheme.colorScheme.error,
             )
+
+        is WhisperDownloadState.Paused -> {
+            RowActionIcon(Icons.Default.PlayArrow, "Resume download", onDownload)
+            RowActionIcon(
+                Icons.Default.Delete, "Discard partial download", onRequestDelete,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        is WhisperDownloadState.Failed -> {
+            RowActionIcon(
+                Icons.Default.Refresh,
+                if (state.resumableBytes > 0) "Resume download" else "Retry download",
+                onDownload,
+            )
+            if (state.resumableBytes > 0) {
+                RowActionIcon(
+                    Icons.Default.Delete, "Discard partial download", onRequestDelete,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
@@ -589,10 +693,12 @@ private fun GemmaDownloadCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             GemmaModelCatalog.ALL.forEach { entry ->
+                val pathMatches = activePath.endsWith("/${entry.fileName}")
                 GemmaRow(
                     entry = entry,
                     state = states[entry.id] ?: GemmaDownloadState.Idle,
-                    isActive = useLocal && activePath.endsWith("/${entry.fileName}"),
+                    isActive = useLocal && pathMatches,
+                    isSelected = !useLocal && pathMatches,
                     showTechnicalDetails = showTechnicalDetails,
                     onDownload = { onDownload(entry.id) },
                     onCancel = { onCancel(entry.id) },
@@ -667,12 +773,15 @@ private fun DetectedOnDiskBlock(
             color = MaterialTheme.colorScheme.primary
         )
         loadable.forEach { info ->
+            val isActive = useLocal && activePath == info.path
+            val isSelected = !useLocal && activePath == info.path
             DetectedRow(
                 info = info,
-                isActive = useLocal && activePath == info.path,
+                isActive = isActive,
+                isSelected = isSelected,
                 showTechnicalDetails = showTechnicalDetails,
                 statusLine = "MediaPipe-loadable · ${formatBytes(info.sizeBytes)}",
-                primaryActionLabel = if (useLocal && activePath == info.path) null else "Set active",
+                primaryActionLabel = if (isActive) null else "Set active",
                 onPrimary = { onSetActive(info.path) },
                 onDelete = { onDeleteFile(info.path) }
             )
@@ -681,6 +790,7 @@ private fun DetectedOnDiskBlock(
             DetectedRow(
                 info = info,
                 isActive = false,
+                isSelected = false,
                 showTechnicalDetails = showTechnicalDetails,
                 statusLine = "Incompatible (GGUF — needs .litertlm from litert-community) · " +
                     formatBytes(info.sizeBytes),
@@ -697,6 +807,7 @@ private fun DetectedOnDiskBlock(
 private fun DetectedRow(
     info: LocalModelInfo,
     isActive: Boolean,
+    isSelected: Boolean,
     showTechnicalDetails: Boolean,
     statusLine: String,
     statusIsError: Boolean = false,
@@ -711,7 +822,11 @@ private fun DetectedRow(
                 title = info.name,
                 subtitle = statusLine,
                 technicalLine = info.path.takeIf { showTechnicalDetails || statusIsError },
-                status = if (isActive) RowStatus.ACTIVE else RowStatus.INSTALLED,
+                status = when {
+                    isActive -> RowStatus.ACTIVE
+                    isSelected -> RowStatus.SELECTED
+                    else -> RowStatus.INSTALLED
+                },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (primaryActionLabel != null) {
@@ -780,13 +895,25 @@ private fun GemmaRow(
     entry: GemmaModelEntry,
     state: GemmaDownloadState,
     isActive: Boolean,
+    isSelected: Boolean,
     showTechnicalDetails: Boolean,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
     onSetActive: (String) -> Unit
 ) {
-    ModelRowSurface {
+    var confirmDelete by remember { mutableStateOf(false) }
+    val completedPath = (state as? GemmaDownloadState.Completed)?.path
+
+    val rowOnClick: (() -> Unit)? = when {
+        state is GemmaDownloadState.Completed && !isActive ->
+            completedPath?.let { p -> { onSetActive(p) } }
+        state is GemmaDownloadState.Idle || state is GemmaDownloadState.Cancelled ->
+            ({ onDownload() })
+        else -> null
+    }
+
+    ModelRowSurface(onClick = rowOnClick) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = entry.displayName,
@@ -795,21 +922,73 @@ private fun GemmaRow(
                     entry.notes?.let { append(" · "); append(it) }
                 },
                 technicalLine = entry.fileName.takeIf { showTechnicalDetails },
-                status = gemmaStatus(state, isActive),
+                status = gemmaStatus(state, isActive, isSelected),
+                actions = {
+                    GemmaRowActions(
+                        state = state,
+                        onDownload = onDownload,
+                        onCancel = onCancel,
+                        onRequestDelete = { confirmDelete = true },
+                    )
+                }
             )
             GemmaProgressBlock(state, entry.sizeBytes, showTechnicalDetails)
-            GemmaActionRow(
-                state = state,
-                isActive = isActive,
-                completedPath = (state as? GemmaDownloadState.Completed)?.path,
-                resumableBytes = when (state) {
-                    is GemmaDownloadState.Failed -> state.resumableBytes
-                    is GemmaDownloadState.Paused -> state.resumableBytes
-                    else -> 0L
-                },
-                onDownload = onDownload, onCancel = onCancel, onDelete = onDelete,
-                onSetActive = onSetActive
+        }
+    }
+
+    DeleteConfirmDialog(
+        visible = confirmDelete,
+        title = "Delete model?",
+        message = "Remove ${entry.displayName} (${formatBytes(entry.sizeBytes)}) from disk. " +
+            "You can re-download it later.",
+        onConfirm = onDelete,
+        onDismiss = { confirmDelete = false },
+    )
+}
+
+@Composable
+private fun GemmaRowActions(
+    state: GemmaDownloadState,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onRequestDelete: () -> Unit,
+) {
+    when (state) {
+        is GemmaDownloadState.Idle,
+        is GemmaDownloadState.Cancelled ->
+            RowActionIcon(Icons.Default.Download, "Download", onDownload)
+
+        is GemmaDownloadState.Downloading,
+        is GemmaDownloadState.Queued,
+        is GemmaDownloadState.Retrying ->
+            RowActionIcon(Icons.Default.Close, "Cancel download", onCancel)
+
+        is GemmaDownloadState.Completed ->
+            RowActionIcon(
+                Icons.Default.Delete, "Delete", onRequestDelete,
+                tint = MaterialTheme.colorScheme.error,
             )
+
+        is GemmaDownloadState.Paused -> {
+            RowActionIcon(Icons.Default.PlayArrow, "Resume download", onDownload)
+            RowActionIcon(
+                Icons.Default.Delete, "Discard partial download", onRequestDelete,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        is GemmaDownloadState.Failed -> {
+            RowActionIcon(
+                Icons.Default.Refresh,
+                if (state.resumableBytes > 0) "Resume download" else "Retry download",
+                onDownload,
+            )
+            if (state.resumableBytes > 0) {
+                RowActionIcon(
+                    Icons.Default.Delete, "Discard partial download", onRequestDelete,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
@@ -879,49 +1058,6 @@ private fun GemmaProgressBlock(
     }
 }
 
-@Composable
-private fun GemmaActionRow(
-    state: GemmaDownloadState,
-    isActive: Boolean,
-    completedPath: String?,
-    resumableBytes: Long,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-    onDelete: () -> Unit,
-    onSetActive: (String) -> Unit
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (state) {
-            is GemmaDownloadState.Downloading,
-            is GemmaDownloadState.Queued,
-            is GemmaDownloadState.Retrying ->
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
-
-            is GemmaDownloadState.Completed -> {
-                if (!isActive) Button(
-                    onClick = { completedPath?.let(onSetActive) },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Set active") }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) { Text("Delete") }
-            }
-            is GemmaDownloadState.Paused -> {
-                Button(onClick = onDownload, modifier = Modifier.weight(1f)) { Text("Resume") }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) { Text("Discard") }
-            }
-            is GemmaDownloadState.Failed -> {
-                Button(
-                    onClick = onDownload,
-                    modifier = Modifier.weight(1f)
-                ) { Text(if (resumableBytes > 0) "Resume" else "Retry") }
-                if (resumableBytes > 0) OutlinedButton(
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Discard") }
-            }
-            else -> Button(onClick = onDownload, modifier = Modifier.weight(1f)) { Text("Download") }
-        }
-    }
-}
 
 // endregion
 
@@ -934,14 +1070,33 @@ private fun GemmaActionRow(
  * when several models were installed at once.
  */
 @Composable
-private fun ModelRowSurface(content: @Composable () -> Unit) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        content()
+private fun ModelRowSurface(
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    // Two flavors: clickable (Surface(onClick=) gives ripple + accessible
+    // role=Button) and inert. Splitting via if instead of always-onClick
+    // because Surface with a no-op onClick still grabs focus and shows a
+    // ripple, which would suggest tappability that isn't there.
+    if (onClick != null) {
+        Surface(
+            onClick = onClick,
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            content()
+        }
     }
 }
 
@@ -951,6 +1106,7 @@ private fun ModelHeader(
     subtitle: String,
     technicalLine: String?,
     status: RowStatus,
+    actions: @Composable () -> Unit = {},
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
@@ -980,52 +1136,79 @@ private fun ModelHeader(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ActionRow(
-    state: WhisperDownloadState,
-    isActive: Boolean,
-    completedPath: String?,
-    resumableBytes: Long,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-    onDelete: () -> Unit,
-    onSetActive: (String) -> Unit
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (state) {
-            is WhisperDownloadState.Downloading,
-            is WhisperDownloadState.Queued,
-            is WhisperDownloadState.Retrying ->
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
-
-            is WhisperDownloadState.Completed -> {
-                if (!isActive) Button(
-                    onClick = { completedPath?.let(onSetActive) },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Set active") }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) { Text("Delete") }
-            }
-            is WhisperDownloadState.Paused -> {
-                Button(onClick = onDownload, modifier = Modifier.weight(1f)) { Text("Resume") }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) { Text("Discard") }
-            }
-            is WhisperDownloadState.Failed -> {
-                Button(
-                    onClick = onDownload,
-                    modifier = Modifier.weight(1f)
-                ) { Text(if (resumableBytes > 0) "Resume" else "Retry") }
-                if (resumableBytes > 0) OutlinedButton(
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Discard") }
-            }
-            else -> Button(onClick = onDownload, modifier = Modifier.weight(1f)) { Text("Download") }
+        // Compact icon-button cluster on the right. Each child is a 32dp
+        // IconButton — fits two side-by-side without forcing the title to
+        // wrap on phone widths. Buttons use their own click target so taps
+        // here don't bubble up to the row's Surface(onClick=) handler.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            actions()
         }
     }
 }
+
+/**
+ * 32dp circular icon-button used in the row header for primary/secondary
+ * actions (download, cancel, delete, retry, resume). Smaller than the
+ * Material default 48dp so two icons fit comfortably alongside the title
+ * without crowding the status badge.
+ */
+@Composable
+private fun RowActionIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(32.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * Confirmation dialog shared by Whisper and Gemma row delete actions.
+ * Returns the [confirmDelete] state so callers can also drive the dialog
+ * from any of their action paths (header trash, "Discard" on a paused
+ * download, etc.) without each duplicating the dialog body.
+ */
+@Composable
+private fun DeleteConfirmDialog(
+    visible: Boolean,
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (!visible) return
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                onConfirm()
+            }) {
+                Text(
+                    "Delete",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
 
 @Composable
 private fun ChipToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
