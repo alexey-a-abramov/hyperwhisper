@@ -81,6 +81,7 @@ fun KeyboardScreen(
     onTab: () -> Unit = {},
     onInsertClipboard: () -> Unit = {},
     onSwitchKeyboard: () -> Unit = {},
+    onSendKeyChord: (com.hyperwhisper.data.KeyChord) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -439,6 +440,13 @@ fun KeyboardScreen(
                         // an extra mode-cycle tap.
                         keyboardInputMode = lastNonAgentMode
                     },
+                    onSendChord = { chord ->
+                        // Chord chips are *not* slash-commands; the user is
+                        // toggling app state (e.g. Claude Code's plan mode)
+                        // and almost certainly wants to keep tapping more
+                        // chips, so do NOT auto-switch back to QWERTY here.
+                        onSendKeyChord(chord)
+                    },
                     onSpace = handleSpacePress,
                     onEnter = onEnter,
                     lastTranscribedText = lastTranscribedText,
@@ -483,6 +491,11 @@ fun KeyboardScreen(
                     layout = currentKeyboardLayout,
                     recordingState = recordingState,
                     recordingDuration = recordingDuration,
+                    lastTranscribedText = lastTranscribedText,
+                    transcriptionHistory = transcriptionHistory,
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPasteText = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true },
                     onModeChange = { keyboardInputMode = it },
                     onKeyPress = onTextCommit,
                     onSpacePress = handleSpacePress,

@@ -101,7 +101,8 @@ fun RowScope.PasteLastPill(
     transcriptionHistory: List<TranscriptionHistoryItem>,
     enableHistoryPanel: Boolean,
     onPasteText: (String) -> Unit,
-    onShowHistory: () -> Unit
+    onShowHistory: () -> Unit,
+    weight: Float = 1f,
 ) {
     if (!hasPasteContent(lastTranscribedText, transcriptionHistory)) return
     val strings = LocalStrings.current
@@ -109,7 +110,7 @@ fun RowScope.PasteLastPill(
         else transcriptionHistory.first().text
     Box(
         modifier = Modifier
-            .weight(1f)
+            .weight(weight)
             .fillMaxHeight()
     ) {
         Surface(

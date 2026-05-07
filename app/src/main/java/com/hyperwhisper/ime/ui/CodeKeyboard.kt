@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.TranscriptionHistoryItem
+import com.hyperwhisper.ui.sections.KeyboardBottomBar
 import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
@@ -68,6 +70,11 @@ fun CodeKeyboard(
     onLockCtrl: () -> Unit = {},
     onLockAlt: () -> Unit = {},
     onLockShift: () -> Unit = {},
+    lastTranscribedText: String = "",
+    transcriptionHistory: List<TranscriptionHistoryItem> = emptyList(),
+    enableHistoryPanel: Boolean = false,
+    onPasteText: (String) -> Unit = {},
+    onShowHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -110,7 +117,10 @@ fun CodeKeyboard(
                 )
             }
 
-            // 6. Modifiers + arrows + space + Enter
+            // 6. Modifiers + arrows. Space and Enter migrated to row 7 (the
+            // universal bottom bar) so the action keys land in the same
+            // screen position they do on every other layout — muscle memory
+            // transfers across QWERTY ↔ Code without re-aiming.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -127,21 +137,23 @@ fun CodeKeyboard(
                     onTap = onToggleAlt, onLock = onLockAlt, weight = 1.0f, height = keyHeight)
                 CodeModifierButton("Shift", modifierState.shift, modifierState.shiftLocked,
                     onTap = onToggleShift, onLock = onLockShift, weight = 1.0f, height = keyHeight)
-                CodeIconButton(Icons.Default.KeyboardArrowLeft, "Left", onMoveCursorLeft, weight = 0.9f, height = keyHeight)
-                CodeIconButton(Icons.Default.KeyboardArrowDown, "Down", onMoveCursorDown, weight = 0.9f, height = keyHeight)
-                CodeIconButton(Icons.Default.KeyboardArrowRight, "Right", onMoveCursorRight, weight = 0.9f, height = keyHeight)
-                CodeActionButton(
-                    "space", onSpacePress, weight = 2.5f, height = keyHeight,
-                    bg = KeyboardSpaceColor,
-                    fg = Color.Black
-                )
-                CodeIconButton(
-                    Icons.Default.KeyboardReturn, "Enter", onEnter,
-                    weight = 1.3f, height = keyHeight,
-                    bg = KeyboardEnterColor,
-                    fg = Color.White
-                )
+                CodeIconButton(Icons.Default.KeyboardArrowLeft, "Left", onMoveCursorLeft, weight = 1.0f, height = keyHeight)
+                CodeIconButton(Icons.Default.KeyboardArrowDown, "Down", onMoveCursorDown, weight = 1.0f, height = keyHeight)
+                CodeIconButton(Icons.Default.KeyboardArrowRight, "Right", onMoveCursorRight, weight = 1.0f, height = keyHeight)
             }
+
+            // 7. Universal bottom bar — same paste-last/space/enter as every
+            // other layout. Backspace stays on row 5 (the existing nav row)
+            // since Code uses it constantly and shouldn't be top-strip-only.
+            KeyboardBottomBar(
+                lastTranscribedText = lastTranscribedText,
+                transcriptionHistory = transcriptionHistory,
+                enableHistoryPanel = enableHistoryPanel,
+                onPasteText = onPasteText,
+                onShowHistory = onShowHistory,
+                onSpace = onSpacePress,
+                onEnter = onEnter,
+            )
         }
     }
 }

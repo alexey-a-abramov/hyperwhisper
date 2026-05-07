@@ -45,6 +45,7 @@ import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.buttons.PeriodKeyWithPopup
+import com.hyperwhisper.ui.sections.PasteLastPill
 
 @Composable
 internal fun TextKeyboardSectionNew(
@@ -82,6 +83,11 @@ internal fun TextKeyboardSectionNew(
     onLockCtrl: () -> Unit = {},
     onLockAlt: () -> Unit = {},
     onLockShift: () -> Unit = {},
+    lastTranscribedText: String = "",
+    transcriptionHistory: List<com.hyperwhisper.data.TranscriptionHistoryItem> = emptyList(),
+    enableHistoryPanel: Boolean = false,
+    onPasteText: (String) -> Unit = {},
+    onShowHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -145,6 +151,11 @@ internal fun TextKeyboardSectionNew(
                 onLockCtrl = onLockCtrl,
                 onLockAlt = onLockAlt,
                 onLockShift = onLockShift,
+                lastTranscribedText = lastTranscribedText,
+                transcriptionHistory = transcriptionHistory,
+                enableHistoryPanel = enableHistoryPanel,
+                onPasteText = onPasteText,
+                onShowHistory = onShowHistory,
                 modifier = modifier
             )
         }
@@ -536,33 +547,21 @@ internal fun TextKeyboardSectionNew(
                         )
                     }
 
-                    // Bottom row with mode switcher, space, and backspace
-                    Row(
-                        modifier = Modifier.fillMaxWidth().height(45.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        // Unified mode switcher
-                        UnifiedModeSwitcher(
-                            currentMode = mode,
-                            onModeChange = onModeChange,
-                            onReturnToDictation = onReturnToDictation,
-                            modifier = Modifier.weight(2.5f).fillMaxHeight()
-                        )
-
-                        KeyboardActionButton(
-                            label = "space",
-                            onClick = onSpacePress,
-                            modifier = Modifier.weight(2f),
-                            style = KeyboardActionStyle.SPACE
-                        )
-
-                        RepeatingActionButton(
-                            icon = Icons.Default.Backspace,
-                            onAction = onDelete,
-                            style = KeyboardActionStyle.BACKSPACE,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    // Universal bottom bar — same paste-last/space/enter
+                    // shape as every other layout. Mode switching lives in
+                    // the universal top strip (Voice / QWERTY / preset slot
+                    // configurable to Numpad / Vibe Coding); backspace
+                    // also lives there. The mode-switcher previously
+                    // hosted here is now redundant.
+                    com.hyperwhisper.ui.sections.KeyboardBottomBar(
+                        lastTranscribedText = lastTranscribedText,
+                        transcriptionHistory = transcriptionHistory,
+                        enableHistoryPanel = enableHistoryPanel,
+                        onPasteText = onPasteText,
+                        onShowHistory = onShowHistory,
+                        onSpace = onSpacePress,
+                        onEnter = onEnter,
+                    )
                 }
             }
         }
@@ -1123,13 +1122,27 @@ internal fun TextKeyboardSectionNew(
                             }
                         }
 
-                        // Bottom row — mode switching is in the universal
-                        // top strip; bottom row is now pure typing keys.
+                        // Bottom row — universal paste-last pill (when there's
+                        // history) at the leftmost slot for muscle-memory
+                        // parity with Dictation/Agent/Emoji/Code, then the
+                        // typing-friendly comma/space/period/enter cluster.
+                        // Mode switching + backspace live in the universal
+                        // top strip.
+                        val hasPasteContent = lastTranscribedText.isNotEmpty() ||
+                            transcriptionHistory.isNotEmpty()
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            PasteLastPill(
+                                lastTranscribedText = lastTranscribedText,
+                                transcriptionHistory = transcriptionHistory,
+                                enableHistoryPanel = enableHistoryPanel,
+                                onPasteText = onPasteText,
+                                onShowHistory = onShowHistory,
+                                weight = 2.0f,
+                            )
                             // Comma
                             KeyboardKeyButton(
                                 label = ",",
@@ -1137,12 +1150,14 @@ internal fun TextKeyboardSectionNew(
                                 modifier = Modifier.weight(0.7f),
                                 height = keyHeight
                             )
-                            // Space bar (long-press for layout selector)
+                            // Space bar (long-press for layout selector). Reduce
+                            // weight when paste-last is present to keep the row
+                            // visually balanced.
                             LongPressActionButton(
                                 label = "space",
                                 onClick = onSpacePress,
                                 onLongPress = onSpaceLongPress,
-                                modifier = Modifier.weight(5.5f),
+                                modifier = Modifier.weight(if (hasPasteContent) 3.5f else 5.5f),
                                 style = KeyboardActionStyle.SPACE,
                                 height = keyHeight,
                                 longPressThreshold = 800L
