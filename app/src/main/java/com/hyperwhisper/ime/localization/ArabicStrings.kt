@@ -637,6 +637,23 @@ object ArabicStrings : Strings {
     override val errorUnknown = "خطأ غير معروف"
     override val errorProcessingFailedFormat = "فشل المعالجة: %1\$s: %2\$s"
 
+    override val errorOverlayProviderFallback = "المزود"
+    override val errorOverlaySummaryAuthFormat =
+        "رفض %s مفتاح API. افتح الإعدادات وتأكد من أن المفتاح حديث ولديه وصول إلى النموذج المختار."
+    override val errorOverlaySummaryModelNotFoundFormat =
+        "%s لا يتعرف على النموذج المُكوَّن. اختر نموذجاً آخر من منتقي النماذج بلوحة المفاتيح، أو حدّث معرّف النموذج في الإعدادات."
+    override val errorOverlaySummaryRateLimitedFormat =
+        "%s يحدّ من الطلبات. انتظر دقيقة أو بدّل إلى مزود آخر عبر منتقي لوحة المفاتيح."
+    override val errorOverlaySummaryTimeoutFormat =
+        "انتهت مهلة الطلب إلى %s. قد يكون المزود بطيئاً الآن — أعد المحاولة بعد قليل."
+    override val errorOverlaySummaryProviderDownFormat =
+        "أعاد %s خطأ خادم. على الأرجح أن الخدمة معطلة — حاول لاحقاً أو بدّل إلى مزود آخر."
+    override val errorOverlaySummaryNetworkFormat =
+        "تعذر الوصول إلى %s. تحقق من اتصال الشبكة وأعد المحاولة."
+    override val errorOverlaySummaryUnknownFormat =
+        "حدث خطأ ما أثناء التواصل مع %s. الخطأ الكامل أدناه — انسخه إذا احتجت إلى طلب المساعدة."
+    override val errorOverlaySwitchProvider = "تبديل المزود"
+
     // Local processing
     override val secretsGateRevealTitle = "أكّد لعرض مفتاح API"
     override val secretsGateExportTitle = "أكّد لتصدير الأسرار"

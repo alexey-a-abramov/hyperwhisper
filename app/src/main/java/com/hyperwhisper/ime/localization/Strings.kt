@@ -649,6 +649,19 @@ interface Strings {
     val errorUnknown: String                       // "Unknown error"
     val errorProcessingFailedFormat: String        // "Processing failed: %1$s: %2$s"
 
+    // Plain-language summaries for the error overlay (one per ErrorKind).
+    // Format arg %1$s is the provider's display name, or
+    // [errorOverlayProviderFallback] when no provider is known.
+    val errorOverlayProviderFallback: String       // "the provider"
+    val errorOverlaySummaryAuthFormat: String           // "%s rejected the API key…"
+    val errorOverlaySummaryModelNotFoundFormat: String  // "%s doesn't recognise the configured model…"
+    val errorOverlaySummaryRateLimitedFormat: String    // "%s is rate-limiting requests…"
+    val errorOverlaySummaryTimeoutFormat: String        // "The request to %s timed out…"
+    val errorOverlaySummaryProviderDownFormat: String   // "%s returned a server error…"
+    val errorOverlaySummaryNetworkFormat: String        // "Couldn't reach %s. Check your network…"
+    val errorOverlaySummaryUnknownFormat: String        // "Something went wrong while talking to %s…"
+    val errorOverlaySwitchProvider: String              // "Switch provider"
+
     // Biometric / device-credential gate shown before revealing or exporting
     // API keys. Title is reused for export ("Confirm to reveal/export"),
     // subtitle is the explanatory body. NotEnrolled fires when the device has

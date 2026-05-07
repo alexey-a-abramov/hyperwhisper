@@ -637,6 +637,23 @@ object EnglishStrings : Strings {
     override val errorUnknown = "Unknown error"
     override val errorProcessingFailedFormat = "Processing failed: %1\$s: %2\$s"
 
+    override val errorOverlayProviderFallback = "the provider"
+    override val errorOverlaySummaryAuthFormat =
+        "%s rejected the API key. Open Settings and double-check the key is current and has access to the chosen model."
+    override val errorOverlaySummaryModelNotFoundFormat =
+        "%s doesn't recognise the configured model. Pick a different model in the keyboard model picker, or update the model ID in Settings."
+    override val errorOverlaySummaryRateLimitedFormat =
+        "%s is rate-limiting requests. Wait a minute, or switch to a different provider via the keyboard picker."
+    override val errorOverlaySummaryTimeoutFormat =
+        "The request to %s timed out. The provider may be slow right now — try again in a moment."
+    override val errorOverlaySummaryProviderDownFormat =
+        "%s returned a server error. The service is likely having an outage — try again later or switch to a different provider."
+    override val errorOverlaySummaryNetworkFormat =
+        "Couldn't reach %s. Check your network connection and try again."
+    override val errorOverlaySummaryUnknownFormat =
+        "Something went wrong while talking to %s. The full error is below — copy it if you need to ask for help."
+    override val errorOverlaySwitchProvider = "Switch provider"
+
     // Local processing
     override val secretsGateRevealTitle = "Confirm to reveal API key"
     override val secretsGateExportTitle = "Confirm to export secrets"

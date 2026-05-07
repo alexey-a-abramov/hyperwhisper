@@ -61,7 +61,7 @@ fun ErrorOverlay(
     val strings = LocalStrings.current
     val isPermissionError = errorMessage.contains("permission", ignoreCase = true)
     val kind = classifyErrorMessage(errorMessage)
-    val summary = plainLanguageSummary(kind, providerName)
+    val summary = plainLanguageSummary(kind, providerName, strings)
 
     // Full-screen overlay within keyboard (not a separate Dialog window)
     Surface(
@@ -222,7 +222,7 @@ private fun SuggestedActionForKind(
             // what to do, and we don't want a dead-end button.
             if (onSwitchProvider != null) {
                 SuggestedActionButton(
-                    label = "Switch provider",
+                    label = strings.errorOverlaySwitchProvider,
                     icon = Icons.Default.SwapHoriz,
                     onClick = onSwitchProvider
                 )
@@ -266,24 +266,25 @@ private fun SuggestedActionButton(
     }
 }
 
-/** Short user-facing explanation per error kind. Kept English-only for now —
- *  if these strings get localised, move them into the Strings table. */
-private fun plainLanguageSummary(kind: ErrorKind, providerName: String?): String {
-    val who = providerName?.takeIf { it.isNotBlank() }?.let { "$it" } ?: "the provider"
-    return when (kind) {
-        ErrorKind.AUTH ->
-            "$who rejected the API key. Open Settings and double-check the key is current and has access to the chosen model."
-        ErrorKind.MODEL_NOT_FOUND ->
-            "$who doesn't recognise the configured model. Pick a different model in the keyboard model picker, or update the model ID in Settings."
-        ErrorKind.RATE_LIMITED ->
-            "$who is rate-limiting requests. Wait a minute, or switch to a different provider via the keyboard picker."
-        ErrorKind.TIMEOUT ->
-            "The request to $who timed out. The provider may be slow right now — try again in a moment."
-        ErrorKind.PROVIDER_DOWN ->
-            "$who returned a server error. The service is likely having an outage — try again later or switch to a different provider."
-        ErrorKind.NETWORK ->
-            "Couldn't reach $who. Check your network connection and try again."
-        ErrorKind.UNKNOWN ->
-            "Something went wrong while talking to $who. The full error is below — copy it if you need to ask for help."
+/** Short user-facing explanation per error kind. Strings come from the
+ *  shared [com.hyperwhisper.localization.Strings] table so they translate
+ *  alongside the rest of the UI. The provider name is interpolated as %1$s;
+ *  callers pass null when no provider context is available, in which case
+ *  the locale's [Strings.errorOverlayProviderFallback] is used. */
+private fun plainLanguageSummary(
+    kind: ErrorKind,
+    providerName: String?,
+    strings: com.hyperwhisper.localization.Strings,
+): String {
+    val who = providerName?.takeIf { it.isNotBlank() } ?: strings.errorOverlayProviderFallback
+    val template = when (kind) {
+        ErrorKind.AUTH -> strings.errorOverlaySummaryAuthFormat
+        ErrorKind.MODEL_NOT_FOUND -> strings.errorOverlaySummaryModelNotFoundFormat
+        ErrorKind.RATE_LIMITED -> strings.errorOverlaySummaryRateLimitedFormat
+        ErrorKind.TIMEOUT -> strings.errorOverlaySummaryTimeoutFormat
+        ErrorKind.PROVIDER_DOWN -> strings.errorOverlaySummaryProviderDownFormat
+        ErrorKind.NETWORK -> strings.errorOverlaySummaryNetworkFormat
+        ErrorKind.UNKNOWN -> strings.errorOverlaySummaryUnknownFormat
     }
+    return String.format(template, who)
 }

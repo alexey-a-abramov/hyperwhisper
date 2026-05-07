@@ -637,6 +637,23 @@ object RussianStrings : Strings {
     override val errorUnknown = "Неизвестная ошибка"
     override val errorProcessingFailedFormat = "Ошибка обработки: %1\$s: %2\$s"
 
+    override val errorOverlayProviderFallback = "провайдер"
+    override val errorOverlaySummaryAuthFormat =
+        "%s отклонил ключ API. Откройте Настройки и убедитесь, что ключ актуален и имеет доступ к выбранной модели."
+    override val errorOverlaySummaryModelNotFoundFormat =
+        "%s не распознаёт настроенную модель. Выберите другую модель в выборе моделей клавиатуры или обновите ID модели в Настройках."
+    override val errorOverlaySummaryRateLimitedFormat =
+        "%s ограничивает количество запросов. Подождите минуту или переключитесь на другого провайдера через выбор клавиатуры."
+    override val errorOverlaySummaryTimeoutFormat =
+        "Истекло время ожидания запроса к %s. Возможно, провайдер сейчас работает медленно — попробуйте ещё раз через минуту."
+    override val errorOverlaySummaryProviderDownFormat =
+        "%s вернул ошибку сервера. Вероятно, сервис недоступен — попробуйте позже или переключитесь на другого провайдера."
+    override val errorOverlaySummaryNetworkFormat =
+        "Не удалось связаться с %s. Проверьте сетевое подключение и попробуйте снова."
+    override val errorOverlaySummaryUnknownFormat =
+        "Что-то пошло не так при обращении к %s. Полная ошибка ниже — скопируйте её, если нужна помощь."
+    override val errorOverlaySwitchProvider = "Сменить провайдера"
+
     // Local processing
     override val secretsGateRevealTitle = "Подтвердите, чтобы показать ключ API"
     override val secretsGateExportTitle = "Подтвердите экспорт секретов"
