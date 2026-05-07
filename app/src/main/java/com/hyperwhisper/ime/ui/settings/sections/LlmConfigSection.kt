@@ -63,6 +63,8 @@ fun LlmConfigSection(
     openRouterError: String? = null,
     onRefreshOpenRouterModels: () -> Unit = {},
     localGemmaModelPath: String = "",
+    lastTestedAt: Map<LlmProvider, Long> = emptyMap(),
+    retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -70,6 +72,8 @@ fun LlmConfigSection(
     // LLM Provider selector
     LlmProviderSelector(
         selectedProvider = llmProvider,
+        lastTestedAt = lastTestedAt,
+        retestProgress = retestProgress,
         onProviderSelected = onLlmProviderChange,
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
     )

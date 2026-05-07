@@ -104,6 +104,7 @@ fun TranscriptionSection(
     connectionTestState: ConnectionTestState,
     transcriptionTestLog: List<TestLogEntry> = emptyList(),
     whisperDownloadStates: Map<String, WhisperDownloadState> = emptyMap(),
+    retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState> = emptyMap(),
     onSaveCloud: (
         provider: ApiProvider,
         baseUrl: String,
@@ -189,7 +190,8 @@ fun TranscriptionSection(
                 transcriptionTestLog = transcriptionTestLog,
                 onTestConnection = onTestConnection,
                 onResetConnectionState = onResetConnectionState,
-                onShowApiCallLogs = onShowApiCallLogs
+                onShowApiCallLogs = onShowApiCallLogs,
+                retestProgress = retestProgress,
             )
         }
     }
@@ -301,7 +303,8 @@ private fun CloudPanel(
     transcriptionTestLog: List<TestLogEntry> = emptyList(),
     onTestConnection: () -> Unit = {},
     onResetConnectionState: () -> Unit = {},
-    onShowApiCallLogs: () -> Unit = {}
+    onShowApiCallLogs: () -> Unit = {},
+    retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState> = emptyMap(),
 ) {
     val strings = LocalStrings.current
     var provider by remember(apiSettings.provider) { mutableStateOf(apiSettings.provider) }
@@ -332,6 +335,8 @@ private fun CloudPanel(
         FieldGroup(title = strings.provider) {
             CloudProviderSelector(
                 selectedProvider = provider,
+                lastTestedAt = apiSettings.lastTestedAt,
+                retestProgress = retestProgress,
                 onProviderSelected = { newProvider ->
                     provider = newProvider
                     val newApiKey = apiSettings.apiKeys[newProvider] ?: ""

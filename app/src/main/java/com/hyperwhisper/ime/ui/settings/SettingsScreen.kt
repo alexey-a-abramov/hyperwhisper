@@ -263,10 +263,13 @@ fun SettingsScreen(
                 },
                 label = "settings-route"
             ) { current ->
+                // Retest state is collected once for both Home (full progress
+                // card) and Detail (per-section selector chips), so a retest
+                // kicked off from one screen reflects live in the other.
+                val retestProgress by viewModel.retestProgress.collectAsState()
+                val retestRunning by viewModel.retestRunning.collectAsState()
                 when (current) {
                     is SettingsRoute.Home -> {
-                        val retestProgress by viewModel.retestProgress.collectAsState()
-                        val retestRunning by viewModel.retestRunning.collectAsState()
                         SettingsHomeScreen(
                             apiSettings = apiSettings,
                             retestProgress = retestProgress,
@@ -310,7 +313,8 @@ fun SettingsScreen(
                                 openRouterModels = openRouterModels,
                                 openRouterRefreshing = openRouterRefreshing,
                                 openRouterError = openRouterError,
-                                onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() }
+                                onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() },
+                                retestProgress = retestProgress,
                             )
 
                             SettingsCategory.POST_PROCESSING -> PostProcessingDetail(
@@ -331,7 +335,8 @@ fun SettingsScreen(
                                 openRouterModels = openRouterModels,
                                 openRouterRefreshing = openRouterRefreshing,
                                 openRouterError = openRouterError,
-                                onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() }
+                                onRefreshOpenRouterModels = { viewModel.refreshOpenRouterModels() },
+                                retestProgress = retestProgress,
                             )
 
                             SettingsCategory.LOCAL_MODELS -> {
@@ -492,7 +497,8 @@ private fun PostProcessingDetail(
     openRouterModels: List<com.hyperwhisper.network.OpenRouterModelInfo> = emptyList(),
     openRouterRefreshing: Boolean = false,
     openRouterError: String? = null,
-    onRefreshOpenRouterModels: () -> Unit = {}
+    onRefreshOpenRouterModels: () -> Unit = {},
+    retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState> = emptyMap(),
 ) {
     val cfg = apiSettings.llmConfig
     var llmProvider by remember(cfg) { mutableStateOf(cfg.provider) }
@@ -618,7 +624,9 @@ private fun PostProcessingDetail(
             openRouterRefreshing = openRouterRefreshing,
             openRouterError = openRouterError,
             onRefreshOpenRouterModels = onRefreshOpenRouterModels,
-            localGemmaModelPath = apiSettings.localModelSettings.gemmaModelPath
+            localGemmaModelPath = apiSettings.localModelSettings.gemmaModelPath,
+            lastTestedAt = cfg.lastTestedAt,
+            retestProgress = retestProgress,
         )
     }
 }
