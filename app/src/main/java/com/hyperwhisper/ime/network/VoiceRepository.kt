@@ -108,6 +108,17 @@ class VoiceRepository @Inject constructor(
 
                 when (transcriptionResult) {
                     is ApiResult.Success -> {
+                        // Real-world call succeeded → refresh the per-provider
+                        // tested-status timestamp so picker badges reflect
+                        // actual usage, not just explicit Settings tests.
+                        val effectiveAsr = if (apiSettings.localModelSettings.useLocalWhisper)
+                            ApiProvider.LOCAL_WHISPER else apiSettings.provider
+                        runCatching {
+                            settingsRepository.recordProviderTested(
+                                effectiveAsr, System.currentTimeMillis()
+                            )
+                        }
+
                         // Step 2: Post-process the transcribed text with chat model
                         Log.d(TAG, "Transcription successful, applying post-processing")
                         val originalTranscription = transcriptionResult.data
@@ -225,6 +236,15 @@ class VoiceRepository @Inject constructor(
                                 tokenUsage = result.processingInfo?.transcriptionTokens
                             )
                         )
+
+                        // Real-world call succeeded → refresh tested-status.
+                        val effectiveAsr = if (apiSettings.localModelSettings.useLocalWhisper)
+                            ApiProvider.LOCAL_WHISPER else apiSettings.provider
+                        runCatching {
+                            settingsRepository.recordProviderTested(
+                                effectiveAsr, System.currentTimeMillis()
+                            )
+                        }
 
                         ApiResult.Success(result.data, processingInfo)
                     }
@@ -398,6 +418,13 @@ class VoiceRepository @Inject constructor(
                     outputBytes = finalText.toByteArray(Charsets.UTF_8).size.toLong()
                 )
 
+                // Real-world LLM call succeeded — refresh tested-status badge.
+                runCatching {
+                    settingsRepository.recordLlmProviderTested(
+                        LlmProvider.LOCAL_GEMMA, System.currentTimeMillis()
+                    )
+                }
+
                 val info = ProcessingInfo(
                     processingMode = "two-step",
                     strategy = "transcription + Local Gemma (in-proc)",
@@ -523,6 +550,13 @@ class VoiceRepository @Inject constructor(
                         outputCharacters = finalChars,
                         outputBytes = finalBytes
                     )
+
+                    // Real-world LLM call succeeded — refresh tested-status badge.
+                    runCatching {
+                        settingsRepository.recordLlmProviderTested(
+                            apiSettings.llmConfig.provider, System.currentTimeMillis()
+                        )
+                    }
 
                     ApiResult.Success(processedText, processingInfo)
                 } else {
