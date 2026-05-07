@@ -57,6 +57,7 @@ fun SettingsHomeScreen(
     retestProgress: Map<String, ConnectionTester.RetestRowState> = emptyMap(),
     retestRunning: Boolean = false,
     onRetestAll: () -> Unit = {},
+    onClearRetestProgress: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier
@@ -74,6 +75,7 @@ fun SettingsHomeScreen(
                 running = retestRunning,
                 progress = retestProgress,
                 onRetestAll = onRetestAll,
+                onClearProgress = onClearRetestProgress,
             )
         }
         item { Spacer(Modifier.height(4.dp)) }
@@ -93,6 +95,7 @@ private fun RetestAllCard(
     running: Boolean,
     progress: Map<String, ConnectionTester.RetestRowState>,
     onRetestAll: () -> Unit,
+    onClearProgress: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -135,6 +138,15 @@ private fun RetestAllCard(
             if (progress.isNotEmpty()) {
                 progress.entries.sortedBy { it.key }.forEach { (key, state) ->
                     RetestRow(key = key, state = state)
+                }
+                // Clear the per-row progress list after a batch completes.
+                // Only enabled when the run isn't in flight — clearing mid-
+                // run would yank the user's live status display.
+                if (!running) {
+                    androidx.compose.material3.TextButton(
+                        onClick = onClearProgress,
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("Clear results", fontSize = 11.sp) }
                 }
             }
         }

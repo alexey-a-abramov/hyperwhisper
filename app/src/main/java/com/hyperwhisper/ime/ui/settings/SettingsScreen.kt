@@ -275,6 +275,7 @@ fun SettingsScreen(
                             retestProgress = retestProgress,
                             retestRunning = retestRunning,
                             onRetestAll = { viewModel.retestAllProviders() },
+                            onClearRetestProgress = { viewModel.resetRetestProgress() },
                             onCategorySelected = { route = SettingsRoute.Detail(it) }
                         )
                     }
