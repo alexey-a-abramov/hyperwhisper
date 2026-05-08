@@ -687,7 +687,8 @@ private fun GemmaDownloadCard(
             )
             Text(
                 "MediaPipe-converted .task / .litertlm files from huggingface.co/litert-community · " +
-                    "saved to /sdcard/LLM/Gemma/. Standard llama.cpp GGUF files won't load — use these. " +
+                    "saved to /sdcard/LLM/Gemma/. Standard llama.cpp GGUF files also work now via the " +
+                    "in-process llama.cpp engine — drop them next to the others. " +
                     "All listed repos are gated; accept the Gemma license on HF (logged in) before downloading.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -738,12 +739,10 @@ private fun GemmaDownloadCard(
 }
 
 /**
- * Shows files we found on disk that aren't part of the curated catalog. Two
- * buckets: loadable (.task / .litertlm / non-gguf .bin) get a "Set active"
- * action; incompatible (.gguf) get a clear explanation + one-tap delete so
- * the user can free the (often multi-GB) disk space without going through a
- * file manager. The user has 8+ GB of GGUF Gemma 4 files from confusing
- * `gguf` with `litertlm` — surfacing them here is the whole point.
+ * Shows files we found on disk that aren't part of the curated catalog. All
+ * detected GEMMA-type files (.task / .litertlm / .bin / .gguf) are now
+ * loadable: .gguf routes through the vendored llama.cpp engine and the rest
+ * through MediaPipe. Each row gets a "Set active" action and one-tap delete.
  */
 @Composable
 private fun DetectedOnDiskBlock(
@@ -764,7 +763,6 @@ private fun DetectedOnDiskBlock(
     }
     if (orphans.isEmpty()) return
 
-    val (loadable, incompatible) = orphans.partition { isLoadableByMediaPipe(it.name) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             "DETECTED ON DISK · ${orphans.size}",
@@ -772,7 +770,7 @@ private fun DetectedOnDiskBlock(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-        loadable.forEach { info ->
+        orphans.forEach { info ->
             val isActive = useLocal && activePath == info.path
             val isSelected = !useLocal && activePath == info.path
             DetectedRow(
@@ -780,23 +778,9 @@ private fun DetectedOnDiskBlock(
                 isActive = isActive,
                 isSelected = isSelected,
                 showTechnicalDetails = showTechnicalDetails,
-                statusLine = "MediaPipe-loadable · ${formatBytes(info.sizeBytes)}",
+                statusLine = engineLabelFor(info.name) + " · " + formatBytes(info.sizeBytes),
                 primaryActionLabel = if (isActive) null else "Set active",
                 onPrimary = { onSetActive(info.path) },
-                onDelete = { onDeleteFile(info.path) }
-            )
-        }
-        incompatible.forEach { info ->
-            DetectedRow(
-                info = info,
-                isActive = false,
-                isSelected = false,
-                showTechnicalDetails = showTechnicalDetails,
-                statusLine = "Incompatible (GGUF — needs .litertlm from litert-community) · " +
-                    formatBytes(info.sizeBytes),
-                statusIsError = true,
-                primaryActionLabel = null,
-                onPrimary = {},
                 onDelete = { onDeleteFile(info.path) }
             )
         }
@@ -816,7 +800,12 @@ private fun DetectedRow(
     onDelete: () -> Unit
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
-    ModelRowSurface {
+    // Whole-row tap = primary action when one is offered (loadable orphan
+    // with "Set active"). Incompatible (.gguf) rows have no primary action,
+    // so the whole row is inert — only the trash icon does anything.
+    val rowOnClick: (() -> Unit)? = if (primaryActionLabel != null) onPrimary else null
+
+    ModelRowSurface(onClick = rowOnClick) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ModelHeader(
                 title = info.name,
@@ -827,67 +816,37 @@ private fun DetectedRow(
                     isSelected -> RowStatus.SELECTED
                     else -> RowStatus.INSTALLED
                 },
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (primaryActionLabel != null) {
-                    Button(onClick = onPrimary, modifier = Modifier.weight(1f)) {
-                        Text(primaryActionLabel)
-                    }
+                actions = {
+                    RowActionIcon(
+                        icon = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        onClick = { confirmDelete = true },
+                        tint = MaterialTheme.colorScheme.error,
+                    )
                 }
-                OutlinedButton(
-                    onClick = { confirmDelete = true },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Delete") }
-            }
+            )
         }
     }
 
-    if (confirmDelete) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete file?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(info.name, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        info.path,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Frees ${formatBytes(info.sizeBytes)}. This cannot be undone.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) {
-                    Text(
-                        "Delete",
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
+    DeleteConfirmDialog(
+        visible = confirmDelete,
+        title = "Delete file?",
+        message = "${info.name}\n${info.path}\n\nFrees ${formatBytes(info.sizeBytes)}. This cannot be undone.",
+        onConfirm = onDelete,
+        onDismiss = { confirmDelete = false },
+    )
 }
 
-/** Mirrors the runtime check in GemmaInferenceEngine — only .gguf is rejected
- *  outright; .task / .litertlm / .bin can all be attempted by tasks-genai. */
-private fun isLoadableByMediaPipe(fileName: String): Boolean {
+/** Human-readable engine label per file extension, mirroring the routing in
+ *  [com.hyperwhisper.ime.llm.LocalLlmRouter]. */
+private fun engineLabelFor(fileName: String): String {
     val lower = fileName.lowercase()
-    if (lower.endsWith(".gguf")) return false
-    return lower.endsWith(".task") || lower.endsWith(".litertlm") || lower.endsWith(".bin")
+    return when {
+        lower.endsWith(".gguf") -> "llama.cpp (GGUF)"
+        lower.endsWith(".task") || lower.endsWith(".litertlm") -> "MediaPipe LLM"
+        lower.endsWith(".bin") -> "MediaPipe LLM (legacy .bin)"
+        else -> "Unknown format"
+    }
 }
 
 @Composable

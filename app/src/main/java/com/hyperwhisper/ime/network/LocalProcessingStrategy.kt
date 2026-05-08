@@ -21,7 +21,7 @@ import java.io.File
 class LocalProcessingStrategy(
     private val settingsRepository: com.hyperwhisper.data.SettingsRepository,
     private val whisperCache: com.hyperwhisper.ime.whisper.WhisperContextCache,
-    private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine
+    private val localLlm: com.hyperwhisper.ime.llm.LocalLlmRouter
 ) : AudioProcessingStrategy {
 
     companion object {
@@ -101,25 +101,26 @@ class LocalProcessingStrategy(
             var postProcessingModelName: String? = null
 
             if (!skipLocalLlm && canRunLocalLlm) {
-                Log.d(TAG, "Local LLM post-processing with ${File(localSettings.gemmaModelPath).name}")
+                val modelName = File(localSettings.gemmaModelPath).name
+                Log.d(TAG, "Local LLM post-processing with $modelName")
                 val ppStart = System.currentTimeMillis()
                 try {
-                    val rewritten = gemma.rewrite(
+                    val rewritten = localLlm.rewrite(
                         modelPath = localSettings.gemmaModelPath,
                         systemPrompt = voiceMode.systemPrompt,
                         userText = rawText
                     )
                     if (rewritten.isNotBlank()) finalResult = rewritten
                     postProcessingTimeMs = System.currentTimeMillis() - ppStart
-                    postProcessingModelName = File(localSettings.gemmaModelPath).name
-                    Log.d(TAG, "Gemma post-processing done in ${postProcessingTimeMs} ms")
+                    postProcessingModelName = modelName
+                    Log.d(TAG, "Local LLM done in ${postProcessingTimeMs} ms")
                 } catch (t: Throwable) {
-                    // Don't fail the whole transcription if Gemma blows up —
-                    // the raw Whisper text is still useful.
-                    TraceLogger.error(TAG, "Gemma post-processing failed; returning raw transcription", t)
+                    // Don't fail the whole transcription if the local LLM blows
+                    // up — the raw Whisper text is still useful.
+                    TraceLogger.error(TAG, "Local LLM post-processing failed; returning raw transcription", t)
                 }
             } else if (canRunLocalLlm) {
-                Log.d(TAG, "Skipping Gemma — voice mode is verbatim/direct")
+                Log.d(TAG, "Skipping local LLM — voice mode is verbatim/direct")
             }
 
             val totalTime = System.currentTimeMillis() - startTime

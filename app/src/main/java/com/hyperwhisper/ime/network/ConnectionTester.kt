@@ -54,7 +54,7 @@ class ConnectionTester @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val transcriptionApiService: TranscriptionApiService,
     private val gson: Gson,
-    private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
+    private val localLlm: com.hyperwhisper.ime.llm.LocalLlmRouter,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -817,18 +817,22 @@ class ConnectionTester @Inject constructor(
             )
             return
         }
+        val engineLabel = when (localLlm.engineFor(modelPath)) {
+            com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.LLAMA_CPP -> "Engine: llama.cpp (in-process, GGUF)"
+            com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.GEMMA -> "Engine: MediaPipe LLM (in-process)"
+        }
         appendPostProcessingLog(
             TestLogLevel.INFO,
-            "Engine: MediaPipe LLM (in-process)",
+            engineLabel,
             "${file.length() / 1024 / 1024} MB · ${file.name}"
         )
         appendPostProcessingLog(TestLogLevel.INFO, "Sample input", sampleText)
-        appendPostProcessingLog(TestLogLevel.RUNNING, "Running in-process Gemma")
+        appendPostProcessingLog(TestLogLevel.RUNNING, "Running in-process inference")
 
         val started = System.nanoTime()
         try {
             val out = withContext(Dispatchers.IO) {
-                gemma.rewrite(
+                localLlm.rewrite(
                     modelPath = modelPath,
                     systemPrompt = systemPrompt,
                     userText = sampleText
@@ -839,7 +843,7 @@ class ConnectionTester @Inject constructor(
             if (out.isBlank()) {
                 appendPostProcessingLog(TestLogLevel.FAIL, "Empty output")
                 _postProcessingTestState.value = ConnectionTestState.Error(
-                    "Gemma returned empty text. Model may be incompatible with MediaPipe — confirm it's a litert-community .bin."
+                    "Local LLM returned empty text. The model may be malformed for its runtime — for .gguf use a llama.cpp-compatible quant; for .task/.litertlm/.bin use a MediaPipe-converted model from huggingface.co/litert-community."
                 )
                 return
             }

@@ -15,7 +15,7 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val localProcessingStrategy: LocalProcessingStrategy,
-    private val gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine,
+    private val localLlm: com.hyperwhisper.ime.llm.LocalLlmRouter,
     private val settingsRepository: SettingsRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
     private val llmServiceFactory: LlmServiceFactory,
@@ -391,13 +391,13 @@ class VoiceRepository @Inject constructor(
                 }
                 val postProcessStartTime = System.currentTimeMillis()
                 val rewritten = try {
-                    gemma.rewrite(
+                    localLlm.rewrite(
                         modelPath = localPath,
                         systemPrompt = systemPrompt,
                         userText = transcribedText
                     )
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Local Gemma post-processing failed; returning raw transcription", t)
+                    Log.w(TAG, "Local LLM post-processing failed; returning raw transcription", t)
                     return ApiResult.Success(transcribedText)
                 }
                 val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime

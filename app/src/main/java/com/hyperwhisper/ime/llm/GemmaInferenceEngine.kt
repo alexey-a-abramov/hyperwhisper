@@ -50,12 +50,10 @@ class GemmaInferenceEngine @Inject constructor(
         maxTokens: Int = DEFAULT_MAX_TOKENS
     ): String = mutex.withLock {
         require(modelPath.isNotBlank()) { "Gemma model path is blank" }
-        if (modelPath.endsWith(".gguf", ignoreCase = true)) {
-            error(
-                "MediaPipe LLM does not load standard GGUF files. Use a " +
-                    "MediaPipe-converted .bin (e.g. from huggingface.co/litert-community)."
-            )
-        }
+        // Note: callers are expected to route GGUF through LlamaCppEngine via
+        // LocalLlmRouter. If a .gguf still reaches this point, MediaPipe will
+        // surface its own native error during ensureLoaded — we no longer
+        // pre-empt with a custom message.
         val instance = ensureLoaded(modelPath, maxTokens)
         // Gemma's instruction-tuned chat template:
         //   <start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n

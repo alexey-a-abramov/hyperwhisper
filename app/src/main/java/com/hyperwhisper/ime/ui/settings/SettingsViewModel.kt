@@ -151,9 +151,8 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Delete an on-disk model file that the user no longer wants. Used by the
-     * "Detected on disk" section to clean up incompatible (e.g. .gguf) files.
-     * If the deleted file was the active Gemma path, clear that too so the
-     * settings don't keep pointing at a missing file.
+     * "Detected on disk" section. If the deleted file was the active Gemma
+     * path, clear that too so the settings don't keep pointing at a missing file.
      */
     fun deleteOnDiskFile(path: String) {
         viewModelScope.launch {

@@ -102,9 +102,9 @@ object NetworkModule {
     fun provideLocalProcessingStrategy(
         settingsRepository: SettingsRepository,
         whisperCache: com.hyperwhisper.ime.whisper.WhisperContextCache,
-        gemma: com.hyperwhisper.ime.llm.GemmaInferenceEngine
+        localLlm: com.hyperwhisper.ime.llm.LocalLlmRouter
     ): com.hyperwhisper.network.LocalProcessingStrategy {
-        return com.hyperwhisper.network.LocalProcessingStrategy(settingsRepository, whisperCache, gemma)
+        return com.hyperwhisper.network.LocalProcessingStrategy(settingsRepository, whisperCache, localLlm)
     }
 
     @Provides
