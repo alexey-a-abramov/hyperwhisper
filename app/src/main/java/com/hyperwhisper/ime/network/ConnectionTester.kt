@@ -801,11 +801,11 @@ class ConnectionTester @Inject constructor(
         if (modelPath.isBlank()) {
             appendPostProcessingLog(
                 TestLogLevel.FAIL,
-                "No Gemma model path",
-                "Set one in Transcription → Local → Gemma. Expected a MediaPipe-converted .bin (litert-community on HF), not a GGUF file."
+                "No local LLM model path",
+                "Set one in Transcription → Local. Accepts MediaPipe .task/.litertlm/.bin or llama.cpp .gguf."
             )
             _postProcessingTestState.value = ConnectionTestState.Error(
-                "No Gemma model selected. Pick one under Transcription → Local."
+                "No local LLM model selected. Pick one under Transcription → Local."
             )
             return
         }
