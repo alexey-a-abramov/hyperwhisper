@@ -55,6 +55,7 @@ class ConnectionTester @Inject constructor(
     private val transcriptionApiService: TranscriptionApiService,
     private val gson: Gson,
     private val localLlm: com.hyperwhisper.ime.llm.LocalLlmRouter,
+    private val localModelRepository: com.hyperwhisper.data.LocalModelRepository,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -729,6 +730,7 @@ class ConnectionTester @Inject constructor(
             if (llm.provider == LlmProvider.LOCAL_GEMMA) {
                 runLocalGemmaPostProcessingTest(
                     modelPath = settings.localModelSettings.gemmaModelPath,
+                    pickerModelId = llm.modelId,
                     systemPrompt = systemPrompt,
                     sampleText = sampleText
                 )
@@ -789,35 +791,95 @@ class ConnectionTester @Inject constructor(
     }
 
     /**
-     * In-process Gemma post-processing test. Loads the user's MediaPipe-
-     * converted .bin via [GemmaInferenceEngine] and runs the sample text
-     * through it. No HTTP server required.
+     * In-process post-processing test. Loads the user's local LLM file via
+     * [LocalLlmRouter] (MediaPipe for .task/.litertlm/.bin, llama.cpp for
+     * .gguf) and runs the sample text through it. No HTTP server required.
+     *
+     * If [modelPath] is blank, runs an on-disk discovery first and either
+     * auto-falls-back to a file whose name matches [pickerModelId] (so the
+     * common UX disconnect — picker says "gemma-4-9b-it" but the disk-path
+     * setting was never wired — produces a useful test instead of a
+     * dead-end FAIL), or surfaces the full list of detected files so the
+     * user can pick one in Transcription → Local.
      */
     private suspend fun runLocalGemmaPostProcessingTest(
         modelPath: String,
+        pickerModelId: String,
         systemPrompt: String,
         sampleText: String
     ) {
-        if (modelPath.isBlank()) {
+        // ----- Path resolution + diagnostics -----
+        var effectivePath = modelPath
+        var autoPicked = false
+
+        if (effectivePath.isBlank()) {
             appendPostProcessingLog(
-                TestLogLevel.FAIL,
-                "No local LLM model path",
-                "Set one in Transcription → Local. Accepts MediaPipe .task/.litertlm/.bin or llama.cpp .gguf."
+                TestLogLevel.INFO,
+                "Configured path: [not set]",
+                "LLM picker shows '$pickerModelId' but no on-disk file is bound. Scanning…"
             )
-            _postProcessingTestState.value = ConnectionTestState.Error(
-                "No local LLM model selected. Pick one under Transcription → Local."
+            val detected = withContext(Dispatchers.IO) {
+                runCatching { localModelRepository.discoverModels() }.getOrDefault(emptyList())
+            }
+            val gemmaLike = detected.filter {
+                it.type == com.hyperwhisper.data.LocalModelType.GEMMA
+            }
+            if (gemmaLike.isEmpty()) {
+                appendPostProcessingLog(
+                    TestLogLevel.FAIL,
+                    "No local LLM files detected",
+                    "Looked under /sdcard/Download, /sdcard/Models, /sdcard/Whisper, /sdcard/LLM (and one level deeper). " +
+                        "Drop a .gguf / .task / .litertlm / .bin in any of those, then pick it in Transcription → Local."
+                )
+                _postProcessingTestState.value = ConnectionTestState.Error(
+                    "No local LLM file is set and none were found on disk."
+                )
+                return
+            }
+            // Show the full inventory so the user can copy the right file path.
+            appendPostProcessingLog(
+                TestLogLevel.INFO,
+                "Detected on disk: ${gemmaLike.size} file(s)",
+                gemmaLike.joinToString("\n") { info ->
+                    val engine = when (localLlm.engineFor(info.path)) {
+                        com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.LLAMA_CPP -> "llama.cpp"
+                        com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.GEMMA -> "MediaPipe"
+                    }
+                    "• ${info.name}  [$engine, ${info.sizeBytes / 1024 / 1024} MB]\n  ${info.path}"
+                }
             )
-            return
+            // Try to auto-pick a file whose name matches the LLM picker label.
+            val match = pickFileMatching(pickerModelId, gemmaLike)
+            if (match == null) {
+                appendPostProcessingLog(
+                    TestLogLevel.FAIL,
+                    "Cannot auto-pick a file for '$pickerModelId'",
+                    "Open Transcription → Local, find the file you want, and tap 'Set active'. The test will use that path next time."
+                )
+                _postProcessingTestState.value = ConnectionTestState.Error(
+                    "No on-disk file matches '$pickerModelId'. Pick one under Transcription → Local."
+                )
+                return
+            }
+            appendPostProcessingLog(
+                TestLogLevel.INFO,
+                "Auto-pick for this test: ${match.name}",
+                "Best name match for picker '$pickerModelId'. This test won't change your saved settings — to make it permanent, tap 'Set active' on the file under Transcription → Local."
+            )
+            effectivePath = match.path
+            autoPicked = true
         }
-        val file = java.io.File(modelPath)
+
+        val file = java.io.File(effectivePath)
         if (!file.exists()) {
-            appendPostProcessingLog(TestLogLevel.FAIL, "Model file missing", modelPath)
+            appendPostProcessingLog(TestLogLevel.FAIL, "Model file missing", effectivePath)
             _postProcessingTestState.value = ConnectionTestState.Error(
-                "Configured Gemma model file not found on disk."
+                "Configured local LLM file not found on disk: ${file.name}"
             )
             return
         }
-        val engineLabel = when (localLlm.engineFor(modelPath)) {
+
+        val engineLabel = when (localLlm.engineFor(effectivePath)) {
             com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.LLAMA_CPP -> "Engine: llama.cpp (in-process, GGUF)"
             com.hyperwhisper.ime.llm.LocalLlmRouter.Engine.GEMMA -> "Engine: MediaPipe LLM (in-process)"
         }
@@ -833,7 +895,7 @@ class ConnectionTester @Inject constructor(
         try {
             val out = withContext(Dispatchers.IO) {
                 localLlm.rewrite(
-                    modelPath = modelPath,
+                    modelPath = effectivePath,
                     systemPrompt = systemPrompt,
                     userText = sampleText
                 )
@@ -849,21 +911,61 @@ class ConnectionTester @Inject constructor(
             }
             val preview = "“${out.take(160)}${if (out.length > 160) "…" else ""}”"
             appendPostProcessingLog(TestLogLevel.INFO, preview)
-            settingsRepository.recordLlmProviderTested(
-                LlmProvider.LOCAL_GEMMA, System.currentTimeMillis()
-            )
-            _postProcessingTestState.value = ConnectionTestState.Success("Sample → $preview")
+            // Only record success against the provider when the user's actual
+            // saved path was used; an auto-picked file is a one-shot
+            // diagnostic, not a confirmation that their config works.
+            if (!autoPicked) {
+                settingsRepository.recordLlmProviderTested(
+                    LlmProvider.LOCAL_GEMMA, System.currentTimeMillis()
+                )
+            }
+            val successMsg = if (autoPicked) {
+                "Sample → $preview  ⚠️ used auto-picked file (your saved path is still empty)"
+            } else {
+                "Sample → $preview"
+            }
+            _postProcessingTestState.value = ConnectionTestState.Success(successMsg)
         } catch (t: Throwable) {
-            Log.w(TAG, "Local Gemma test failed", t)
+            Log.w(TAG, "Local LLM test failed", t)
             appendPostProcessingLog(
                 TestLogLevel.FAIL,
                 t.javaClass.simpleName,
                 t.message ?: "no message"
             )
             _postProcessingTestState.value = ConnectionTestState.Error(
-                t.message ?: "Local Gemma inference failed."
+                t.message ?: "Local LLM inference failed."
             )
         }
+    }
+
+    /** Pick the on-disk file whose filename best matches the LLM picker
+     *  label (e.g. picker "gemma-4-9b-it" → "gemma-4-9b-it-Q4_K_M.gguf").
+     *  Tokenises both sides on `[-_.]` and counts overlapping tokens; ties
+     *  break toward GGUF (the cheaper-to-load runtime), then largest file. */
+    private fun pickFileMatching(
+        pickerModelId: String,
+        candidates: List<com.hyperwhisper.data.LocalModelInfo>
+    ): com.hyperwhisper.data.LocalModelInfo? {
+        if (candidates.isEmpty()) return null
+        val pickerTokens = pickerModelId.lowercase()
+            .split('-', '_', '.', ' ')
+            .filter { it.isNotBlank() }
+            .toSet()
+        if (pickerTokens.isEmpty()) return candidates.firstOrNull()
+        val scored = candidates.map { info ->
+            val nameTokens = info.name.lowercase()
+                .split('-', '_', '.', ' ')
+                .filter { it.isNotBlank() }
+                .toSet()
+            val overlap = pickerTokens.intersect(nameTokens).size
+            Triple(overlap, info.name.endsWith(".gguf", ignoreCase = true), info)
+        }.filter { it.first > 0 }
+            .sortedWith(
+                compareByDescending<Triple<Int, Boolean, com.hyperwhisper.data.LocalModelInfo>> { it.first }
+                    .thenByDescending { it.second }
+                    .thenByDescending { it.third.sizeBytes }
+            )
+        return scored.firstOrNull()?.third
     }
 
     private fun appendPostProcessingLog(level: TestLogLevel, message: String, detail: String? = null) {
