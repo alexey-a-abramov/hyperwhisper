@@ -2,6 +2,7 @@ package com.hyperwhisper.network
 
 import android.util.Log
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.SessionTimer
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -36,12 +37,14 @@ class ChatCompletionStrategy(
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer?
     ): ApiResult<String> {
         return try {
             Log.d(TAG, "========== CHAT COMPLETION REQUEST ==========")
             Log.d(TAG, "Processing audio with chat completion strategy")
 
+            timer?.mark("request_build")
             // Get current API settings
             val apiSettings = settingsRepository.apiSettings.first()
 
@@ -96,7 +99,9 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call
+            timer?.mark("network")
             val response = chatCompletionApiService.chatCompletion(request)
+            timer?.mark("response_parse")
 
             // Log response details
             Log.d(TAG, "Response Details:")

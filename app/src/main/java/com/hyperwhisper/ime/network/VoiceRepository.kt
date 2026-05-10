@@ -3,6 +3,12 @@ package com.hyperwhisper.network
 import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.ColdStartTracker
+import com.hyperwhisper.data.telemetry.DeviceSnapshot
+import com.hyperwhisper.data.telemetry.DeviceSnapshotProvider
+import com.hyperwhisper.data.telemetry.PerformanceRepository
+import com.hyperwhisper.data.telemetry.SessionTimer
+import com.hyperwhisper.data.telemetry.SessionType
 import com.hyperwhisper.localization.stringsFor
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.flow.first
@@ -20,6 +26,9 @@ class VoiceRepository @Inject constructor(
     private val apiCallLogRepository: ApiCallLogRepository,
     private val llmServiceFactory: LlmServiceFactory,
     private val processingRouter: ProcessingRouter,
+    private val performanceRepository: PerformanceRepository,
+    private val coldStartTracker: ColdStartTracker,
+    private val deviceSnapshotProvider: DeviceSnapshotProvider,
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
@@ -60,6 +69,30 @@ class VoiceRepository @Inject constructor(
             return ApiResult.Error(msg)
         }
 
+        // --- Telemetry session ---
+        // Cold-start kind tracks per-process model state; for local Whisper this
+        // captures the first-load cost (whisperCache miss). For cloud, it's the
+        // process-cold + per-model warm-up effect on the first call.
+        val device = deviceSnapshotProvider.snapshot()
+        val useLocal = apiSettings.localModelSettings.useLocalWhisper
+        val telemetrySessionType = if (useLocal) SessionType.ON_DEVICE else SessionType.CLOUD
+        val telemetryModelId = if (useLocal) {
+            val n = File(apiSettings.localModelSettings.whisperModelPath).name
+            "Whisper:" + n.ifBlank { "unknown" }
+        } else apiSettings.modelId
+        val telemetryProvider =
+            if (useLocal) "LOCAL_WHISPER" else apiSettings.provider.name
+        val telemetryColdKind = coldStartTracker.classify(telemetryModelId)
+        val telemetryTimer = SessionTimer.start(
+            sessionType = telemetrySessionType,
+            provider = telemetryProvider,
+            modelId = telemetryModelId,
+            coldStartKind = telemetryColdKind,
+            device = device,
+            inputLanguage = apiSettings.inputLanguage.ifEmpty { null }
+        )
+        var audioDurationSeconds = 0.0
+
         return try {
 
             TraceLogger.trace(TAG, "=== PROCESSING STARTED ===")
@@ -70,12 +103,15 @@ class VoiceRepository @Inject constructor(
 
             // Calculate audio duration in seconds (approximate based on file size and format)
             // For m4a at 128kbps: ~16KB per second
-            val audioDurationSeconds = calculateAudioDuration(audioFile)
+            telemetryTimer.mark("audio_duration_calc")
+            audioDurationSeconds = calculateAudioDuration(audioFile)
             Log.d(TAG, "Audio duration: $audioDurationSeconds seconds (${String.format("%.1f", audioDurationSeconds / 60.0)} minutes)")
 
             // Convert audio to base64
+            telemetryTimer.mark("base64_encode")
             val base64Result = audioRecorderManager.audioFileToBase64(audioFile)
             if (base64Result.isFailure) {
+                commitTelemetry(telemetryTimer, audioDurationSeconds, success = false, errorKind = "base64_encode_failed")
                 return ApiResult.Error("Failed to encode audio: ${base64Result.exceptionOrNull()?.message}")
             }
             val audioBase64 = base64Result.getOrNull() ?: ""
@@ -101,7 +137,8 @@ class VoiceRepository @Inject constructor(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode.copy(systemPrompt = "Transcribe the audio exactly as spoken."),
-                    modelId = apiSettings.modelId
+                    modelId = apiSettings.modelId,
+                    timer = telemetryTimer
                 )
                 val transcriptionTimeMs = System.currentTimeMillis() - transcriptionStartTime
                 Log.d(TAG, "Transcription completed in ${transcriptionTimeMs}ms (strategy=${if (apiSettings.localModelSettings.useLocalWhisper) "local" else "cloud"})")
@@ -122,6 +159,18 @@ class VoiceRepository @Inject constructor(
                         // Step 2: Post-process the transcribed text with chat model
                         Log.d(TAG, "Transcription successful, applying post-processing")
                         val originalTranscription = transcriptionResult.data
+                        // Commit transcription-leg telemetry before handing off to
+                        // post-processing (which gets its own session row).
+                        val tx = transcriptionResult.processingInfo?.transcriptionTokens
+                        commitTelemetry(
+                            telemetryTimer,
+                            audioDurationSeconds,
+                            outputChars = originalTranscription.length,
+                            inputTokens = tx?.promptTokens,
+                            outputTokens = tx?.completionTokens,
+                            totalTokens = tx?.totalTokens,
+                            success = true
+                        )
                         return postProcessText(
                             transcribedText = originalTranscription,
                             voiceMode = voiceMode,
@@ -131,13 +180,17 @@ class VoiceRepository @Inject constructor(
                             transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens,
                             transcriptionTimeMs = transcriptionTimeMs,
                             audioFileSizeBytes = audioFileSizeBytes,
-                            processingStartTime = processingStartTime
+                            processingStartTime = processingStartTime,
+                            previousSessionId = telemetryTimer.sessionId,
+                            device = device
                         )
                     }
                     is ApiResult.Error -> {
+                        commitTelemetry(telemetryTimer, audioDurationSeconds, success = false, errorKind = "transcription_api_error")
                         return transcriptionResult
                     }
                     else -> {
+                        commitTelemetry(telemetryTimer, audioDurationSeconds, success = false, errorKind = "transcription_unexpected_result")
                         return ApiResult.Error("Unexpected result from transcription")
                     }
                 }
@@ -157,7 +210,8 @@ class VoiceRepository @Inject constructor(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode,
-                    modelId = apiSettings.modelId
+                    modelId = apiSettings.modelId,
+                    timer = telemetryTimer
                 )
                 val apiCallTimeMs = System.currentTimeMillis() - apiCallStartTime
 
@@ -246,9 +300,27 @@ class VoiceRepository @Inject constructor(
                             )
                         }
 
+                        val tokens = result.processingInfo?.transcriptionTokens
+                        commitTelemetry(
+                            telemetryTimer,
+                            audioDurationSeconds,
+                            outputChars = result.data.length,
+                            inputTokens = tokens?.promptTokens,
+                            outputTokens = tokens?.completionTokens,
+                            totalTokens = tokens?.totalTokens,
+                            success = true
+                        )
                         ApiResult.Success(result.data, processingInfo)
                     }
-                    else -> result
+                    else -> {
+                        commitTelemetry(
+                            telemetryTimer,
+                            audioDurationSeconds,
+                            success = false,
+                            errorKind = (result as? ApiResult.Error)?.let { "api_error" } ?: "unknown_result"
+                        )
+                        result
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -267,12 +339,25 @@ class VoiceRepository @Inject constructor(
                 )
             )
 
+            commitTelemetry(
+                telemetryTimer,
+                audioDurationSeconds,
+                success = false,
+                errorKind = e.javaClass.simpleName ?: "unknown_exception"
+            )
+
             val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
             ApiResult.Error(ErrorMessageFormatter.friendlyMessage(e, strings), e)
         } catch (t: Throwable) {
             // Catches OOM/UnsatisfiedLinkError etc. from local model inference paths.
             // We log and convert to a graceful error rather than letting it crash the IME.
             TraceLogger.error(TAG, "Fatal error in audio processing — converted to ApiResult.Error", t)
+            commitTelemetry(
+                telemetryTimer,
+                audioDurationSeconds,
+                success = false,
+                errorKind = t.javaClass.simpleName ?: "fatal_throwable"
+            )
             val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
             ApiResult.Error(
                 String.format(
@@ -281,6 +366,37 @@ class VoiceRepository @Inject constructor(
                     t.message ?: strings.errorUnknown
                 )
             )
+        }
+    }
+
+    /** Commit a SessionTimer to the telemetry DB. Never throws — telemetry must
+     *  not break the transcription path. */
+    private suspend fun commitTelemetry(
+        timer: SessionTimer,
+        audioDurationSeconds: Double,
+        outputChars: Int = 0,
+        inputTokens: Int? = null,
+        outputTokens: Int? = null,
+        totalTokens: Int? = null,
+        success: Boolean,
+        errorKind: String? = null,
+        retryOf: String? = null,
+    ) {
+        try {
+            timer.commit(
+                repo = performanceRepository,
+                audioDurationMs = (audioDurationSeconds * 1000).toLong(),
+                outputChars = outputChars,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                totalTokens = totalTokens,
+                detectedLanguage = null,
+                success = success,
+                errorKind = errorKind,
+                retryOf = retryOf,
+            )
+        } catch (t: Throwable) {
+            TraceLogger.error(TAG, "telemetry commit failed", t)
         }
     }
 

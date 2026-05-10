@@ -20,7 +20,8 @@ import java.io.File
 class TranscriptionViewModel(
     private val context: Context,
     private val voiceRepository: VoiceRepository,
-    private val voiceCommandProcessor: VoiceCommandProcessor
+    private val voiceCommandProcessor: VoiceCommandProcessor,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     companion object {
@@ -111,27 +112,43 @@ class TranscriptionViewModel(
                     _processingStage.value = ProcessingStage.PREPARING
                     _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
 
-                    // Launch progress updater with realistic stage-based simulation
+                    // Estimate-driven progress: pull the historical
+                    // ms-per-byte for this provider/model from the API call
+                    // log, multiply by the file size, add a 1.5s buffer, and
+                    // animate from 0 → ~95% over that wall-clock budget. The
+                    // last 5% is reserved so the bar can't sit dead at 100%
+                    // before the actual response arrives — when the API
+                    // returns the outer code jumps to 100%. Also flips
+                    // `processingStage` at rough thirds so the stage label
+                    // still has something to say while the bar fills.
+                    val estimateMs = settingsRepository.estimateTranscriptionMs(
+                        provider = settings.provider,
+                        modelId = settings.modelId,
+                        audioFileSize = audioFile.length(),
+                    )
+                    Log.d(TAG, "Progress estimate: ${estimateMs}ms for ${audioFile.length()} bytes via ${settings.provider}/${settings.modelId}")
                     val progressJob = launch {
-                        // Cloud processing stages: prepare -> upload -> wait for API -> finish
-                        val stages = listOf(
-                            ProcessingStage.PREPARING to (200L to ProcessingPhase.PREPARING_AUDIO),
-                            ProcessingStage.UPLOADING to (800L to ProcessingPhase.SENDING_TO_SERVER),
-                            ProcessingStage.WAITING_API to (2000L to ProcessingPhase.WAITING_FOR_RESPONSE),  // Main API call - takes longest
-                            ProcessingStage.FINISHING to (200L to ProcessingPhase.RECEIVING_DATA)
+                        val tickMs = 100L
+                        val targetCap = 0.95f
+                        val started = System.currentTimeMillis()
+                        // Stage labels — purely cosmetic now that progress is
+                        // continuous, but they keep the indicator's stage
+                        // line meaningful as the bar fills.
+                        val stageBreakpoints = listOf(
+                            0.0f to (ProcessingStage.PREPARING to ProcessingPhase.PREPARING_AUDIO),
+                            0.15f to (ProcessingStage.UPLOADING to ProcessingPhase.SENDING_TO_SERVER),
+                            0.30f to (ProcessingStage.WAITING_API to ProcessingPhase.WAITING_FOR_RESPONSE),
+                            0.85f to (ProcessingStage.FINISHING to ProcessingPhase.RECEIVING_DATA),
                         )
-
-                        for ((stage, durationAndPhase) in stages) {
-                            val (duration, phase) = durationAndPhase
-                            _processingStage.value = stage
-                            _processingPhase.value = phase
-                            // Smoothly animate progress within the stage
-                            val steps = (duration / 100).toInt().coerceAtLeast(1)
-                            val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
-                            for (i in 0 until steps) {
-                                _transcriptionProgress.value = stage.progressStart + (progressIncrement * i)
-                                kotlinx.coroutines.delay(100)
-                            }
+                        while (true) {
+                            val elapsed = System.currentTimeMillis() - started
+                            val frac = (elapsed.toFloat() / estimateMs.toFloat()).coerceIn(0f, targetCap)
+                            _transcriptionProgress.value = frac
+                            // Pick the latest stage breakpoint we've passed.
+                            val (stage, phase) = stageBreakpoints.last { it.first <= frac }.second
+                            if (_processingStage.value != stage) _processingStage.value = stage
+                            if (_processingPhase.value != phase) _processingPhase.value = phase
+                            kotlinx.coroutines.delay(tickMs)
                         }
                     }
 

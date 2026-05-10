@@ -2,6 +2,7 @@ package com.hyperwhisper.network
 
 import android.util.Log
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.SessionTimer
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -27,12 +28,14 @@ class TranscriptionStrategy(
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer?
     ): ApiResult<String> {
         return try {
             Log.d(TAG, "========== TRANSCRIPTION REQUEST ==========")
             Log.d(TAG, "Processing audio with transcription strategy")
 
+            timer?.mark("request_build")
             // Get current API settings for language
             val apiSettings = settingsRepository.apiSettings.first()
 
@@ -67,6 +70,7 @@ class TranscriptionStrategy(
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
             // Make API call with additional parameters for token usage
+            timer?.mark("network")
             val response = if (isLocalWhisper) {
                 apiService.transcribeLocal(
                     file = filePart,
@@ -82,6 +86,7 @@ class TranscriptionStrategy(
                     language = languagePart
                 )
             }
+            timer?.mark("response_parse")
 
             // Log response details
             Log.d(TAG, "Response Details:")

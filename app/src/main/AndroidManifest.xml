@@ -5,6 +5,7 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -70,6 +71,14 @@
             android:name=".ui.logs.LogsActivity"
             android:label="@string/logs_title"
             android:theme="@style/Theme.HyperWhisper"
+            android:exported="false" />
+
+        <!-- Latency Stats Activity -->
+        <activity
+            android:name=".ui.stats.StatsActivity"
+            android:label="Latency Stats"
+            android:theme="@style/Theme.HyperWhisper"
+            android:parentActivityName=".ui.settings.SettingsActivity"
             android:exported="false" />
 
         <!-- Crash Report Activity -->

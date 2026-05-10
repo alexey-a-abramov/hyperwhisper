@@ -41,4 +41,24 @@ interface ApiCallLogDao {
 
     @Query("SELECT COUNT(*) FROM api_call_logs")
     suspend fun count(): Int
+
+    /**
+     * Recent successful entries for a given (provider, model, requestType)
+     * — used by the transcription progress estimator to compute an average
+     * wall-clock-per-byte ratio. Filtered to success=1 so timeouts/aborts
+     * don't skew the estimate. Trimmed by [limit] (typically ≤10) so the
+     * average tracks recent conditions, not full history.
+     */
+    @Query(
+        "SELECT * FROM api_call_logs " +
+            "WHERE provider = :provider AND modelId = :modelId " +
+            "AND requestType = :requestType AND success = 1 AND inputSize > 0 " +
+            "ORDER BY timestamp DESC LIMIT :limit",
+    )
+    suspend fun recentSuccessfulFor(
+        provider: String,
+        modelId: String,
+        requestType: String,
+        limit: Int,
+    ): List<ApiCallLogEntity>
 }

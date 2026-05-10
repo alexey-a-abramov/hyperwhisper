@@ -119,7 +119,8 @@ class KeyboardViewModel @Inject constructor(
     private val transcriptionViewModel: TranscriptionViewModel = TranscriptionViewModel(
         context,
         voiceRepository,
-        voiceCommandProcessor
+        voiceCommandProcessor,
+        settingsRepository,
     )
     private val historyViewModel: HistoryViewModel = HistoryViewModel(
         voiceRepository,

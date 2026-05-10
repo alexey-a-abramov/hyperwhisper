@@ -46,6 +46,26 @@ class ApiCallLogRepository(
         private const val TAG = "ApiCallLogRepository"
         private const val LEGACY_FILE_NAME = "api_call_logs.json"
         private const val MAX_LOGS_PER_MODEL = 20
+
+        // Estimator constants — tuned, not a contract. Adjust if real-world
+        // timings drift; the historical ratio kicks in after the first
+        // successful call so defaults only matter on a cold install.
+        private const val SAMPLE_LIMIT = 10
+        private const val REQUEST_TYPE_TRANSCRIPTION = "transcription"
+        // Fallback when no history exists. ~10 µs/byte ≈ 3 s for ~300 KB,
+        // which is roughly a fast cloud Whisper round-trip on a 5 s clip.
+        private const val DEFAULT_MS_PER_BYTE = 0.010
+        // Used when audioFileSize is unknown (0). 4 s feels long enough that
+        // the bar doesn't snap to 100% before the user notices it moved.
+        private const val DEFAULT_FALLBACK_MS = 4_000L
+        // Safety margin so the bar reaches "almost done" *before* the
+        // response usually arrives — better to undershoot the target than
+        // park at 100% waiting.
+        private const val BUFFER_MS = 1_500L
+        // Floor: if the heuristic produces something tiny (very small file +
+        // very fast model), keep at least this so the animation has time to
+        // be readable.
+        private const val MIN_ESTIMATE_MS = 1_500L
     }
 
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
@@ -110,6 +130,57 @@ class ApiCallLogRepository(
             modelUsage = modelUsage,
             averageDurationMs = averageDuration,
         )
+    }
+
+    /**
+     * Estimate transcription wall-clock for an upcoming call.
+     *
+     * Strategy: average ms-per-byte from the last [SAMPLE_LIMIT] *successful*
+     * transcription calls of the same provider/model. Multiplies by the
+     * upcoming [audioFileSize], adds a [BUFFER_MS] safety margin, and floors
+     * at [MIN_ESTIMATE_MS] so the progress bar never sets a target it
+     * trivially overshoots before the user sees motion.
+     *
+     * Falls back to a [DEFAULT_MS_PER_BYTE] heuristic when there's no
+     * matching history yet — picked so a typical 5-second voice clip
+     * (~300 KB at 48 kHz mono PCM-16) maps to ~3 s, which is in line with
+     * fast cloud Whisper providers.
+     *
+     * Bytes-per-byte rather than seconds-of-audio because the audio length
+     * isn't logged today; bytes are. Different providers using different
+     * upload formats will simply train their own ratio over the first few
+     * calls and converge.
+     */
+    suspend fun estimateTranscriptionMs(
+        provider: ApiProvider,
+        modelId: String,
+        audioFileSize: Long,
+    ): Long {
+        if (audioFileSize <= 0) return DEFAULT_FALLBACK_MS
+        val samples = try {
+            dao.recentSuccessfulFor(
+                provider = provider.name,
+                modelId = modelId,
+                requestType = REQUEST_TYPE_TRANSCRIPTION,
+                limit = SAMPLE_LIMIT,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "estimateTranscriptionMs: lookup failed, falling back", e)
+            emptyList()
+        }
+        val msPerByte = if (samples.isEmpty()) {
+            DEFAULT_MS_PER_BYTE
+        } else {
+            // Geometric-ish average: protect against one outlier (e.g. cold
+            // start / network blip) by trimming the slowest sample when we
+            // have ≥4 data points.
+            val ratios = samples.map { it.durationMs.toDouble() / it.inputSize.toDouble() }
+                .sorted()
+            val trimmed = if (ratios.size >= 4) ratios.dropLast(1) else ratios
+            trimmed.average()
+        }
+        val raw = (msPerByte * audioFileSize).toLong()
+        return (raw + BUFFER_MS).coerceAtLeast(MIN_ESTIMATE_MS)
     }
 
     /**

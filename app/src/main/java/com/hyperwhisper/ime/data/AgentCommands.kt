@@ -21,8 +21,20 @@ enum class AgentCategory {
     MACRO
 }
 
+/**
+ * Hardware-key chord (keycode + meta-state mask) sent to the focused app via
+ * the IME's InputConnection. Used for chips that need to fire an actual key
+ * combo rather than insert text — e.g. Shift+Tab to cycle Claude Code's
+ * normal/auto-accept/plan modes inside the Termux TUI.
+ *
+ * [keyCode] is `android.view.KeyEvent.KEYCODE_*`; [metaState] is the OR of
+ * `KeyEvent.META_*_ON` flags (META_SHIFT_ON, META_CTRL_ON, META_ALT_ON).
+ */
+data class KeyChord(val keyCode: Int, val metaState: Int = 0)
+
 data class AgentCommand(
-    /** What gets inserted (typed into the editor). Trailing space optional. */
+    /** What gets inserted (typed into the editor). Empty when [keyChord] is
+     *  set — the chip is a key-event sender, not a text inserter. */
     val insertion: String,
     /** Short label shown on the key. Defaults to [insertion]. */
     val label: String = insertion,
@@ -35,7 +47,16 @@ data class AgentCommand(
      * lower-frequency siblings (e.g. /security-review, /pr-comments) without
      * spending front-page real estate on them.
      */
-    val variants: List<AgentCommand> = emptyList()
+    val variants: List<AgentCommand> = emptyList(),
+    /**
+     * When non-null, tapping the chip dispatches this hardware-key chord to
+     * the focused app (via [InputConnection.sendKeyEvent]) instead of
+     * inserting [insertion]. Used for app-level shortcuts that the target
+     * CLI listens for directly — Shift+Tab in Claude Code, Ctrl+L to clear,
+     * etc. Label should describe the *effect*, not the chord, since the
+     * effect is what the user is reaching for.
+     */
+    val keyChord: KeyChord? = null
 )
 
 object AgentCommands {
@@ -48,8 +69,25 @@ object AgentCommands {
     private val claudeCode = listOf(
         // Inline row — sigils and prompt-shaping keywords. `@` lives on QWERTY,
         // so giving it a dedicated full-row slot was overkill; left out here.
-        AgentCommand("#", label = "# memory", description = "Save to memory", category = AgentCategory.INLINE),
+        // `#` (memory) was dropped: in practice the auto-memory system
+        // captures the same intent without forcing a sigil — keeping the
+        // chip just added clutter for a feature people rarely invoked.
         AgentCommand("!", label = "! bash", description = "Run shell command", category = AgentCategory.INLINE),
+        // Real key-chord chip — sends Shift+Tab to the focused app. In
+        // Claude Code's TUI this cycles the permission mode
+        // (normal → auto-accept → plan → normal). Keeping the label
+        // outcome-oriented ("Plan / Auto") rather than chord-oriented
+        // ("⇧+Tab") because the user wants the result, not the keystroke.
+        AgentCommand(
+            insertion = "",
+            label = "Plan / Auto",
+            description = "Cycle Claude Code mode (sends Shift+Tab)",
+            category = AgentCategory.INLINE,
+            keyChord = KeyChord(
+                keyCode = android.view.KeyEvent.KEYCODE_TAB,
+                metaState = android.view.KeyEvent.META_SHIFT_ON
+            )
+        ),
         AgentCommand("ultrathink", description = "Maximum thinking budget", category = AgentCategory.INLINE),
         AgentCommand("\u001B", label = "Esc", description = "Cancel current action", category = AgentCategory.INLINE),
         // Session controls — touched multiple times per work session.

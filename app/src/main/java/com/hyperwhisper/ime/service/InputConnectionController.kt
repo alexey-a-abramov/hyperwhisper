@@ -349,6 +349,39 @@ internal class InputConnectionController(
         }
     }
 
+    /**
+     * Dispatch an arbitrary key chord (keycode + meta-state mask) to the
+     * focused app. Built for the agent-keyboard "Plan / Auto" chip that
+     * sends Shift+Tab so Claude Code's TUI cycles its permission mode.
+     *
+     * Uses [KeyEvent.FLAG_SOFT_KEYBOARD] so receivers can tell this came
+     * from an IME, mirroring what [commitText] does for modifier-aware
+     * single-char dispatch.
+     */
+    fun sendKeyChord(keyCode: Int, metaState: Int = 0) {
+        val ic = ic ?: return
+        try {
+            val now = android.os.SystemClock.uptimeMillis()
+            ic.sendKeyEvent(
+                KeyEvent(
+                    now, now, KeyEvent.ACTION_DOWN,
+                    keyCode, 0, metaState, 0, 0,
+                    KeyEvent.FLAG_SOFT_KEYBOARD
+                )
+            )
+            ic.sendKeyEvent(
+                KeyEvent(
+                    now, now, KeyEvent.ACTION_UP,
+                    keyCode, 0, metaState, 0, 0,
+                    KeyEvent.FLAG_SOFT_KEYBOARD
+                )
+            )
+            Log.d(TAG, "Sent key chord: keycode=$keyCode meta=$metaState")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending key chord", e)
+        }
+    }
+
     private companion object {
         private const val TAG = "VoiceIME"
     }

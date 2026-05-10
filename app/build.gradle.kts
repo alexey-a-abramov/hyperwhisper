@@ -129,6 +129,13 @@ android {
     }
 }
 
+// Room schema export — keeps a JSON snapshot per DB version for migration tests.
+// Telemetry DB lives in com.hyperwhisper.data.telemetry.AppDatabase (separate
+// from the existing api-call-log / history / usage DBs).
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
@@ -166,6 +173,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+    // Newer sqlite-jdbc bundles bionic-aarch64 native; needed for Room's
+    // compile-time SQL verification on Termux build host (paired with the
+    // Termux fix in gradle.properties).
+    ksp("org.xerial:sqlite-jdbc:3.45.1.0")
 
     // Biometric / device-credential prompt for secrets reveal
     implementation("androidx.biometric:biometric:1.1.0")

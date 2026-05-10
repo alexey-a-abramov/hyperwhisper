@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.AgentCategory
 import com.hyperwhisper.data.AgentCommand
+import com.hyperwhisper.data.KeyChord
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.components.LongPressIndicator
@@ -56,6 +57,7 @@ fun AgentKeyboard(
     title: String,
     commands: List<AgentCommand>,
     onInsert: (String) -> Unit,
+    onSendChord: (KeyChord) -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     lastTranscribedText: String,
@@ -135,6 +137,7 @@ fun AgentKeyboard(
                         AgentCommandKey(
                             cmd = cmd,
                             onInsert = onInsert,
+                            onSendChord = onSendChord,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -160,12 +163,12 @@ fun AgentKeyboard(
                         // a row per item costs nothing.
                         items.forEach { cmd ->
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                AgentCommandKey(cmd = cmd, onInsert = onInsert)
+                                AgentCommandKey(cmd = cmd, onInsert = onInsert, onSendChord = onSendChord)
                             }
                         }
                     } else {
                         items(items) { cmd ->
-                            AgentCommandKey(cmd = cmd, onInsert = onInsert)
+                            AgentCommandKey(cmd = cmd, onInsert = onInsert, onSendChord = onSendChord)
                         }
                     }
                 }
@@ -209,10 +212,16 @@ private fun CategoryHeader(category: AgentCategory) {
 private fun AgentCommandKey(
     cmd: AgentCommand,
     onInsert: (String) -> Unit,
+    onSendChord: (KeyChord) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val hasVariants = cmd.variants.isNotEmpty()
+    val onPrimary: () -> Unit = {
+        // Chord wins if both are set — chord chips are explicit gestures and
+        // shouldn't double-insert their (usually empty) text payload.
+        cmd.keyChord?.let(onSendChord) ?: onInsert(cmd.insertion)
+    }
     Box {
         Surface(
             shape = RoundedCornerShape(6.dp),
@@ -221,7 +230,7 @@ private fun AgentCommandKey(
             modifier = modifier
                 .height(36.dp)
                 .combinedClickable(
-                    onClick = { onInsert(cmd.insertion) },
+                    onClick = onPrimary,
                     onLongClick = if (hasVariants) ({ menuExpanded = true }) else null
                 )
         ) {
@@ -261,7 +270,7 @@ private fun AgentCommandKey(
                         )
                     },
                     onClick = {
-                        onInsert(variant.insertion)
+                        variant.keyChord?.let(onSendChord) ?: onInsert(variant.insertion)
                         menuExpanded = false
                     }
                 )

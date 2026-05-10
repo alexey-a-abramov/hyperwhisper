@@ -60,21 +60,20 @@ fun MicrophoneButton(
                 )
             }
             RecordingState.PROCESSING -> {
-                // Show animated processing button based on phase, or fallback to progress indicator
-                if (processingPhase != ProcessingPhase.IDLE) {
-                    ProcessingMicButton(
-                        processingPhase = processingPhase,
-                        onClick = onCancelTranscription
-                    )
-                } else {
-                    ProcessingIndicator(
-                        progress = transcriptionProgress,
-                        processingStage = processingStage,
-                        audioFileSize = audioFileSize,
-                        audioDurationSeconds = audioDurationSeconds,
-                        onCancel = onCancelTranscription
-                    )
-                }
+                // Always show the determinate-style ProcessingIndicator (big
+                // circle, pulsing wave glyph, ≈ % counter, stage label) so
+                // the user gets continuous progress info. Earlier code only
+                // hit this branch when processingPhase == IDLE; the phase-
+                // animated `ProcessingMicButton` won out the rest of the
+                // time, hiding the real progress UI. Phase info is still
+                // conveyed via the stage label inside ProcessingIndicator.
+                ProcessingIndicator(
+                    progress = transcriptionProgress,
+                    processingStage = processingStage,
+                    audioFileSize = audioFileSize,
+                    audioDurationSeconds = audioDurationSeconds,
+                    onCancel = onCancelTranscription
+                )
             }
             RecordingState.ERROR -> {
                 IdleMicButton(

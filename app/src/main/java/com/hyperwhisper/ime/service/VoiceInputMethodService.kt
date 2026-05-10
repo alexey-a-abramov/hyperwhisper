@@ -282,6 +282,9 @@ class VoiceInputMethodService : InputMethodService(),
                 },
                 onSwitchKeyboard = {
                     switchToTextKeyboard()
+                },
+                onSendKeyChord = { chord ->
+                    controller.sendKeyChord(chord.keyCode, chord.metaState)
                 }
             )
         }

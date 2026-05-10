@@ -174,4 +174,11 @@ class SettingsRepository @Inject constructor(
 
     suspend fun clearApiCallLogs() =
         apiCallLogRepository.clearAllLogs()
+
+    /** See [ApiCallLogRepository.estimateTranscriptionMs]. */
+    suspend fun estimateTranscriptionMs(
+        provider: ApiProvider,
+        modelId: String,
+        audioFileSize: Long,
+    ): Long = apiCallLogRepository.estimateTranscriptionMs(provider, modelId, audioFileSize)
 }

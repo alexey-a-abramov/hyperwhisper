@@ -2,6 +2,7 @@ package com.hyperwhisper.network
 
 import android.util.Log
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.SessionTimer
 import com.hyperwhisper.localization.stringsFor
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.Dispatchers
@@ -32,13 +33,15 @@ class LocalProcessingStrategy(
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer?
     ): ApiResult<String> {
         val strings = stringsFor(
             settingsRepository.appearanceSettings.first().uiLanguage
         )
         return try {
             Log.d(TAG, "========== LOCAL PROCESSING REQUEST ==========")
+            timer?.mark("settings_load")
             val settings = settingsRepository.apiSettings.first()
             val localSettings = settings.localModelSettings
 
@@ -58,8 +61,12 @@ class LocalProcessingStrategy(
             Log.d(TAG, "Local transcription: model=${whisperModel.name}, audio=${audioFile.name} (${audioFile.length()} B)")
             val startTime = System.currentTimeMillis()
 
+            // whisper_load is THE cold-start cost on local — first call materialises
+            // the model in memory; subsequent calls hit the cache.
+            timer?.mark("whisper_load")
             val ctx = whisperCache.get(localSettings.whisperModelPath)
 
+            timer?.mark("audio_decode")
             val decodeStart = System.currentTimeMillis()
             val samples = withContext(Dispatchers.Default) {
                 com.hyperwhisper.ime.audio.AudioDecoder.decodeTo16kMonoFloat(audioFile)
@@ -69,6 +76,7 @@ class LocalProcessingStrategy(
                 com.hyperwhisper.ime.audio.AudioDecoder.WHISPER_SAMPLE_RATE
             Log.d(TAG, "Decoded ${samples.size} samples (${"%.2f".format(audioSeconds)} s) in ${decodeMs} ms")
 
+            timer?.mark("whisper_inference")
             val inferenceStart = System.currentTimeMillis()
             val language = settings.inputLanguage.takeIf { it.isNotBlank() }
             val translate = settings.outputLanguage.equals("en", ignoreCase = true) &&
@@ -103,6 +111,7 @@ class LocalProcessingStrategy(
             if (!skipLocalLlm && canRunLocalLlm) {
                 val modelName = File(localSettings.gemmaModelPath).name
                 Log.d(TAG, "Local LLM post-processing with $modelName")
+                timer?.mark("local_llm_postprocess")
                 val ppStart = System.currentTimeMillis()
                 try {
                     val rewritten = localLlm.rewrite(
