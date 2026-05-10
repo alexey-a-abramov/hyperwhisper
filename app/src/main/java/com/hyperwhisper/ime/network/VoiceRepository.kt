@@ -707,9 +707,20 @@ class VoiceRepository @Inject constructor(
                         )
                     }
 
+                    commitTelemetry(
+                        ppTimer,
+                        audioDurationSeconds = 0.0,
+                        outputChars = processedText.length,
+                        inputTokens = postProcessingTokens?.promptTokens,
+                        outputTokens = postProcessingTokens?.completionTokens,
+                        totalTokens = postProcessingTokens?.totalTokens,
+                        success = true,
+                        retryOf = previousSessionId
+                    )
                     ApiResult.Success(processedText, processingInfo)
                 } else {
                     Log.w(TAG, "No processed text in response, returning original")
+                    commitTelemetry(ppTimer, 0.0, success = false, errorKind = "empty_response", retryOf = previousSessionId)
                     ApiResult.Success(transcribedText)
                 }
             } else {
@@ -717,11 +728,14 @@ class VoiceRepository @Inject constructor(
                 Log.e(TAG, "Post-processing API error: ${response.code()} - $errorBody")
                 // On error, return original transcription
                 Log.w(TAG, "Post-processing failed, returning original transcription")
+                commitTelemetry(ppTimer, 0.0, success = false, errorKind = "http_${response.code()}", retryOf = previousSessionId)
                 ApiResult.Success(transcribedText)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in post-processing, returning original text", e)
-            // On exception, return original transcription
+            // On exception, return original transcription. We don't have a ppTimer
+            // reference here (declared inside the try); telemetry for the LLM
+            // outage already captured at network-error sites above.
             ApiResult.Success(transcribedText)
         }
     }
