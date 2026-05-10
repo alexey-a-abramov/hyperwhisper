@@ -3,9 +3,13 @@ package com.hyperwhisper.network
 import android.util.Log
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.ColdStartTracker
+import com.hyperwhisper.data.telemetry.DeviceSnapshotProvider
+import com.hyperwhisper.data.telemetry.PerformanceRepository
+import com.hyperwhisper.data.telemetry.SessionTimer
+import com.hyperwhisper.data.telemetry.SessionType
 import java.io.File
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
@@ -13,10 +17,14 @@ class VoiceRepository @Inject constructor(
     private val audioRecorderManager: AudioRecorderManager,
     private val transcriptionStrategy: TranscriptionStrategy,
     private val chatCompletionStrategy: ChatCompletionStrategy,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val performanceRepository: PerformanceRepository,
+    private val coldStartTracker: ColdStartTracker,
+    private val deviceSnapshotProvider: DeviceSnapshotProvider
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
+        private const val POST_PROCESS_MODEL = "gpt-4o-mini"
     }
 
     /**
@@ -33,57 +41,77 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): ApiResult<String> {
+        val device = deviceSnapshotProvider.snapshot()
+        val coldStartKind = coldStartTracker.classify(apiSettings.modelId)
+        val timer = SessionTimer.start(
+            sessionType = SessionType.CLOUD,
+            provider = apiSettings.provider.name,
+            modelId = apiSettings.modelId,
+            coldStartKind = coldStartKind,
+            device = device,
+            inputLanguage = apiSettings.inputLanguage.ifEmpty { null }
+        )
+
+        var audioDurationSeconds = 0.0
+
         return try {
             Log.d(TAG, "Processing audio with mode: ${voiceMode.name}, provider: ${apiSettings.provider}")
 
-            // Calculate audio duration in seconds (approximate based on file size and format)
-            // For m4a at 128kbps: ~16KB per second
-            val audioDurationSeconds = calculateAudioDuration(audioFile)
+            timer.mark("audio_duration_calc")
+            audioDurationSeconds = calculateAudioDuration(audioFile)
             Log.d(TAG, "Audio duration: $audioDurationSeconds seconds")
 
-            // Convert audio to base64
+            timer.mark("base64_encode")
             val base64Result = audioRecorderManager.audioFileToBase64(audioFile)
             if (base64Result.isFailure) {
+                commitFailure(timer, audioDurationSeconds, "base64_encode_failed")
                 return ApiResult.Error("Failed to encode audio: ${base64Result.exceptionOrNull()?.message}")
             }
             val audioBase64 = base64Result.getOrNull() ?: ""
 
-            // Check if we need two-step processing (transcription + post-processing)
             val needsTwoStepProcessing = needsTwoStepProcessing(voiceMode, apiSettings)
 
             if (needsTwoStepProcessing) {
-                // Step 1: Transcribe audio
                 Log.d(TAG, "Using two-step processing: transcribe + post-process")
                 val transcriptionResult = transcriptionStrategy.processAudio(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode.copy(systemPrompt = "Transcribe the audio exactly as spoken."),
-                    modelId = apiSettings.modelId
+                    modelId = apiSettings.modelId,
+                    timer = timer
                 )
 
                 when (transcriptionResult) {
                     is ApiResult.Success -> {
-                        // Step 2: Post-process the transcribed text with chat model
                         Log.d(TAG, "Transcription successful, applying post-processing")
-                        val originalTranscription = transcriptionResult.data
+                        val tx = transcriptionResult.processingInfo?.transcriptionTokens
+                        commitSuccess(
+                            timer,
+                            audioDurationSeconds,
+                            transcriptionResult.data.length,
+                            tx?.promptTokens, tx?.completionTokens, tx?.totalTokens
+                        )
                         return postProcessText(
-                            transcribedText = originalTranscription,
+                            transcribedText = transcriptionResult.data,
                             voiceMode = voiceMode,
                             apiSettings = apiSettings,
                             transcriptionModel = apiSettings.modelId,
                             audioDurationSeconds = audioDurationSeconds,
-                            transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens
+                            transcriptionTokens = transcriptionResult.processingInfo?.transcriptionTokens,
+                            previousSessionId = timer.sessionId,
+                            device = device
                         )
                     }
                     is ApiResult.Error -> {
+                        commitFailure(timer, audioDurationSeconds, "transcription_api_error")
                         return transcriptionResult
                     }
                     else -> {
+                        commitFailure(timer, audioDurationSeconds, "transcription_unexpected_result")
                         return ApiResult.Error("Unexpected result from transcription")
                     }
                 }
             } else {
-                // Single-step processing (direct strategy)
                 val strategy = selectStrategy(voiceMode, apiSettings.provider)
                 val strategyName = if (strategy is TranscriptionStrategy) "transcription" else "chat-completion"
                 val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
@@ -92,10 +120,10 @@ class VoiceRepository @Inject constructor(
                     audioFile = audioFile,
                     audioBase64 = audioBase64,
                     voiceMode = voiceMode,
-                    modelId = apiSettings.modelId
+                    modelId = apiSettings.modelId,
+                    timer = timer
                 )
 
-                // Add processing info for single-step
                 when (result) {
                     is ApiResult.Success -> {
                         val processingInfo = ProcessingInfo(
@@ -113,7 +141,6 @@ class VoiceRepository @Inject constructor(
                             postProcessingTokens = null
                         )
 
-                        // Record usage statistics
                         result.processingInfo?.transcriptionTokens?.let { tokens ->
                             settingsRepository.recordUsage(
                                 modelId = apiSettings.modelId,
@@ -124,57 +151,110 @@ class VoiceRepository @Inject constructor(
                             )
                         }
 
+                        val tokens = result.processingInfo?.transcriptionTokens
+                        commitSuccess(
+                            timer,
+                            audioDurationSeconds,
+                            result.data.length,
+                            tokens?.promptTokens, tokens?.completionTokens, tokens?.totalTokens
+                        )
+
                         ApiResult.Success(result.data, processingInfo)
                     }
-                    else -> result
+                    is ApiResult.Error -> {
+                        commitFailure(timer, audioDurationSeconds, "api_error")
+                        result
+                    }
+                    else -> {
+                        commitFailure(timer, audioDurationSeconds, "unknown_result")
+                        result
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing audio", e)
+            commitFailure(
+                timer,
+                audioDurationSeconds,
+                e.javaClass.simpleName ?: "unknown_exception"
+            )
             ApiResult.Error("Processing failed: ${e.message}", e)
+        }
+    }
+
+    private suspend fun commitSuccess(
+        timer: SessionTimer,
+        audioDurationSeconds: Double,
+        outputChars: Int,
+        inputTokens: Int?,
+        outputTokens: Int?,
+        totalTokens: Int?,
+        retryOf: String? = null
+    ) {
+        try {
+            timer.commit(
+                repo = performanceRepository,
+                audioDurationMs = (audioDurationSeconds * 1000).toLong(),
+                outputChars = outputChars,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                totalTokens = totalTokens,
+                detectedLanguage = null,
+                success = true,
+                errorKind = null,
+                retryOf = retryOf
+            )
+        } catch (t: Throwable) {
+            Log.e(TAG, "telemetry commitSuccess failed", t)
+        }
+    }
+
+    private suspend fun commitFailure(
+        timer: SessionTimer,
+        audioDurationSeconds: Double,
+        errorKind: String,
+        retryOf: String? = null
+    ) {
+        try {
+            timer.commit(
+                repo = performanceRepository,
+                audioDurationMs = (audioDurationSeconds * 1000).toLong(),
+                outputChars = 0,
+                inputTokens = null,
+                outputTokens = null,
+                totalTokens = null,
+                detectedLanguage = null,
+                success = false,
+                errorKind = errorKind,
+                retryOf = retryOf
+            )
+        } catch (t: Throwable) {
+            Log.e(TAG, "telemetry commitFailure failed", t)
         }
     }
 
     /**
      * Determine if two-step processing is needed
-     * (transcription-only models with transformation modes or translation)
      */
     private fun needsTwoStepProcessing(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): Boolean {
-        // Translation is only needed if output language is set AND different from input
-        // If both are the same (e.g., both "en"), no translation is needed
         val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
             apiSettings.outputLanguage != apiSettings.inputLanguage
 
-        // OpenRouter supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.OPENROUTER) return false
-
-        // Gemini supports audio in chat completions AND translation in one step
         if (apiSettings.provider == ApiProvider.GEMINI) return false
-
-        // Hugging Face is text-only - requires two-step for all audio input
         if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
-
-        // Verbatim mode only needs post-processing if translation is required
         if (voiceMode.id == "verbatim") return needsTranslation
-
-        // All other providers with transformation modes need two-step
         return true
     }
 
-    /**
-     * Get language name from ISO code for translation instruction
-     */
     private fun getLanguageName(languageCode: String): String {
         val language = SUPPORTED_LANGUAGES.find { it.code == languageCode }
         return language?.name ?: languageCode.uppercase()
     }
 
-    /**
-     * Build system prompt with optional translation instruction
-     */
     private fun buildSystemPrompt(basePrompt: String, outputLanguage: String): String {
         return if (outputLanguage.isNotEmpty()) {
             val languageName = getLanguageName(outputLanguage)
@@ -186,7 +266,6 @@ class VoiceRepository @Inject constructor(
 
     /**
      * Post-process transcribed text using a chat model
-     * Uses a simple text-to-text chat completion
      */
     private suspend fun postProcessText(
         transcribedText: String,
@@ -194,44 +273,49 @@ class VoiceRepository @Inject constructor(
         apiSettings: ApiSettings,
         transcriptionModel: String,
         audioDurationSeconds: Double,
-        transcriptionTokens: TokenUsage?
+        transcriptionTokens: TokenUsage?,
+        previousSessionId: String?,
+        device: com.hyperwhisper.data.telemetry.DeviceSnapshot
     ): ApiResult<String> {
+        val coldStartKind = coldStartTracker.classify(POST_PROCESS_MODEL)
+        val ppTimer = SessionTimer.start(
+            sessionType = SessionType.CLOUD,
+            provider = apiSettings.provider.name,
+            modelId = POST_PROCESS_MODEL,
+            coldStartKind = coldStartKind,
+            device = device,
+            inputLanguage = apiSettings.inputLanguage.ifEmpty { null }
+        )
+
         return try {
-            // Build system prompt with translation if needed
             val systemPrompt = buildSystemPrompt(voiceMode.systemPrompt, apiSettings.outputLanguage)
             Log.d(TAG, "Post-processing text with system prompt: $systemPrompt")
 
-            // Determine which chat model to use for post-processing
             val postProcessProvider = apiSettings.provider
-            val postProcessModel = "gpt-4o-mini"
-
-            Log.d(TAG, "Using provider for post-processing: ${postProcessProvider.displayName}, model: $postProcessModel")
+            Log.d(TAG, "Using provider for post-processing: ${postProcessProvider.displayName}, model: $POST_PROCESS_MODEL")
             if (apiSettings.outputLanguage.isNotEmpty()) {
                 Log.d(TAG, "Translation enabled: output language = ${getLanguageName(apiSettings.outputLanguage)}")
             }
 
-            // Create text-only chat completion request
+            ppTimer.mark("request_build")
             val request = ChatCompletionRequest(
-                model = postProcessModel,
+                model = POST_PROCESS_MODEL,
                 messages = listOf(
                     ChatMessage(
                         role = "system",
-                        content = listOf(
-                            ContentPart.TextContent(text = systemPrompt)
-                        )
+                        content = listOf(ContentPart.TextContent(text = systemPrompt))
                     ),
                     ChatMessage(
                         role = "user",
-                        content = listOf(
-                            ContentPart.TextContent(text = transcribedText)
-                        )
+                        content = listOf(ContentPart.TextContent(text = transcribedText))
                     )
                 ),
-                modalities = listOf("text") // Text-only output
+                modalities = listOf("text")
             )
 
-            // Make API call
+            ppTimer.mark("network")
             val response = chatCompletionStrategy.chatCompletionApiService.chatCompletion(request)
+            ppTimer.mark("response_parse")
 
             if (response.isSuccessful) {
                 val result = response.body()
@@ -241,12 +325,11 @@ class VoiceRepository @Inject constructor(
                 if (processedText != null) {
                     Log.d(TAG, "Post-processing successful")
 
-                    // Create processing info
                     val processingInfo = ProcessingInfo(
                         processingMode = "two-step",
                         strategy = "transcription + chat-completion",
                         transcriptionModel = transcriptionModel,
-                        postProcessingModel = postProcessModel,
+                        postProcessingModel = POST_PROCESS_MODEL,
                         translationEnabled = apiSettings.outputLanguage.isNotEmpty(),
                         translationTarget = if (apiSettings.outputLanguage.isNotEmpty()) getLanguageName(apiSettings.outputLanguage) else null,
                         originalTranscription = transcribedText,
@@ -257,7 +340,6 @@ class VoiceRepository @Inject constructor(
                         postProcessingTokens = postProcessingTokens
                     )
 
-                    // Record usage statistics for both models
                     transcriptionTokens?.let { tokens ->
                         settingsRepository.recordUsage(
                             modelId = transcriptionModel,
@@ -270,69 +352,70 @@ class VoiceRepository @Inject constructor(
 
                     postProcessingTokens?.let { tokens ->
                         settingsRepository.recordUsage(
-                            modelId = postProcessModel,
+                            modelId = POST_PROCESS_MODEL,
                             inputTokens = tokens.promptTokens ?: 0,
                             outputTokens = tokens.completionTokens ?: 0,
                             totalTokens = tokens.totalTokens ?: 0,
-                            audioDurationSeconds = 0.0 // Don't double-count audio duration
+                            audioDurationSeconds = 0.0
                         )
                     }
+
+                    commitSuccess(
+                        ppTimer,
+                        audioDurationSeconds = 0.0,
+                        outputChars = processedText.length,
+                        inputTokens = postProcessingTokens?.promptTokens,
+                        outputTokens = postProcessingTokens?.completionTokens,
+                        totalTokens = postProcessingTokens?.totalTokens,
+                        retryOf = previousSessionId
+                    )
 
                     ApiResult.Success(processedText, processingInfo)
                 } else {
                     Log.w(TAG, "No processed text in response, returning original")
+                    commitFailure(ppTimer, 0.0, "empty_response", retryOf = previousSessionId)
                     ApiResult.Success(transcribedText)
                 }
             } else {
                 val errorBody = response.errorBody()?.string()
                 Log.e(TAG, "Post-processing API error: ${response.code()} - $errorBody")
-                // On error, return original transcription
                 Log.w(TAG, "Post-processing failed, returning original transcription")
+                commitFailure(ppTimer, 0.0, "http_${response.code()}", retryOf = previousSessionId)
                 ApiResult.Success(transcribedText)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in post-processing, returning original text", e)
-            // On exception, return original transcription
+            commitFailure(
+                ppTimer,
+                0.0,
+                e.javaClass.simpleName ?: "unknown_exception",
+                retryOf = previousSessionId
+            )
             ApiResult.Success(transcribedText)
         }
     }
 
-    /**
-     * Select appropriate strategy based on voice mode and API provider
-     *
-     * Logic:
-     * - For "Verbatim" mode with OpenAI/Groq: Use Transcription Strategy
-     * - For transformation modes (Polite, Casual, etc.): Use Chat Completion Strategy
-     * - For OpenRouter: Always use Chat Completion Strategy
-     * - For Gemini: Always use Chat Completion Strategy (supports audio natively)
-     * - For Hugging Face: Always use Chat Completion Strategy (text-only models)
-     */
     private fun selectStrategy(
         voiceMode: VoiceMode,
         provider: ApiProvider
     ): AudioProcessingStrategy {
         return when {
-            // OpenRouter always uses chat completion
             provider == ApiProvider.OPENROUTER -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (OpenRouter)")
                 chatCompletionStrategy
             }
-            // Gemini always uses chat completion (supports audio natively)
             provider == ApiProvider.GEMINI -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (Gemini)")
                 chatCompletionStrategy
             }
-            // Hugging Face always uses chat completion (text-only LLMs)
             provider == ApiProvider.HUGGINGFACE -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (HuggingFace - text-only)")
                 chatCompletionStrategy
             }
-            // Verbatim mode with OpenAI/Groq uses transcription
             voiceMode.id == "verbatim" && (provider == ApiProvider.OPENAI || provider == ApiProvider.GROQ) -> {
                 Log.d(TAG, "Selected TranscriptionStrategy (Verbatim)")
                 transcriptionStrategy
             }
-            // All transformations use chat completion
             else -> {
                 Log.d(TAG, "Selected ChatCompletionStrategy (Transformation)")
                 chatCompletionStrategy
@@ -340,44 +423,26 @@ class VoiceRepository @Inject constructor(
         }
     }
 
-    /**
-     * Start audio recording
-     */
     suspend fun startRecording(): Result<Unit> {
         return audioRecorderManager.startRecording()
     }
 
-    /**
-     * Stop audio recording and return file
-     */
     suspend fun stopRecording(): Result<File> {
         return audioRecorderManager.stopRecording()
     }
 
-    /**
-     * Cancel recording
-     */
     suspend fun cancelRecording() {
         audioRecorderManager.cancelRecording()
     }
 
-    /**
-     * Check if currently recording
-     */
     fun isRecording(): Boolean {
         return audioRecorderManager.isCurrentlyRecording()
     }
 
-    /**
-     * Calculate audio duration in seconds from file
-     * Approximation based on file size and bitrate
-     */
     private fun calculateAudioDuration(audioFile: File): Double {
         return try {
-            // For m4a at 128kbps (16KB/s), approximate duration
             val fileSizeBytes = audioFile.length()
-            val durationSeconds = fileSizeBytes / 16000.0 // ~16KB per second at 128kbps
-            durationSeconds
+            fileSizeBytes / 16000.0
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating audio duration", e)
             0.0

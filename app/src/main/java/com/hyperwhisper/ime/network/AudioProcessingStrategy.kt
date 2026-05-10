@@ -2,6 +2,7 @@ package com.hyperwhisper.network
 
 import android.util.Log
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.telemetry.SessionTimer
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -17,7 +18,8 @@ interface AudioProcessingStrategy {
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer? = null
     ): ApiResult<String>
 }
 
@@ -38,16 +40,16 @@ class TranscriptionStrategy(
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer?
     ): ApiResult<String> {
         return try {
             Log.d(TAG, "========== TRANSCRIPTION REQUEST ==========")
             Log.d(TAG, "Processing audio with transcription strategy")
 
-            // Get current API settings for language
+            timer?.mark("request_build")
             val apiSettings = settingsRepository.apiSettings.first()
 
-            // Prepare multipart request
             val requestFile = audioFile.asRequestBody("audio/*".toMediaTypeOrNull())
             val filePart = MultipartBody.Part.createFormData(
                 "file",
@@ -55,14 +57,12 @@ class TranscriptionStrategy(
                 requestFile
             )
             val modelPart = modelId.toRequestBody("text/plain".toMediaTypeOrNull())
-            // Use verbose_json to get token usage and duration info
             val formatPart = "verbose_json".toRequestBody("text/plain".toMediaTypeOrNull())
             val timestampGranularityPart = "word".toRequestBody("text/plain".toMediaTypeOrNull())
             val languagePart = if (apiSettings.inputLanguage.isNotEmpty()) {
                 apiSettings.inputLanguage.toRequestBody("text/plain".toMediaTypeOrNull())
             } else null
 
-            // Log request details
             Log.d(TAG, "Request Details:")
             Log.d(TAG, "  Base URL: ${apiSettings.baseUrl}")
             Log.d(TAG, "  Endpoint: audio/transcriptions")
@@ -75,7 +75,7 @@ class TranscriptionStrategy(
             Log.d(TAG, "  Timestamp granularity: word")
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
-            // Make API call with additional parameters for token usage
+            timer?.mark("network")
             val response = apiService.transcribeWithDetails(
                 file = filePart,
                 model = modelPart,
@@ -83,8 +83,8 @@ class TranscriptionStrategy(
                 timestampGranularity = timestampGranularityPart,
                 language = languagePart
             )
+            timer?.mark("response_parse")
 
-            // Log response details
             Log.d(TAG, "Response Details:")
             Log.d(TAG, "  Status code: ${response.code()}")
             Log.d(TAG, "  Status message: ${response.message()}")
@@ -94,8 +94,6 @@ class TranscriptionStrategy(
                 val body = response.body()
                 val transcription = body?.text ?: ""
                 val tokenUsage = body?.usage
-                // Calculate duration from file if API doesn't provide it
-                // WAV format: 16kHz, mono, 16-bit = 32000 bytes/sec (minus 44 byte header)
                 val estimatedDuration = if (audioFile.length() > 44) {
                     (audioFile.length() - 44) / 32000.0
                 } else 0.0
@@ -110,7 +108,6 @@ class TranscriptionStrategy(
                 Log.d(TAG, "  Result preview: ${transcription.take(100)}...")
                 Log.d(TAG, "========== END REQUEST ==========")
 
-                // Create ProcessingInfo with token usage
                 val processingInfo = ProcessingInfo(
                     processingMode = "single-step",
                     strategy = "transcription",
@@ -135,7 +132,6 @@ class TranscriptionStrategy(
                 Log.e(TAG, "  Error body: $errorBody")
                 Log.d(TAG, "========== END REQUEST ==========")
 
-                // Create detailed error message
                 val errorMessage = buildString {
                     appendLine("API Request Failed")
                     appendLine()
@@ -168,7 +164,6 @@ class TranscriptionStrategy(
             Log.e(TAG, "  Stack trace: ${e.stackTraceToString()}")
             Log.d(TAG, "========== END REQUEST ==========")
 
-            // Create detailed error message
             val errorMessage = buildString {
                 appendLine("Network/Processing Error")
                 appendLine()
@@ -217,9 +212,6 @@ class ChatCompletionStrategy(
         private const val TAG = "ChatCompletionStrategy"
     }
 
-    /**
-     * Build system prompt with optional translation instruction
-     */
     private fun buildSystemPromptWithTranslation(basePrompt: String, outputLanguage: String): String {
         return if (outputLanguage.isNotEmpty()) {
             val language = SUPPORTED_LANGUAGES.find { it.code == outputLanguage }
@@ -234,22 +226,21 @@ class ChatCompletionStrategy(
         audioFile: File,
         audioBase64: String,
         voiceMode: VoiceMode,
-        modelId: String
+        modelId: String,
+        timer: SessionTimer?
     ): ApiResult<String> {
         return try {
             Log.d(TAG, "========== CHAT COMPLETION REQUEST ==========")
             Log.d(TAG, "Processing audio with chat completion strategy")
 
-            // Get current API settings
+            timer?.mark("request_build")
             val apiSettings = settingsRepository.apiSettings.first()
 
-            // Build system prompt with translation if needed
             val systemPrompt = buildSystemPromptWithTranslation(
                 voiceMode.systemPrompt,
                 apiSettings.outputLanguage
             )
 
-            // Determine audio format
             val audioFormat = when (audioFile.extension.lowercase()) {
                 "m4a" -> "mp4"
                 "wav" -> "wav"
@@ -257,7 +248,6 @@ class ChatCompletionStrategy(
                 else -> "mp4"
             }
 
-            // Build chat completion request
             val request = ChatCompletionRequest(
                 model = modelId,
                 messages = listOf(
@@ -276,7 +266,6 @@ class ChatCompletionStrategy(
                 )
             )
 
-            // Log request details
             Log.d(TAG, "Request Details:")
             Log.d(TAG, "  Base URL: ${apiSettings.baseUrl}")
             Log.d(TAG, "  Endpoint: chat/completions")
@@ -293,10 +282,10 @@ class ChatCompletionStrategy(
             Log.d(TAG, "  Audio base64 length: ${audioBase64.length} chars")
             Log.d(TAG, "  API Key: ${apiSettings.getCurrentApiKey().take(10)}...")
 
-            // Make API call
+            timer?.mark("network")
             val response = chatCompletionApiService.chatCompletion(request)
+            timer?.mark("response_parse")
 
-            // Log response details
             Log.d(TAG, "Response Details:")
             Log.d(TAG, "  Status code: ${response.code()}")
             Log.d(TAG, "  Status message: ${response.message()}")
@@ -315,7 +304,6 @@ class ChatCompletionStrategy(
                 }
                 Log.d(TAG, "========== END REQUEST ==========")
 
-                // Create ProcessingInfo with token usage
                 val processingInfo = tokenUsage?.let {
                     ProcessingInfo(
                         processingMode = "single-step",
@@ -342,7 +330,6 @@ class ChatCompletionStrategy(
                 Log.e(TAG, "  Error body: $errorBody")
                 Log.d(TAG, "========== END REQUEST ==========")
 
-                // Create detailed error message
                 val errorMessage = buildString {
                     appendLine("API Request Failed")
                     appendLine()
@@ -376,7 +363,6 @@ class ChatCompletionStrategy(
             Log.e(TAG, "  Stack trace: ${e.stackTraceToString()}")
             Log.d(TAG, "========== END REQUEST ==========")
 
-            // Create detailed error message
             val errorMessage = buildString {
                 appendLine("Network/Processing Error")
                 appendLine()

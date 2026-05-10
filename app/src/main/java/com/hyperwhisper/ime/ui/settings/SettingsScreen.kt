@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.VoiceMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.about.AboutActivity
+import com.hyperwhisper.ui.stats.StatsActivity
 import com.hyperwhisper.ui.settings.components.cards.ProviderStatusCard
 import com.hyperwhisper.ui.settings.components.cards.SectionCard
 import com.hyperwhisper.ui.settings.dialogs.AddModeDialog
@@ -257,6 +258,40 @@ fun SettingsScreen(
                     updateManager = updateManager,
                     onShowUpdateDialog = onShowUpdateDialog
                 )
+            }
+
+            item { Divider() }
+
+            item {
+                androidx.compose.material3.Card(
+                    onClick = {
+                        context.startActivity(Intent(context, StatsActivity::class.java))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Latency Stats",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                text = "Per-model latency breakdown and JSONL export",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }

@@ -101,6 +101,12 @@ android {
     }
 }
 
+// Room schema export — keeps a JSON snapshot per DB version for migration tests
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+
 dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
@@ -130,6 +136,13 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Room (telemetry / latency stats)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+    // Newer sqlite-jdbc bundles bionic (Linux-Android) aarch64 .so for Termux build host
+    ksp("org.xerial:sqlite-jdbc:3.45.1.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
