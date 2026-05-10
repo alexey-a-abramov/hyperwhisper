@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.hyperwhisper.data.ProcessingPhase
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.data.ProcessingStage
 import com.hyperwhisper.data.TranscriptionHistoryItem
@@ -57,6 +58,7 @@ import com.hyperwhisper.ui.sections.LanguageModelRow
 import com.hyperwhisper.ui.sections.RecordingSection
 import com.hyperwhisper.ui.sections.TopControlsRow
 import com.hyperwhisper.ui.dialogs.ModeSelectionDialog
+import com.hyperwhisper.ui.dialogs.RecordingConfirmationDialog
 import com.hyperwhisper.ui.selectors.LanguageSelectorDialog
 import com.hyperwhisper.ui.selectors.ModeSelector
 
@@ -94,6 +96,10 @@ fun KeyboardScreen(
     val lastAudioDuration by viewModel.lastAudioDuration.collectAsState()
     val walkieTalkieMode by viewModel.walkieTalkieMode.collectAsState()
     val modeChangeMessage by viewModel.modeChangeMessage.collectAsState()
+    val needsConfirmation by viewModel.needsConfirmation.collectAsState()
+    val finalRecordingDuration by viewModel.finalRecordingDuration.collectAsState()
+    val recordingWasCut by viewModel.recordingWasCut.collectAsState()
+    val processingPhase by viewModel.processingPhase.collectAsState()
 
     var showConfigInfo by remember { mutableStateOf(false) }
     var showInputLanguageDialog by remember { mutableStateOf(false) }
@@ -183,11 +189,9 @@ fun KeyboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
             ) {
-            // Add space at the top to push content down
-            Spacer(modifier = Modifier.height(32.dp))
-
             // Top Row: Keyboard Switcher + Settings + View Logs (techie) + Help
             TopControlsRow(
                 context = context,
@@ -196,29 +200,45 @@ fun KeyboardScreen(
                 onSwitchKeyboard = onSwitchKeyboard
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Language & Model Info Row: Input | Combined Mode/Model Button | Output
-            LanguageModelRow(
-                apiSettings = apiSettings,
-                recordingState = recordingState,
-                techieModeEnabled = appearanceSettings.techieModeEnabled,
-                voiceModes = voiceModes,
-                selectedModeId = selectedModeId,
-                onShowInputLanguageDialog = { showInputLanguageDialog = true },
-                onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
-                onShowConfigInfo = { showConfigInfo = true },
-                onShowModeDialog = { showModeDialog = true }
-            )
+            // Language & Model Info Row with Delete Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Delete button (left side)
+                RepeatableDeleteButton(
+                    onDelete = onDelete,
+                    onDeleteAll = onDeleteAll,
+                    modifier = Modifier.width(60.dp).height(32.dp)
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                // Language & Model Info Row (center)
+                LanguageModelRow(
+                    apiSettings = apiSettings,
+                    recordingState = recordingState,
+                    techieModeEnabled = appearanceSettings.techieModeEnabled,
+                    voiceModes = voiceModes,
+                    selectedModeId = selectedModeId,
+                    onShowInputLanguageDialog = { showInputLanguageDialog = true },
+                    onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
+                    onShowConfigInfo = { showConfigInfo = true },
+                    onShowModeDialog = { showModeDialog = true },
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            // Middle section: Cancel (far left) + Mic (center) + Controls (right)
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Middle section: Cancel (far left) + Mic (center) + Enter (right)
             RecordingSection(
                 recordingState = recordingState,
                 recordingDuration = recordingDuration,
                 transcriptionProgress = transcriptionProgress,
                 processingStage = processingStage,
+                processingPhase = processingPhase,
                 lastAudioFileSize = lastAudioFileSize,
                 lastAudioDuration = lastAudioDuration,
                 editorInfo = editorInfo,
@@ -233,9 +253,8 @@ fun KeyboardScreen(
                 onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
                 onPressStartRecording = { viewModel.startRecording() },
                 onPressReleaseRecording = { viewModel.stopRecording() },
+                onConfirmRecording = { viewModel.confirmRecording() },
                 onToggleTimer = { showTimerText = !showTimerText },
-                onDelete = onDelete,
-                onDeleteAll = onDeleteAll,
                 onEnter = onEnter,
                 modifier = Modifier.weight(1f)
             )
@@ -273,6 +292,15 @@ fun KeyboardScreen(
                 message = result.message,
                 onConfirm = { viewModel.confirmPendingCommand() },
                 onDismiss = { viewModel.rejectPendingCommand() }
+            )
+        }
+
+        // Show Recording Confirmation Dialog (for recordings > 30 seconds)
+        if (needsConfirmation) {
+            RecordingConfirmationDialog(
+                durationSeconds = finalRecordingDuration / 1000,
+                onConfirm = { viewModel.confirmRecording() },
+                onDiscard = { viewModel.rejectRecording() }
             )
         }
 
@@ -391,6 +419,13 @@ fun MicrophoneButton(
                 IdleMicButton(onClick = onStartRecording)
             }
             RecordingState.RECORDING -> {
+                RecordingMicButton(
+                    onClick = onStopRecording,
+                    recordingDuration = recordingDuration
+                )
+            }
+            RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION -> {
+                // Show awaiting confirmation button
                 RecordingMicButton(
                     onClick = onStopRecording,
                     recordingDuration = recordingDuration

@@ -35,7 +35,13 @@ class AudioRecorderManager @Inject constructor(
     private val _recordingDuration = MutableStateFlow(0L)
     val recordingDuration: StateFlow<Long> = _recordingDuration.asStateFlow()
 
+    private val _recordingCutDueToTimeout = MutableStateFlow(false)
+    val recordingCutDueToTimeout: StateFlow<Boolean> = _recordingCutDueToTimeout.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default)
+
+    // Callback for when max duration is reached
+    var onMaxDurationReached: (() -> Unit)? = null
 
     companion object {
         private const val TAG = "AudioRecorderManager"
@@ -100,6 +106,7 @@ class AudioRecorderManager @Inject constructor(
                     isRecording = true
                     recordingStartTime = System.currentTimeMillis()
                     _recordingDuration.value = 0L
+                    _recordingCutDueToTimeout.value = false
 
                     // Acquire wake lock to keep recording during screen lock
                     acquireWakeLock()
@@ -211,6 +218,14 @@ class AudioRecorderManager @Inject constructor(
             while (isRecording) {
                 val elapsed = System.currentTimeMillis() - recordingStartTime
                 _recordingDuration.value = elapsed
+
+                // Check if max duration reached
+                if (elapsed >= MAX_RECORDING_DURATION_MS) {
+                    _recordingCutDueToTimeout.value = true
+                    onMaxDurationReached?.invoke()
+                    Log.d(TAG, "Max recording duration reached - callback invoked")
+                }
+
                 delay(100) // Update every 100ms for smooth timer
             }
         }
@@ -320,4 +335,16 @@ class AudioRecorderManager @Inject constructor(
     }
 
     fun isCurrentlyRecording(): Boolean = isRecording
+
+    /**
+     * Check if last recording was cut due to timeout
+     */
+    fun wasRecordingCutDueToTimeout(): Boolean = _recordingCutDueToTimeout.value
+
+    /**
+     * Clear the recording cut flag
+     */
+    fun clearRecordingCutFlag() {
+        _recordingCutDueToTimeout.value = false
+    }
 }

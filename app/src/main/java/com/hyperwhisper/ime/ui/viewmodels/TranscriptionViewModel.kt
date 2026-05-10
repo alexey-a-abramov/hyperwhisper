@@ -43,6 +43,10 @@ class TranscriptionViewModel(
     private val _processingStage = MutableStateFlow<ProcessingStage?>(null)
     val processingStage: StateFlow<ProcessingStage?> = _processingStage.asStateFlow()
 
+    // Current processing phase for granular UI feedback
+    private val _processingPhase = MutableStateFlow(ProcessingPhase.IDLE)
+    val processingPhase: StateFlow<ProcessingPhase> = _processingPhase.asStateFlow()
+
     // Pending configuration command for confirmation dialog
     private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
     val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
@@ -93,6 +97,7 @@ class TranscriptionViewModel(
             transcriptionJob = viewModelScope.launch {
                 try {
                     // Initial stage
+                    _processingPhase.value = ProcessingPhase.PREPARING_AUDIO
                     _processingStage.value = ProcessingStage.PREPARING
                     _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
 
@@ -100,14 +105,16 @@ class TranscriptionViewModel(
                     val progressJob = launch {
                         // Cloud processing stages: prepare -> upload -> wait for API -> finish
                         val stages = listOf(
-                            ProcessingStage.PREPARING to 200L,
-                            ProcessingStage.UPLOADING to 800L,
-                            ProcessingStage.WAITING_API to 2000L,  // Main API call - takes longest
-                            ProcessingStage.FINISHING to 200L
+                            ProcessingStage.PREPARING to (200L to ProcessingPhase.PREPARING_AUDIO),
+                            ProcessingStage.UPLOADING to (800L to ProcessingPhase.SENDING_TO_SERVER),
+                            ProcessingStage.WAITING_API to (2000L to ProcessingPhase.WAITING_FOR_RESPONSE),  // Main API call - takes longest
+                            ProcessingStage.FINISHING to (200L to ProcessingPhase.RECEIVING_DATA)
                         )
 
-                        for ((stage, duration) in stages) {
+                        for ((stage, durationAndPhase) in stages) {
+                            val (duration, phase) = durationAndPhase
                             _processingStage.value = stage
+                            _processingPhase.value = phase
                             // Smoothly animate progress within the stage
                             val steps = (duration / 100).toInt().coerceAtLeast(1)
                             val progressIncrement = (stage.progressEnd - stage.progressStart) / steps
@@ -123,6 +130,7 @@ class TranscriptionViewModel(
 
                     // Cancel progress updater and complete
                     progressJob.cancel()
+                    _processingPhase.value = ProcessingPhase.COMPLETE
                     _processingStage.value = ProcessingStage.FINISHING
                     _transcriptionProgress.value = 1.0f
 
@@ -144,6 +152,7 @@ class TranscriptionViewModel(
                             _processingInfo.value = result.processingInfo
                             _transcriptionProgress.value = null
                             _processingStage.value = null
+                            _processingPhase.value = ProcessingPhase.IDLE
                         }
                         is ApiResult.Error -> {
                             Log.e(TAG, "Transcription failed: ${result.message}")
@@ -151,6 +160,7 @@ class TranscriptionViewModel(
                             _errorMessage.value = "API Error: ${result.message}"
                             _transcriptionProgress.value = null
                             _processingStage.value = null
+                            _processingPhase.value = ProcessingPhase.ERROR
                         }
                         is ApiResult.Loading -> {
                             // Should not happen in this flow
@@ -162,6 +172,7 @@ class TranscriptionViewModel(
 
                     _transcriptionProgress.value = null
                     _processingStage.value = null
+                    _processingPhase.value = ProcessingPhase.IDLE
                     throw e // Re-throw to properly cancel the coroutine
                 } catch (e: Exception) {
                     Log.e(TAG, "Error during transcription", e)
@@ -169,6 +180,7 @@ class TranscriptionViewModel(
                     _errorMessage.value = e.message
                     _transcriptionProgress.value = null
                     _processingStage.value = null
+                    _processingPhase.value = ProcessingPhase.ERROR
                 } finally {
                     transcriptionJob = null
                 }
@@ -224,6 +236,7 @@ class TranscriptionViewModel(
 
                 _transcriptionProgress.value = null
                 _processingStage.value = null
+                _processingPhase.value = ProcessingPhase.IDLE
                 _errorMessage.value = null
 
                 Log.d(TAG, "Transcription cancelled successfully")
