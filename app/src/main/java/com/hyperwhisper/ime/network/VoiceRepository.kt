@@ -474,7 +474,9 @@ class VoiceRepository @Inject constructor(
         transcriptionTokens: TokenUsage?,
         transcriptionTimeMs: Long,
         audioFileSizeBytes: Long,
-        processingStartTime: Long
+        processingStartTime: Long,
+        previousSessionId: String?,
+        device: DeviceSnapshot,
     ): ApiResult<String> {
         return try {
             // Check if LLM processing is disabled
@@ -491,6 +493,23 @@ class VoiceRepository @Inject constructor(
             val llmConfig = apiSettings.llmConfig
             val postProcessModel = llmConfig.modelId
 
+            // --- Telemetry: separate session row for the post-process leg ---
+            val ppSessionType = if (llmConfig.provider == com.hyperwhisper.data.LlmProvider.LOCAL_GEMMA)
+                SessionType.ON_DEVICE else SessionType.CLOUD
+            val ppModelId = if (llmConfig.provider == com.hyperwhisper.data.LlmProvider.LOCAL_GEMMA) {
+                val n = File(apiSettings.localModelSettings.gemmaModelPath).name
+                "LocalGemma:" + n.ifBlank { "unknown" }
+            } else postProcessModel
+            val ppColdKind = coldStartTracker.classify(ppModelId)
+            val ppTimer = SessionTimer.start(
+                sessionType = ppSessionType,
+                provider = llmConfig.provider.name,
+                modelId = ppModelId,
+                coldStartKind = ppColdKind,
+                device = device,
+                inputLanguage = apiSettings.inputLanguage.ifEmpty { null }
+            )
+
             Log.d(TAG, "Using LLM for post-processing: ${llmConfig.provider.displayName}, model: $postProcessModel")
             Log.d(TAG, "LLM endpoint: ${llmConfig.getBaseUrl()}")
             if (apiSettings.outputLanguage.isNotEmpty()) {
@@ -503,8 +522,10 @@ class VoiceRepository @Inject constructor(
                 val localPath = apiSettings.localModelSettings.gemmaModelPath
                 if (localPath.isBlank() || !java.io.File(localPath).exists()) {
                     Log.w(TAG, "Local Gemma path missing or file not found: '$localPath' — falling back to raw transcription")
+                    commitTelemetry(ppTimer, 0.0, success = false, errorKind = "gemma_path_missing", retryOf = previousSessionId)
                     return ApiResult.Success(transcribedText)
                 }
+                ppTimer.mark("gemma_inference")
                 val postProcessStartTime = System.currentTimeMillis()
                 val rewritten = try {
                     localLlm.rewrite(
@@ -514,6 +535,7 @@ class VoiceRepository @Inject constructor(
                     )
                 } catch (t: Throwable) {
                     Log.w(TAG, "Local LLM post-processing failed; returning raw transcription", t)
+                    commitTelemetry(ppTimer, 0.0, success = false, errorKind = t.javaClass.simpleName ?: "gemma_rewrite_failed", retryOf = previousSessionId)
                     return ApiResult.Success(transcribedText)
                 }
                 val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
@@ -559,10 +581,19 @@ class VoiceRepository @Inject constructor(
                     postProcessingTimeMs = postProcessTimeMs,
                     audioFileSizeBytes = audioFileSizeBytes
                 )
+                val finalForTelemetry = rewritten.ifBlank { transcribedText }
+                commitTelemetry(
+                    ppTimer,
+                    audioDurationSeconds = 0.0,
+                    outputChars = finalForTelemetry.length,
+                    success = true,
+                    retryOf = previousSessionId
+                )
                 return ApiResult.Success(rewritten.ifBlank { transcribedText }, info)
             }
 
             // Create text-only chat completion request
+            ppTimer.mark("request_build")
             val request = ChatCompletionRequest(
                 model = postProcessModel,
                 messages = listOf(
@@ -583,9 +614,11 @@ class VoiceRepository @Inject constructor(
             )
 
             // Create dynamic LLM API client and make API call
+            ppTimer.mark("network")
             val postProcessStartTime = System.currentTimeMillis()
             val llmApiService = llmServiceFactory.create(llmConfig)
             val response = llmApiService.chatCompletion(request)
+            ppTimer.mark("response_parse")
             val postProcessTimeMs = System.currentTimeMillis() - postProcessStartTime
 
             if (response.isSuccessful) {
