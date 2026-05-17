@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,11 +61,17 @@ fun IdleMicButton(
                 onPressRelease = if (walkieTalkieMode) onPressRelease else ({})
             ),
         shape = if (walkieTalkieMode) CircleShape else RoundedCornerShape(16.dp),
-        containerColor = Color(0xFF4CAF50), // Green
+        // Vivid green (Material A700) so the record button reads clearly
+        // distinct from any pale mode-chip green elsewhere in the layout.
+        containerColor = Color(0xFF00C853),
         contentColor = Color.White
     ) {
+        // Use the record-dot glyph instead of a mic — the Voice mode chip
+        // in the header already carries a mic icon, so reusing it here was
+        // visually redundant. The dot reads as "press to record" without
+        // doubling up on Voice's branding.
         Icon(
-            imageVector = Icons.Default.Mic,
+            imageVector = Icons.Default.FiberManualRecord,
             contentDescription = "Start Recording",
             modifier = Modifier.size(28.dp)
         )
