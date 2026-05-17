@@ -56,7 +56,7 @@ import com.hyperwhisper.ui.sections.KeyboardBottomBar
 fun AgentKeyboard(
     title: String,
     commands: List<AgentCommand>,
-    onInsert: (String) -> Unit,
+    onInsert: (text: String, stayOnPalette: Boolean) -> Unit,
     onSendChord: (KeyChord) -> Unit,
     onSpace: () -> Unit,
     onEnter: () -> Unit,
@@ -105,7 +105,9 @@ fun AgentKeyboard(
                 )
                 if (lastTranscribedText.isNotEmpty()) {
                     Surface(
-                        onClick = { onInsert(lastTranscribedText) },
+                        // Recall is a one-shot — drop the user back into their
+                        // typing layout after we insert the recalled text.
+                        onClick = { onInsert(lastTranscribedText, false) },
                         shape = RoundedCornerShape(4.dp),
                         color = Color.Transparent,
                         modifier = Modifier.padding(end = 4.dp).size(18.dp)
@@ -211,7 +213,7 @@ private fun CategoryHeader(category: AgentCategory) {
 @Composable
 private fun AgentCommandKey(
     cmd: AgentCommand,
-    onInsert: (String) -> Unit,
+    onInsert: (text: String, stayOnPalette: Boolean) -> Unit,
     onSendChord: (KeyChord) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -220,7 +222,7 @@ private fun AgentCommandKey(
     val onPrimary: () -> Unit = {
         // Chord wins if both are set — chord chips are explicit gestures and
         // shouldn't double-insert their (usually empty) text payload.
-        cmd.keyChord?.let(onSendChord) ?: onInsert(cmd.insertion)
+        cmd.keyChord?.let(onSendChord) ?: onInsert(cmd.insertion, cmd.stayOnPalette)
     }
     Box {
         Surface(
@@ -270,7 +272,8 @@ private fun AgentCommandKey(
                         )
                     },
                     onClick = {
-                        variant.keyChord?.let(onSendChord) ?: onInsert(variant.insertion)
+                        variant.keyChord?.let(onSendChord)
+                            ?: onInsert(variant.insertion, variant.stayOnPalette)
                         menuExpanded = false
                     }
                 )

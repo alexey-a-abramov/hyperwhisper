@@ -351,8 +351,14 @@ internal class InputConnectionController(
 
     /**
      * Dispatch an arbitrary key chord (keycode + meta-state mask) to the
-     * focused app. Built for the agent-keyboard "Plan / Auto" chip that
-     * sends Shift+Tab so Claude Code's TUI cycles its permission mode.
+     * focused app. Available for agent-keyboard chips that need to fire a
+     * real modifier+key combo against a standard Android receiver.
+     *
+     * Note: terminal emulators (Termux) ignore IME meta-state on KeyEvents
+     * and only consume committed text into the PTY. Chips targeting a TUI
+     * (Claude Code's mode cycler, vim, etc.) should commit the equivalent
+     * xterm escape sequence as plain text instead — see the Plan / Auto
+     * chip in AgentCommands.kt for the pattern.
      *
      * Uses [KeyEvent.FLAG_SOFT_KEYBOARD] so receivers can tell this came
      * from an IME, mirroring what [commitText] does for modifier-aware

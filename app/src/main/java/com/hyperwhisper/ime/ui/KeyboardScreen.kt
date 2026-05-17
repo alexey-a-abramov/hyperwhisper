@@ -432,13 +432,17 @@ fun KeyboardScreen(
                 AgentKeyboard(
                     title = keyboardInputMode.displayName,
                     commands = com.hyperwhisper.data.AgentCommands.byMode(keyboardInputMode),
-                    onInsert = { text ->
+                    onInsert = { text, stayOnPalette ->
                         onTextCommit(text)
-                        // Picking a command means the user is done with the
-                        // palette layer — drop them back into their typing
-                        // layout so they can fill in args / hit enter without
-                        // an extra mode-cycle tap.
-                        keyboardInputMode = lastNonAgentMode
+                        // Picking a slash-command or macro means the user is
+                        // done with the palette layer — drop them back into
+                        // their typing layout. State-toggle chips (the Claude
+                        // Code mode cycler) set stayOnPalette so multi-step
+                        // cycling doesn't bounce them through QWERTY between
+                        // taps.
+                        if (!stayOnPalette) {
+                            keyboardInputMode = lastNonAgentMode
+                        }
                     },
                     onSendChord = { chord ->
                         // Chord chips are *not* slash-commands; the user is

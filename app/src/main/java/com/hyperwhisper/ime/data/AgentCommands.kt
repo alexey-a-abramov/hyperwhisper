@@ -56,7 +56,16 @@ data class AgentCommand(
      * etc. Label should describe the *effect*, not the chord, since the
      * effect is what the user is reaching for.
      */
-    val keyChord: KeyChord? = null
+    val keyChord: KeyChord? = null,
+    /**
+     * When true, tapping the chip commits [insertion] without auto-switching
+     * the keyboard back to the last non-agent layout. Used for state-toggle
+     * chips (e.g. the Claude Code mode cycler emitting CSI Z) where the user
+     * is likely to tap multiple times in succession to step through states.
+     * Defaults to false: slash-commands and macros are one-shot, the user
+     * typed them as the next thing they wanted to do.
+     */
+    val stayOnPalette: Boolean = false
 )
 
 object AgentCommands {
@@ -73,20 +82,21 @@ object AgentCommands {
         // captures the same intent without forcing a sigil — keeping the
         // chip just added clutter for a feature people rarely invoked.
         AgentCommand("!", label = "! bash", description = "Run shell command", category = AgentCategory.INLINE),
-        // Real key-chord chip — sends Shift+Tab to the focused app. In
-        // Claude Code's TUI this cycles the permission mode
-        // (normal → auto-accept → plan → normal). Keeping the label
-        // outcome-oriented ("Plan / Auto") rather than chord-oriented
-        // ("⇧+Tab") because the user wants the result, not the keystroke.
+        // Cycles Claude Code's permission mode (normal → auto-accept → plan →
+        // normal). Inserts the xterm "back-tab" escape sequence (CSI Z =
+        // ESC [ Z) rather than dispatching a Shift+Tab keychord — Termux is a
+        // terminal emulator that forwards committed text into the PTY but
+        // ignores IME meta-state on KeyEvents, so a chord-based Shift+Tab
+        // never reaches Claude Code's stdin. The escape sequence is what the
+        // TUI listens for anyway. Sticks on the palette so multi-step
+        // cycling (default → plan = two taps) doesn't bounce the user back
+        // to QWERTY after each tap.
         AgentCommand(
-            insertion = "",
+            insertion = "\u001B[Z",
             label = "Plan / Auto",
-            description = "Cycle Claude Code mode (sends Shift+Tab)",
+            description = "Cycle Claude Code mode (sends ESC[Z, the xterm Shift+Tab sequence)",
             category = AgentCategory.INLINE,
-            keyChord = KeyChord(
-                keyCode = android.view.KeyEvent.KEYCODE_TAB,
-                metaState = android.view.KeyEvent.META_SHIFT_ON
-            )
+            stayOnPalette = true
         ),
         AgentCommand("ultrathink", description = "Maximum thinking budget", category = AgentCategory.INLINE),
         AgentCommand("\u001B", label = "Esc", description = "Cancel current action", category = AgentCategory.INLINE),
