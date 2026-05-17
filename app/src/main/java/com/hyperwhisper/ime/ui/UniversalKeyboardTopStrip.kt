@@ -46,7 +46,8 @@ import com.hyperwhisper.ui.util.repeatOnHold
  *  - Three universal dev shortcuts (Esc / Tab / Backspace) one tap away.
  *  - Settings + Logs entry points.
  *
- * 36dp tall.
+ * Height + chip widths are read from [KeyboardMetrics] so the strip scales
+ * with the rest of the keyboard.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -74,16 +75,19 @@ fun UniversalKeyboardTopStrip(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(36.dp),
+            .height(KeyboardMetrics.TopStripHeight),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                .padding(
+                    horizontal = KeyboardMetrics.OuterPadding,
+                    vertical = KeyboardMetrics.RowGap
+                ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.TopStripKeyGap)
         ) {
             // Slot 1 — Voice (Dictation).
             ModeSlot(
@@ -116,8 +120,8 @@ fun UniversalKeyboardTopStrip(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(vertical = 2.dp)
-                    .width(108.dp)
+                    .padding(vertical = KeyboardMetrics.RowGap)
+                    .width(KeyboardMetrics.ModeChipWidth)
             ) {
                 Surface(
                     color = if (presetIsCurrent)
@@ -126,7 +130,7 @@ fun UniversalKeyboardTopStrip(
                     contentColor = if (presetIsCurrent)
                         MaterialTheme.colorScheme.onPrimary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
                     modifier = Modifier
                         .fillMaxSize()
                         .combinedClickable(
@@ -191,11 +195,11 @@ private fun ModeSlot(
             else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
             else MaterialTheme.colorScheme.onSurfaceVariant,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         modifier = Modifier
             .fillMaxHeight()
-            .padding(vertical = 2.dp)
-            .width(40.dp)
+            .padding(vertical = KeyboardMetrics.RowGap)
+            .width(KeyboardMetrics.TopStripIconWidth)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -216,10 +220,10 @@ private fun IconChip(
         onClick = onClick,
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.primary,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         modifier = Modifier
             .fillMaxHeight()
-            .size(width = 36.dp, height = 32.dp)
+            .width(KeyboardMetrics.TopStripIconWidth)
     ) {
         Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.Center) {
             Icon(imageVector = icon, contentDescription = desc, modifier = Modifier.size(18.dp))
@@ -237,16 +241,16 @@ private fun ChipButton(
 ) {
     val baseModifier = Modifier
         .fillMaxHeight()
-        .padding(vertical = 2.dp)
+        .padding(vertical = KeyboardMetrics.RowGap)
     if (repeatOnHold) {
         Surface(
             color = bg,
             contentColor = fg,
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
             modifier = baseModifier.repeatOnHold(onTrigger = onClick)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp),
+                modifier = Modifier.padding(horizontal = KeyboardMetrics.BaseUnit * 2.5f),
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )
@@ -256,11 +260,11 @@ private fun ChipButton(
             onClick = onClick,
             color = bg,
             contentColor = fg,
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
             modifier = baseModifier
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp),
+                modifier = Modifier.padding(horizontal = KeyboardMetrics.BaseUnit * 2.5f),
                 verticalAlignment = Alignment.CenterVertically,
                 content = content
             )

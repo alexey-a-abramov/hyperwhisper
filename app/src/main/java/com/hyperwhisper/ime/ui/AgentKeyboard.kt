@@ -82,11 +82,11 @@ fun AgentKeyboard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = KeyboardSurfaceColor,
-        shape = RoundedCornerShape(10.dp)
+        shape = RoundedCornerShape(KeyboardMetrics.SurfaceRadius)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            modifier = Modifier.fillMaxSize().padding(KeyboardMetrics.OuterPadding),
+            verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.RowGap)
         ) {
             // Section label so the user knows which agent they're priming.
             // Right side hosts a recall affordance — re-insert the last text
@@ -132,8 +132,10 @@ fun AgentKeyboard(
             // length. Skipped silently if the palette has no INLINE entries.
             if (inline.isNotEmpty()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(KeyboardMetrics.KeyHeightCompact),
+                    horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
                 ) {
                     inline.forEach { cmd ->
                         AgentCommandKey(
@@ -152,8 +154,8 @@ fun AgentKeyboard(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing),
+                verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
             ) {
                 gridSections.forEach { (category, items) ->
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -226,18 +228,23 @@ private fun AgentCommandKey(
     }
     Box {
         Surface(
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
             color = KeyboardKeyColor,
             tonalElevation = 1.dp,
             modifier = modifier
-                .height(36.dp)
+                .height(KeyboardMetrics.KeyHeightCompact)
                 .combinedClickable(
                     onClick = onPrimary,
                     onLongClick = if (hasVariants) ({ menuExpanded = true }) else null
                 )
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = KeyboardMetrics.KeyContentPadding,
+                        vertical = KeyboardMetrics.RowGap
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.KeyboardMetrics
 import com.hyperwhisper.ui.KeyboardSpaceColor
 import com.hyperwhisper.ui.components.LongPressIndicator
 
@@ -42,10 +43,14 @@ import com.hyperwhisper.ui.components.LongPressIndicator
  * (Dictation, Agent, Emoji, QWERTY/Code) renders [Paste-last] [Space]
  * [Enter] at the same height with the same screen positions, so muscle
  * memory transfers regardless of which mode the user is in.
+ *
+ * Values delegate to [KeyboardMetrics] so the bottom bar scales together
+ * with the rest of the keyboard. Kept as named aliases here since several
+ * call sites still import these specific symbols.
  */
-val KeyboardBottomBarHeight = 44.dp
-val KeyboardBottomBarSpacing = 6.dp
-val KeyboardEnterKeyWidth = 60.dp
+val KeyboardBottomBarHeight: androidx.compose.ui.unit.Dp get() = KeyboardMetrics.BottomBarHeight
+val KeyboardBottomBarSpacing: androidx.compose.ui.unit.Dp get() = KeyboardMetrics.BottomBarSpacing
+val KeyboardEnterKeyWidth: androidx.compose.ui.unit.Dp get() = KeyboardMetrics.EnterKeyWidth
 
 /**
  * Universal keyboard bottom bar. Sits flush at the bottom of every layout.
@@ -115,7 +120,7 @@ fun RowScope.PasteLastPill(
     ) {
         Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(enableHistoryPanel) {
@@ -130,7 +135,7 @@ fun RowScope.PasteLastPill(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 10.dp),
+                    .padding(horizontal = KeyboardMetrics.BaseUnit * 2.5f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -163,7 +168,7 @@ fun RowScope.BottomBarSpace(
         modifier = Modifier
             .weight(weight)
             .fillMaxHeight(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         colors = ButtonDefaults.buttonColors(
             containerColor = KeyboardSpaceColor,
             contentColor = Color.Black
@@ -190,7 +195,7 @@ fun BottomBarEnter(
     Surface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         modifier = Modifier
             .width(KeyboardEnterKeyWidth)
             .fillMaxHeight()

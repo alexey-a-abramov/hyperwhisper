@@ -54,7 +54,7 @@ fun EmojiKeyboard(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF000000))
-            .padding(4.dp)
+            .padding(KeyboardMetrics.OuterPadding)
     ) {
         // Search bar
         SearchBar(
@@ -64,7 +64,7 @@ fun EmojiKeyboard(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(KeyboardMetrics.OuterPadding))
 
         // Category tabs
         CategoryTabs(
@@ -74,7 +74,7 @@ fun EmojiKeyboard(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(KeyboardMetrics.OuterPadding))
 
         // Emoji grid. Single LazyVerticalGrid for both search and category
         // browsing; nesting a LazyVerticalGrid inside a LazyColumn item gives
@@ -104,8 +104,8 @@ fun EmojiKeyboard(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(emojisPerRow),
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing),
+                    verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
                 ) {
                     if (searchQuery.isEmpty() && recentEmojis.isNotEmpty()) {
                         item(
@@ -225,7 +225,7 @@ private fun CategoryTabs(
 ) {
     LazyRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.TopStripKeyGap)
     ) {
         items(categories) { category ->
             CategoryTab(
@@ -294,8 +294,8 @@ private fun EmojiGrid(
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(emojisPerRow),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing),
+            verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
         ) {
             items(emojis) { emoji ->
                 EmojiButton(

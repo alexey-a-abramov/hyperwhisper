@@ -327,7 +327,7 @@ fun KeyboardScreen(
         )
     }
 
-    Box(modifier = modifier.fillMaxWidth().height(320.dp)) {
+    Box(modifier = modifier.fillMaxWidth().height(KeyboardMetrics.BoardHeight)) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()

@@ -987,13 +987,17 @@ internal fun TextKeyboardSectionNew(
             Surface(
                 modifier = modifier.fillMaxWidth().fillMaxHeight(),
                 color = KeyboardSurfaceColor,
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(KeyboardMetrics.SurfaceRadius)
             ) {
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    val horizontalGap = 2.dp
-                    val verticalGap = 4.dp
+                    val horizontalGap = KeyboardMetrics.KeySpacing
+                    // QWERTY's between-row gap is wider than the generic
+                    // KeyboardMetrics.RowGap — the letters are taller and
+                    // benefit from a touch more vertical breathing room.
+                    // Kept as twice RowGap so it still scales together.
+                    val verticalGap = KeyboardMetrics.RowGap * 2
                     // Calculate total rows: topRows + shiftRow + bottomRow
                     val totalRows = if (isSpecialChars) {
                         topRows.size + 1 + 1 // topRows + symbols row + bottom row
@@ -1002,10 +1006,11 @@ internal fun TextKeyboardSectionNew(
                     }
                     val totalVerticalGaps = verticalGap * (totalRows + 1)
                     val availableHeight = maxHeight - totalVerticalGaps
-                    val keyHeight = (availableHeight / totalRows).coerceIn(32.dp, 48.dp)
+                    val keyHeight = (availableHeight / totalRows)
+                        .coerceIn(KeyboardMetrics.KeyHeightFloor, KeyboardMetrics.KeyHeightCeiling)
 
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                        modifier = Modifier.fillMaxSize().padding(KeyboardMetrics.OuterPadding),
                         verticalArrangement = Arrangement.spacedBy(verticalGap)
                     ) {
                         // Number row

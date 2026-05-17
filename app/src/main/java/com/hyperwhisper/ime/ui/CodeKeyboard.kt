@@ -80,13 +80,16 @@ fun CodeKeyboard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = KeyboardSurfaceColor,
-        shape = RoundedCornerShape(10.dp)
+        shape = RoundedCornerShape(KeyboardMetrics.SurfaceRadius)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            modifier = Modifier.fillMaxSize().padding(KeyboardMetrics.OuterPadding),
+            verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.RowGap)
         ) {
-            val keyHeight = 36.dp
+            // CodeKeyboard runs 6 typing rows + bottom bar, so it uses the
+            // Compact key height. QWERTY's 4-row layout uses Standard via
+            // BoxWithConstraints derivation.
+            val keyHeight = KeyboardMetrics.KeyHeightCompact
 
             // 1. Numbers
             CodeKeyRow(listOf("1","2","3","4","5","6","7","8","9","0"), keyHeight, onKeyPress)
@@ -100,7 +103,7 @@ fun CodeKeyboard(
             // 5. Nav cluster + Esc / Tab / Backspace
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
             ) {
                 CodeActionButton("Esc", onEscape, weight = 1.1f, height = keyHeight)
                 CodeActionButton("Tab", onTab, weight = 1.0f, height = keyHeight)
@@ -123,7 +126,7 @@ fun CodeKeyboard(
             // transfers across QWERTY ↔ Code without re-aiming.
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
             ) {
                 // Modifiers wired to ModifierKeyState. Tap = one-shot toggle
                 // (auto-clears after the next keypress); long-press = lock
@@ -166,7 +169,7 @@ private fun CodeKeyRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
     ) {
         keys.forEach { key ->
             Surface(
@@ -174,7 +177,7 @@ private fun CodeKeyRow(
                 modifier = Modifier
                     .weight(1f)
                     .height(height),
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
                 color = KeyboardKeyColor,
                 tonalElevation = 1.dp
             ) {
@@ -209,7 +212,7 @@ private fun androidx.compose.foundation.layout.RowScope.CodeActionButton(
         modifier = Modifier
             .weight(weight)
             .height(height),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         color = if (dim) bg.copy(alpha = 0.7f) else bg,
         tonalElevation = 1.dp
     ) {
@@ -250,7 +253,7 @@ private fun androidx.compose.foundation.layout.RowScope.CodeModifierButton(
     }
     @OptIn(ExperimentalFoundationApi::class)
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         color = bg,
         tonalElevation = 1.dp,
         modifier = Modifier
@@ -291,7 +294,7 @@ private fun androidx.compose.foundation.layout.RowScope.CodeIconButton(
         modifier = Modifier
             .weight(weight)
             .height(height),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         color = bg,
         tonalElevation = 1.dp
     ) {
