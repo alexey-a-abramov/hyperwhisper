@@ -93,6 +93,18 @@ enum class KeyboardInputMode(val displayName: String) {
     // promote to a category-within-agent if it proves too much of a switch tax.
     AGENT_MACROS("Macros"),
 
+    // --- Experimental layouts. Surfaced via the preset slot (long-press to
+    // rebind) but kept out of the default swipe-cycle so they don't crowd
+    // the daily-driver modes for users who haven't opted in.
+    /**
+     * Terminal-control keyboard. Each chip commits literal ASCII control
+     * bytes (Ctrl+C = 0x03, Ctrl+L = 0x0C, …) and xterm escape sequences
+     * (arrows, Home/End/PgUp/PgDn, Alt+B/F/Backspace). Bypasses the Android
+     * key-chord path entirely, which is the only reliable way to send
+     * Ctrl+X chords into Termux's PTY.
+     */
+    EXPERIMENTAL_TERMINAL("Terminal"),
+
     // --- Legacy values, transparently rerouted. Kept so old DataStore values
     // still parse. ---
     SPECIAL_CHARS("Symbols"),
@@ -101,11 +113,15 @@ enum class KeyboardInputMode(val displayName: String) {
     NUMPAD("Numpad");
 
     val isAgent: Boolean get() = this in agentModes
+    val isExperimental: Boolean get() = this in experimentalModes
 
     companion object {
         val agentModes: Set<KeyboardInputMode> = setOf(
             AGENT_CLAUDE_CODE, AGENT_OPENCODE, AGENT_GEMINI, AGENT_CODEX, AGENT_MACROS
         )
+
+        /** In-progress layouts surfaced via the preset slot only. */
+        val experimentalModes: Set<KeyboardInputMode> = setOf(EXPERIMENTAL_TERMINAL)
     }
 
     /**

@@ -608,6 +608,7 @@ object ArabicStrings : Strings {
     override val keyboardModeSystemKeys = "مفاتيح النظام"
     override val keyboardModeVibeCoding = "Vibe Coding"
     override val keyboardModeNumpad = "لوحة أرقام"
+    override val keyboardModeExperimentalTerminal = "طرفية"
 
     // Enum: KeyboardLayout displayName
     override val keyboardLayoutEnglish = "الإنجليزية"

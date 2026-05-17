@@ -460,6 +460,19 @@ fun KeyboardScreen(
                     onShowHistory = { showHistoryPanel = true },
                     modifier = Modifier.weight(1f)
                 )
+            } else if (keyboardInputMode == KeyboardInputMode.EXPERIMENTAL_TERMINAL) {
+                topStrip()
+                ExperimentalTerminalKeyboard(
+                    onTextCommit = onTextCommit,
+                    onSpace = handleSpacePress,
+                    onEnter = onEnter,
+                    lastTranscribedText = lastTranscribedText,
+                    transcriptionHistory = transcriptionHistory,
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPasteText = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true },
+                    modifier = Modifier.weight(1f)
+                )
             } else if (keyboardInputMode == KeyboardInputMode.EMOJI) {
                 topStrip()
                 EmojiKeyboard(
@@ -777,7 +790,11 @@ fun KeyboardScreen(
                 val base = listOf(KeyboardInputMode.CODE, KeyboardInputMode.EMOJI)
                 val agents = KeyboardInputMode.agentModes
                     .filter { it.name in appearanceSettings.enabledAgentKeyboards }
-                base + agents
+                // Experimental layouts are always surfaced in the preset picker
+                // — that's their opt-in surface area. They stay out of the
+                // default swipe-cycle until they're promoted to a base mode.
+                val experimental = KeyboardInputMode.experimentalModes.toList()
+                base + agents + experimental
             }
             val scrimSource = remember { MutableInteractionSource() }
             Box(

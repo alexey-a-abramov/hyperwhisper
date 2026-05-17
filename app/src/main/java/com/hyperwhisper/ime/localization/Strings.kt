@@ -618,6 +618,7 @@ interface Strings {
     val keyboardModeSystemKeys: String
     val keyboardModeVibeCoding: String
     val keyboardModeNumpad: String
+    val keyboardModeExperimentalTerminal: String
 
     // Enum: KeyboardLayout displayName
     val keyboardLayoutEnglish: String

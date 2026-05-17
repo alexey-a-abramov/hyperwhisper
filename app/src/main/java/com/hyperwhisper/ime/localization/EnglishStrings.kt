@@ -608,6 +608,7 @@ object EnglishStrings : Strings {
     override val keyboardModeSystemKeys = "System Keys"
     override val keyboardModeVibeCoding = "Vibe Coding"
     override val keyboardModeNumpad = "Numpad"
+    override val keyboardModeExperimentalTerminal = "Terminal"
 
     // Enum: KeyboardLayout displayName
     override val keyboardLayoutEnglish = "English"

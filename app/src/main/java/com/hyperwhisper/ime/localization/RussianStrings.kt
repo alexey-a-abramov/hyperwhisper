@@ -608,6 +608,7 @@ object RussianStrings : Strings {
     override val keyboardModeSystemKeys = "Системные клавиши"
     override val keyboardModeVibeCoding = "Vibe Coding"
     override val keyboardModeNumpad = "Цифровая клавиатура"
+    override val keyboardModeExperimentalTerminal = "Терминал"
 
     // Enum: KeyboardLayout displayName
     override val keyboardLayoutEnglish = "Английский"
