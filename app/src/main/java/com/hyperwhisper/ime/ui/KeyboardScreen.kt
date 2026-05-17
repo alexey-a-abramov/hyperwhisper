@@ -354,11 +354,7 @@ fun KeyboardScreen(
             tonalElevation = 8.dp
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        if (keyboardInputMode == KeyboardInputMode.DICTATION) 16.dp else 0.dp
-                    ),
+                modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
             ) {
