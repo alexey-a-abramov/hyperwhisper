@@ -359,11 +359,25 @@ fun KeyboardScreen(
                 verticalArrangement = Arrangement.Top
             ) {
             if (keyboardInputMode == KeyboardInputMode.DICTATION) {
-                topStrip()
+                // Dictation-specific header — mode chips on the left, settings
+                // gear + backspace stacked on the right. Replaces the universal
+                // top strip for this mode so the chrome can be reorganized
+                // around the mic.
+                com.hyperwhisper.ui.sections.DictationHeader(
+                    currentMode = keyboardInputMode,
+                    presetMode = appearanceSettings.presetKeyboardMode,
+                    onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
+                    onPresetLongPress = { showPresetPicker = true },
+                    onBackspace = onDelete,
+                    onSettings = {
+                        val intent = android.content.Intent(
+                            context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
+                        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
+                )
                 Spacer(modifier = Modifier.height(4.dp))
-            }
 
-            if (keyboardInputMode == KeyboardInputMode.DICTATION) {
                 // Language & Model Info Row (only in dictation mode)
                 LanguageModelRow(
                     apiSettings = apiSettings,
@@ -381,10 +395,37 @@ fun KeyboardScreen(
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
-            }
 
-            if (keyboardInputMode == KeyboardInputMode.DICTATION) {
-                // Middle section: Cancel (far left) + Mic (center) + Enter (right)
+                // Esc + Tab — a row of two medium chips between the
+                // language/model row and the mic. Left-aligned so they sit
+                // under the Voice mode chip (top-left of the header).
+                // Backspace lives in the header column on the right, not
+                // here — the right side stays clear so the mic has room to
+                // breathe below.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = KeyboardMetrics.OuterPadding),
+                    horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.TopStripKeyGap)
+                ) {
+                    com.hyperwhisper.ui.sections.DictationActionChip(
+                        label = "Esc",
+                        onClick = onEscape,
+                        modifier = Modifier.width(KeyboardMetrics.ModeChipWidth)
+                    )
+                    com.hyperwhisper.ui.sections.DictationActionChip(
+                        label = "Tab",
+                        onClick = onTab,
+                        modifier = Modifier.width(KeyboardMetrics.ModeChipWidth)
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Recording row — mic centered in the remaining space above
+                // the bottom bar. Backspace is hidden because the header
+                // already owns it (top-right column).
                 RecordingSection(
                     recordingState = recordingState,
                     recordingDuration = recordingDuration,
@@ -409,6 +450,7 @@ fun KeyboardScreen(
                     onToggleTimer = { showTimerText = !showTimerText },
                     onDelete = onDelete,
                     onDeleteAll = onDeleteAll,
+                    showBackspace = false,
                     modifier = Modifier.weight(1f)
                 )
 

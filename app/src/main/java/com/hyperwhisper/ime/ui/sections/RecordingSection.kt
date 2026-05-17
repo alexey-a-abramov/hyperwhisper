@@ -73,6 +73,13 @@ fun RecordingSection(
     onToggleTimer: () -> Unit,
     onDelete: () -> Unit = {},
     onDeleteAll: () -> Unit = {},
+    /**
+     * When false, the right-column backspace is hidden — used by the new
+     * Dictation layout where backspace lives in the top-right header column
+     * instead of next to the mic. Keeps the on-by-default behaviour for any
+     * other caller untouched.
+     */
+    showBackspace: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -156,16 +163,20 @@ fun RecordingSection(
 
         // Right side: backspace lives here so the right column reads
         // Out → Backspace → Enter top-to-bottom. Repeat-on-hold matches the
-        // backspace behaviour in the universal top strip.
-        Box(
-            modifier = Modifier.width(60.dp).fillMaxHeight(),
-            contentAlignment = Alignment.Center
-        ) {
-            RepeatableDeleteButton(
-                onDelete = onDelete,
-                onDeleteAll = onDeleteAll,
-                modifier = Modifier.size(56.dp)
-            )
+        // backspace behaviour in the universal top strip. Hidden when the
+        // caller has its own backspace surface (the new Dictation layout
+        // moves it to the header column).
+        if (showBackspace) {
+            Box(
+                modifier = Modifier.width(60.dp).fillMaxHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                RepeatableDeleteButton(
+                    onDelete = onDelete,
+                    onDeleteAll = onDeleteAll,
+                    modifier = Modifier.size(56.dp)
+                )
+            }
         }
     }
 }
