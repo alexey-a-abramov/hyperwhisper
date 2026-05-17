@@ -240,28 +240,5 @@ tasks.whenTaskAdded {
     }
 }
 
-// Copy APKs to /builds directory after building
-android.applicationVariants.all {
-    val variant = this
-    val variantName = variant.name
-
-    // Single output directory
-    val outputDir = file("${rootProject.projectDir}/builds")
-
-    // Create task to copy APK to custom location
-    val variantNameCapitalized = variantName.replaceFirstChar { it.uppercase() }
-    val copyTask = tasks.register("copy${variantNameCapitalized}Apk", Copy::class.java) {
-        group = "build"
-        description = "Copy ${variantName} APK to ${outputDir.path}"
-
-        from(variant.outputs.map { it.outputFile })
-        into(outputDir)
-
-        dependsOn(variant.assembleProvider)
-    }
-
-    // Make assemble task depend on copy task
-    tasks.named("assemble${variantNameCapitalized}").configure {
-        finalizedBy(copyTask)
-    }
-}
+// APK output is handled by the global init script at
+// ~/.gradle/init.d/apk-drop.gradle, which drops to /storage/emulated/0/builds/.
