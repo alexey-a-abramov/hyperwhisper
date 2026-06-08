@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
 import com.hyperwhisper.data.KeyboardLayout
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.VoiceMode
@@ -41,7 +40,8 @@ fun LayoutSelectorDialog(
 ) {
     // IMEs cannot host real Android Dialogs (BadTokenException — token null).
     // Render as a full-screen Surface overlay inside the IME composition instead.
-    BackHandler(onBack = onDismiss)
+    // No BackHandler — IMEs don't provide an OnBackPressedDispatcherOwner, so
+    // calling it crashes (IllegalStateException); dismiss via the Close button.
     Surface(
         modifier = Modifier
             .fillMaxSize()

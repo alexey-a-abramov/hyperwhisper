@@ -189,6 +189,9 @@ fun KeyboardLayout.localizedDisplayName(): String {
         KeyboardLayout.FRENCH -> s.keyboardLayoutFrench
         KeyboardLayout.GERMAN -> s.keyboardLayoutGerman
         KeyboardLayout.ARABIC -> s.keyboardLayoutArabic
+        // Localities added with the international-keyboard rollout fall back to
+        // their native name (no per-string translation entry yet).
+        else -> nativeName
     }
 }
 

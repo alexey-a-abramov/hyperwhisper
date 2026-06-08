@@ -27,9 +27,24 @@ class UsageStatisticsRepositoryTest {
 
     @get:Rule val tmp = TemporaryFolder()
 
+    // Cancellable per-test scope; cancelled in tearDown so DataStore's
+    // background coroutine can't outlive the TemporaryFolder and throw async
+    // (the source of flaky UncaughtExceptionsBeforeTest landing on later tests).
+    private val dsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @org.junit.After fun tearDown() {
+        // cancel AND join — the DataStore IO coroutine must finish before the
+        // TemporaryFolder is deleted, or it errors async onto a later test.
+        kotlinx.coroutines.runBlocking {
+            val job = dsScope.coroutineContext[kotlinx.coroutines.Job]
+            job?.cancel()
+            job?.join()
+        }
+    }
+
     private fun store(name: String): DataStore<Preferences> =
         PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            scope = dsScope,
             produceFile = { File(tmp.root, "$name.preferences_pb") },
         )
 

@@ -125,6 +125,13 @@ android {
             // returns so JVM unit tests can exercise repository code without
             // Robolectric. Production code still uses the real Log on device.
             isReturnDefaultValues = true
+            // Fork a fresh JVM per test class. The DataStore-backed repository
+            // tests run DataStore on Dispatchers.IO under runTest's virtual
+            // time; under full-suite load their write→read can race and a
+            // finished test's IO coroutine can bleed into the next class. Each
+            // class passes in isolation, so per-class forking keeps the whole
+            // suite deterministic.
+            all { it.forkEvery = 1 }
         }
     }
 }

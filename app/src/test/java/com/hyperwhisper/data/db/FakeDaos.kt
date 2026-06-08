@@ -82,6 +82,20 @@ class FakeApiCallLogDao : ApiCallLogDao {
     }
 
     override suspend fun count(): Int = rows.value.size
+
+    override suspend fun recentSuccessfulFor(
+        provider: String,
+        modelId: String,
+        requestType: String,
+        limit: Int,
+    ): List<ApiCallLogEntity> =
+        rows.value
+            .filter {
+                it.provider == provider && it.modelId == modelId &&
+                    it.requestType == requestType && it.success && it.inputSize > 0
+            }
+            .sortedByDescending { it.timestamp }
+            .take(limit)
 }
 
 class FakeUsageStatsDao : UsageStatsDao {

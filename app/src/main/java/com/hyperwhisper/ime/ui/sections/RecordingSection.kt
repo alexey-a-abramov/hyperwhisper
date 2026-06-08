@@ -41,7 +41,8 @@ import com.hyperwhisper.ui.indicators.RecordingTimer
 
 /**
  * Recording section - the main interactive area.
- * Left: Cancel button (during recording) or empty when idle.
+ * Left: stacked Esc/Tab (when [onEsc]/[onTab] supplied) or empty. During
+ *       recording the Cancel button overlays this slot.
  * Center: Microphone button + Timer.
  * Right: Backspace — sits between the Output language chip above and the
  * Enter button below, so the right column reads Out → Backspace → Enter
@@ -80,24 +81,58 @@ fun RecordingSection(
      * other caller untouched.
      */
     showBackspace: Boolean = true,
+    /**
+     * Esc/Tab callbacks. When both are supplied, stacked Esc-above-Tab keys
+     * are rendered in the left slot — including during recording, so the
+     * keys never disappear mid-dictation. The Cancel button instead overlays
+     * the left edge of the mic area during recording.
+     */
+    onEsc: (() -> Unit)? = null,
+    onTab: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
+    val showStackedEscTab = onEsc != null && onTab != null
+    val isRecording = recordingState == RecordingState.RECORDING
 
-    // Main Row: Cancel/Info (left) + Mic + Timer (center) + Enter (right)
+    // Main Row: Esc/Tab (left, always) + Mic + cancel overlay (center) + Backspace (right, optional)
     Row(
         modifier = modifier.fillMaxWidth().fillMaxHeight(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Far left: Cancel button during recording
+        // Far left: stacked Esc/Tab when callbacks supplied. Cancel does NOT
+        // replace these — it lives inside the mic Box as a left-aligned
+        // overlay during recording, so muscle memory for Esc/Tab is preserved.
         Box(
-            modifier = Modifier.width(60.dp).fillMaxHeight(),
+            modifier = Modifier.width(66.dp).fillMaxHeight(),
             contentAlignment = Alignment.CenterStart
         ) {
-            when (recordingState) {
-                RecordingState.RECORDING -> {
-                    // Show cancel button during recording
+            when {
+                showStackedEscTab -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(
+                            6.dp, alignment = Alignment.CenterVertically
+                        ),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        DictationActionChip(
+                            label = "Esc",
+                            onClick = onEsc!!,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        )
+                        DictationActionChip(
+                            label = "Tab",
+                            onClick = onTab!!,
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        )
+                    }
+                }
+                isRecording -> {
+                    // Fallback for callers that don't supply Esc/Tab — the
+                    // slot is theirs again so a wide Cancel button is still
+                    // reachable.
                     OutlinedButton(
                         onClick = onCancelRecording,
                         modifier = Modifier.fillMaxWidth().height(42.dp),
@@ -123,16 +158,42 @@ fun RecordingSection(
                     }
                 }
                 else -> {
-                    // Empty space when not recording
+                    // Empty when no Esc/Tab handlers and not recording.
                 }
             }
         }
 
-        // Center: Microphone Button + Timer
+        // Center: Microphone Button + (during recording) Cancel overlay left
+        // of mic. Box stacks them so the mic stays geometrically centered
+        // while Cancel hugs the left edge of the box.
         Box(
             modifier = Modifier.weight(1f).fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
+            if (isRecording && showStackedEscTab) {
+                OutlinedButton(
+                    onClick = onCancelRecording,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = strings.cancelDesc,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        strings.cancel.uppercase(),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

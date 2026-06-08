@@ -5,6 +5,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.data.*
+import com.hyperwhisper.data.config.ConfigPatchApplier
+import com.hyperwhisper.data.config.ConfigPatchParser
+import com.hyperwhisper.data.config.ConfigSnapshotProvider
+import com.hyperwhisper.data.config.PendingConfigPatch
+import com.hyperwhisper.localization.stringsFor
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.flow.*
@@ -20,7 +25,8 @@ import java.io.File
 class TranscriptionViewModel(
     private val context: Context,
     private val voiceRepository: VoiceRepository,
-    private val voiceCommandProcessor: VoiceCommandProcessor,
+    private val configSnapshotProvider: ConfigSnapshotProvider,
+    private val configPatchApplier: ConfigPatchApplier,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
@@ -48,9 +54,10 @@ class TranscriptionViewModel(
     private val _processingPhase = MutableStateFlow(ProcessingPhase.IDLE)
     val processingPhase: StateFlow<ProcessingPhase> = _processingPhase.asStateFlow()
 
-    // Pending configuration command for confirmation dialog
-    private val _pendingCommandResult = MutableStateFlow<VoiceCommandResult?>(null)
-    val pendingCommandResult: StateFlow<VoiceCommandResult?> = _pendingCommandResult.asStateFlow()
+    // Pending configuration patch awaiting user confirmation in the diff sheet.
+    // Nothing is persisted until confirmPendingPatch().
+    private val _pendingConfigPatch = MutableStateFlow<PendingConfigPatch?>(null)
+    val pendingConfigPatch: StateFlow<PendingConfigPatch?> = _pendingConfigPatch.asStateFlow()
 
     // Audio file info for progress display
     private val _lastAudioFileSize = MutableStateFlow<Long>(0L)
@@ -168,8 +175,8 @@ class TranscriptionViewModel(
 
                             // Check if in configuration mode
                             if (mode.id == "configuration") {
-                                // Process as configuration command
-                                processConfigurationCommand(result.data)
+                                // Parse LLM output into a pending config patch
+                                processConfigurationResult(result.data)
                                 // Don't set transcribed text for configuration commands
                             } else {
                                 // Normal transcription mode
@@ -224,27 +231,33 @@ class TranscriptionViewModel(
     }
 
     /**
-     * Process configuration command from transcription result
+     * Parse configuration-mode LLM output into a pending patch. Nothing is
+     * applied here — the diff sheet shows the changes and the user confirms
+     * via [confirmPendingPatch].
      */
-    private suspend fun processConfigurationCommand(commandJson: String) {
+    private suspend fun processConfigurationResult(llmOutput: String) {
         try {
-            val commandResult = voiceCommandProcessor.executeCommand(
-                commandJson,
-                viewModelScope
-            )
+            val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
+            val snapshot = configSnapshotProvider.current()
+            val patch = ConfigPatchParser.parseLlmOutput(llmOutput, snapshot)
 
-            if (commandResult.success) {
-                // Show pending command for user confirmation
-                _pendingCommandResult.value = commandResult
-                Log.d(TAG, "Configuration command pending: ${commandResult.message}")
-                TraceLogger.trace("TranscriptionViewModel", "Configuration pending: ${commandResult.message}")
-            } else {
-                // Show error directly
-                _errorMessage.value = commandResult.message
+            when {
+                patch == null || patch.isEmpty -> {
+                    Log.w(TAG, "Configuration result had no recognizable changes: ${llmOutput.take(200)}")
+                    _errorMessage.value = strings.configNoChangesRecognized
+                }
+                else -> {
+                    _pendingConfigPatch.value = patch
+                    Log.d(TAG, "Configuration patch pending: ${patch.valid.size} change(s), ${patch.errors.size} error(s)")
+                    TraceLogger.trace(
+                        "TranscriptionViewModel",
+                        "Configuration pending: ${patch.valid.joinToString { "${it.field.path}=${it.newDisplay}" }}"
+                    )
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing configuration command", e)
-            TraceLogger.error("TranscriptionViewModel", "Configuration command error", e)
+            Log.e(TAG, "Error processing configuration result", e)
+            TraceLogger.error("TranscriptionViewModel", "Configuration result error", e)
             _errorMessage.value = "Configuration error: ${e.message}"
         }
     }
@@ -348,26 +361,30 @@ class TranscriptionViewModel(
     }
 
     /**
-     * Confirm and apply pending configuration command
+     * Apply the pending configuration patch. This is the ONLY place voice
+     * configuration changes get persisted.
      */
-    fun confirmPendingCommand() {
+    fun confirmPendingPatch() {
         viewModelScope.launch {
-            val pending = _pendingCommandResult.value
-            if (pending != null && pending.success) {
-                // Show notification
-                voiceCommandProcessor.showNotification(pending)
-                Log.d(TAG, "Configuration command confirmed: ${pending.message}")
+            val pending = _pendingConfigPatch.value ?: return@launch
+            val result = configPatchApplier.apply(pending)
+            if (result.success) {
+                Log.d(TAG, "Configuration patch applied: ${result.appliedCount} change(s)")
+                TraceLogger.trace("TranscriptionViewModel", "Configuration applied: ${result.appliedCount} change(s)")
+            } else {
+                val strings = stringsFor(settingsRepository.appearanceSettings.first().uiLanguage)
+                _errorMessage.value = result.errorMessage?.let { "${strings.configApplyFailed}: $it" }
+                    ?: strings.configApplyFailed
             }
-            // Clear pending command
-            _pendingCommandResult.value = null
+            _pendingConfigPatch.value = null
         }
     }
 
     /**
-     * Reject pending configuration command
+     * Discard the pending configuration patch without applying anything.
      */
-    fun rejectPendingCommand() {
-        Log.d(TAG, "Configuration command rejected")
-        _pendingCommandResult.value = null
+    fun rejectPendingPatch() {
+        Log.d(TAG, "Configuration patch rejected")
+        _pendingConfigPatch.value = null
     }
 }

@@ -283,6 +283,24 @@ object EnglishStrings : Strings {
     override val advancedExportSecretsTitle = "Export secrets to clipboard"
     override val advancedExportSecretsDescription = "Copies all provider keys & endpoints as JSON"
 
+    // Configuration export/import + voice configuration mode
+    override val share = "Share"
+    override val advancedExportConfigTitle = "Export configuration"
+    override val advancedExportConfigDescription = "All settings as commented JSON (no API keys)"
+    override val advancedImportConfigTitle = "Import configuration"
+    override val advancedImportConfigDescription = "Paste a config JSON and review changes before applying"
+    override val configCopiedToast = "Configuration copied to clipboard"
+    override val configImportPasteHint = "Paste configuration JSON here…"
+    override val configImportPreview = "Preview changes"
+    override val configImportParseError = "Could not parse — paste a valid configuration JSON"
+    override val configImportNoDifferences = "No differences from current settings"
+    override val configImportAppliedToast = "Configuration applied"
+    override val configChangesTitle = "Configuration changes"
+    override val configApplyChanges = "Apply"
+    override val configChangesInvalidHeader = "Not applied (invalid):"
+    override val configNoChangesRecognized = "No settings changes recognized — try rephrasing"
+    override val configApplyFailed = "Failed to apply configuration changes"
+
     // Appearance section
     override val appearanceSectionColorHeader = "Color"
     override val appearanceDynamicColorTitle = "Dynamic color"
@@ -603,7 +621,7 @@ object EnglishStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
-    override val keyboardModeAgentMacros = "Macros"
+    override val keyboardModeAgentMacros = "Text Snippets"
     override val keyboardModeSpecialChars = "Symbols"
     override val keyboardModeSystemKeys = "System Keys"
     override val keyboardModeVibeCoding = "Vibe Coding"

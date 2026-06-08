@@ -10,7 +10,16 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DataObject
+import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +41,7 @@ import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.overlays.ConfigInfoDialog
-import com.hyperwhisper.ui.overlays.ConfigurationConfirmationDialog
+import com.hyperwhisper.ui.overlays.ConfigPatchConfirmationOverlay
 import com.hyperwhisper.ui.overlays.ErrorOverlay
 import com.hyperwhisper.ui.panels.ReprocessSettingsDialog
 import com.hyperwhisper.ui.panels.TranscriptionHistoryPanel
@@ -57,6 +66,24 @@ internal val KeyboardKeyTextColor = Color(0xFF000000)
 internal val KeyboardSpaceColor = Color(0xFFFFEB3B)
 internal val KeyboardBackspaceColor = Color(0xFFD32F2F)
 internal val KeyboardEnterColor = Color(0xFF00C853)
+
+/**
+ * Pictogram for each preset-pickable layout. Used in the preset picker
+ * dropdown so users can scan modes visually rather than reading every label.
+ * Returns null for modes that don't appear in the picker (Voice, Text — they
+ * have dedicated chips).
+ */
+internal fun KeyboardInputMode.pickerIcon(): ImageVector? = when (this) {
+    KeyboardInputMode.CODE -> Icons.Default.Code
+    KeyboardInputMode.EMOJI -> Icons.Default.EmojiEmotions
+    KeyboardInputMode.AGENT_CLAUDE_CODE -> Icons.Default.SmartToy
+    KeyboardInputMode.AGENT_OPENCODE -> Icons.Default.DataObject
+    KeyboardInputMode.AGENT_GEMINI -> Icons.Default.AutoAwesome
+    KeyboardInputMode.AGENT_CODEX -> Icons.Default.Bolt
+    KeyboardInputMode.AGENT_MACROS -> Icons.Default.TextSnippet
+    KeyboardInputMode.EXPERIMENTAL_TERMINAL -> Icons.Default.Terminal
+    else -> null
+}
 
 @Composable
 fun KeyboardScreen(
@@ -101,8 +128,9 @@ fun KeyboardScreen(
     val recentlyUsedLanguages by viewModel.recentlyUsedLanguages.collectAsState()
     val recentlyUsedProviderModels by viewModel.recentlyUsedProviderModels.collectAsState()
     val configuredProviders by viewModel.configuredProviders.collectAsState()
+    val localWhisperModels by viewModel.localWhisperModels.collectAsState()
     val usageStatistics by viewModel.usageStatistics.collectAsState()
-    val pendingCommandResult by viewModel.pendingCommandResult.collectAsState()
+    val pendingConfigPatch by viewModel.pendingConfigPatch.collectAsState()
     val lastAudioFileSize by viewModel.lastAudioFileSize.collectAsState()
     val lastAudioDuration by viewModel.lastAudioDuration.collectAsState()
     val walkieTalkieMode by viewModel.walkieTalkieMode.collectAsState()
@@ -130,6 +158,8 @@ fun KeyboardScreen(
     var currentKeyboardLayout by remember { mutableStateOf(appearanceSettings.currentKeyboardLayout) }
     var emojiSearchQuery by remember { mutableStateOf("") }
     var showLayoutSelector by remember { mutableStateOf(false) }
+    // Full locality list, opened by long-pressing the dictation locality key.
+    var showLocalitySheet by remember { mutableStateOf(false) }
     var showEnterActionSelector by remember { mutableStateOf(false) }
     // Picker for the third "configurable preset" slot in the top strip.
     var showPresetPicker by remember { mutableStateOf(false) }
@@ -203,6 +233,43 @@ fun KeyboardScreen(
 
     val handleEnterLongPress = {
         showEnterActionSelector = true
+    }
+
+    // Locality = unified keyboard language: applying one flips the typing
+    // layout AND points speech input at that language in a single step.
+    val applyLocality: (com.hyperwhisper.data.KeyboardLayout) -> Unit = { layout ->
+        currentKeyboardLayout = layout
+        viewModel.updateKeyboardLayout(
+            appearanceSettings.copy(
+                currentKeyboardLayout = layout,
+                // Picking a locality also adds it to the tap-cycle, so the
+                // long-press list doubles as the enable manager.
+                enabledKeyboardLayouts = appearanceSettings.enabledKeyboardLayouts + layout
+            )
+        )
+        viewModel.setInputLanguage(layout.inputLanguageCode)
+    }
+
+    // Tap on the locality key → advance to the next enabled locality. Cycle
+    // logic lives in the pure (unit-tested) LocalitySelection helper.
+    val onCycleLocality = {
+        applyLocality(
+            com.hyperwhisper.data.LocalitySelection.next(
+                currentKeyboardLayout, appearanceSettings.enabledKeyboardLayouts
+            )
+        )
+    }
+
+    // Checkbox in the locality list → add/remove from the tap-cycle without
+    // changing the active locality. Never lets the set go empty.
+    val onToggleLocalityEnabled: (com.hyperwhisper.data.KeyboardLayout) -> Unit = { layout ->
+        viewModel.updateKeyboardLayout(
+            appearanceSettings.copy(
+                enabledKeyboardLayouts = com.hyperwhisper.data.LocalitySelection.toggleEnabled(
+                    appearanceSettings.enabledKeyboardLayouts, layout
+                )
+            )
+        )
     }
 
     // Auto-commit transcribed text
@@ -368,7 +435,6 @@ fun KeyboardScreen(
                     presetMode = appearanceSettings.presetKeyboardMode,
                     onSelectMode = { keyboardInputMode = it; modeChangeToast = it },
                     onPresetLongPress = { showPresetPicker = true },
-                    onBackspace = onDelete,
                     onSettings = {
                         val intent = android.content.Intent(
                             context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
@@ -376,56 +442,12 @@ fun KeyboardScreen(
                         context.startActivity(intent)
                     }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Language & Model Info Row (only in dictation mode)
-                LanguageModelRow(
-                    apiSettings = apiSettings,
-                    recordingState = recordingState,
-                    techieModeEnabled = appearanceSettings.techieModeEnabled,
-                    voiceModes = voiceModes,
-                    selectedModeId = selectedModeId,
-                    onShowInputLanguageDialog = { showInputLanguageDialog = true },
-                    onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
-                    onShowConfigInfo = { showConfigInfo = true },
-                    onShowProviderModelDialog = { showProviderModelDialog = true },
-                    onShowModeDialog = { showModeDialog = true },
-                    onShowLlmModelDialog = { showLlmModelDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Esc + Tab — a row of two medium chips between the
-                // language/model row and the mic. Left-aligned so they sit
-                // under the Voice mode chip (top-left of the header).
-                // Backspace lives in the header column on the right, not
-                // here — the right side stays clear so the mic has room to
-                // breathe below.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = KeyboardMetrics.OuterPadding),
-                    horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.TopStripKeyGap)
-                ) {
-                    com.hyperwhisper.ui.sections.DictationActionChip(
-                        label = "Esc",
-                        onClick = onEscape,
-                        modifier = Modifier.width(KeyboardMetrics.ModeChipWidth)
-                    )
-                    com.hyperwhisper.ui.sections.DictationActionChip(
-                        label = "Tab",
-                        onClick = onTab,
-                        modifier = Modifier.width(KeyboardMetrics.ModeChipWidth)
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Recording row — mic centered in the remaining space above
-                // the bottom bar. Backspace is hidden because the header
-                // already owns it (top-right column).
+                // Recording row — mic centered with Esc/Tab stacked on the
+                // left. Sits directly under the header so the mic is high on
+                // the surface and easy to reach. Backspace is hidden because
+                // the bottom action row owns it.
                 RecordingSection(
                     recordingState = recordingState,
                     recordingDuration = recordingDuration,
@@ -451,19 +473,47 @@ fun KeyboardScreen(
                     onDelete = onDelete,
                     onDeleteAll = onDeleteAll,
                     showBackspace = false,
+                    onEsc = onEscape,
+                    onTab = onTab,
                     modifier = Modifier.weight(1f)
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Language & Model Info Row — sits just above the bottom
+                // action row so input/model chips are close to the SPACE bar.
+                LanguageModelRow(
+                    apiSettings = apiSettings,
+                    recordingState = recordingState,
+                    techieModeEnabled = appearanceSettings.techieModeEnabled,
+                    voiceModes = voiceModes,
+                    selectedModeId = selectedModeId,
+                    onShowInputLanguageDialog = { showInputLanguageDialog = true },
+                    onShowOutputLanguageDialog = { showOutputLanguageDialog = true },
+                    onShowConfigInfo = { showConfigInfo = true },
+                    onShowProviderModelDialog = {
+                        viewModel.refreshLocalWhisperModels()
+                        showProviderModelDialog = true
+                    },
+                    onShowModeDialog = { showModeDialog = true },
+                    onShowLlmModelDialog = { showLlmModelDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 BottomActionsRow(
                     lastTranscribedText = lastTranscribedText,
                     transcriptionHistory = transcriptionHistory,
                     enableHistoryPanel = appearanceSettings.enableHistoryPanel,
-                    onPasteText = onTextCommit,
+                    localityCode = currentKeyboardLayout.code,
+                    onCommitText = onTextCommit,
                     onShowHistory = { showHistoryPanel = true },
+                    onCycleLocality = onCycleLocality,
+                    onShowLocalityList = { showLocalitySheet = true },
                     onSpace = handleSpacePress,
-                    onEnter = onEnter
+                    onEnter = onEnter,
+                    onDelete = onDelete
                 )
             } else if (keyboardInputMode.isAgent) {
                 topStrip()
@@ -573,6 +623,9 @@ fun KeyboardScreen(
                     onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
                     onStartRecording = { viewModel.startRecording() },
                     onStopRecording = { viewModel.stopRecording() },
+                    localityCode = currentKeyboardLayout.code,
+                    onCycleLocality = onCycleLocality,
+                    onShowLocalityList = { showLocalitySheet = true },
                     modifierState = codeModifierState,
                     onToggleCtrl = { viewModel.modifierKeyState.toggleCtrl() },
                     onToggleAlt = { viewModel.modifierKeyState.toggleAlt() },
@@ -586,6 +639,7 @@ fun KeyboardScreen(
         }
         }
 
+
         // Show Error Overlay when there's an error (as overlay within keyboard)
         errorMessage?.let { error ->
             ErrorOverlay(
@@ -595,19 +649,19 @@ fun KeyboardScreen(
                 providerName = apiSettings.provider.displayName,
                 onSwitchProvider = {
                     viewModel.clearError()
+                    viewModel.refreshLocalWhisperModels()
                     showProviderModelDialog = true
                 },
             )
         }
 
-        // Show Configuration Command Confirmation Dialog
-        pendingCommandResult?.let { result ->
-            ConfigurationConfirmationDialog(
-                settingChanged = result.settingChanged,
-                newValue = result.newValue,
-                message = result.message,
-                onConfirm = { viewModel.confirmPendingCommand() },
-                onDismiss = { viewModel.rejectPendingCommand() }
+        // Show Configuration Patch Confirmation diff sheet — nothing is
+        // persisted until the user taps Apply.
+        pendingConfigPatch?.let { patch ->
+            ConfigPatchConfirmationOverlay(
+                patch = patch,
+                onApply = { viewModel.confirmPendingPatch() },
+                onCancel = { viewModel.rejectPendingPatch() }
             )
         }
 
@@ -667,6 +721,12 @@ fun KeyboardScreen(
                 configuredProviders = configuredProviders,
                 recentSelections = recentlyUsedProviderModels,
                 lastTestedAt = apiSettings.lastTestedAt,
+                localWhisperModels = localWhisperModels,
+                currentLocalWhisperPath = apiSettings.localModelSettings.whisperModelPath,
+                onLocalWhisperModelSelected = { path ->
+                    viewModel.setActiveLocalWhisperModel(path)
+                    showProviderModelDialog = false
+                },
                 onProviderModelSelected = { provider, modelId ->
                     viewModel.setProviderAndModel(provider, modelId)
                     showProviderModelDialog = false
@@ -719,6 +779,17 @@ fun KeyboardScreen(
                     showModeDialog = true
                 },
                 onDismiss = { showLayoutSelector = false }
+            )
+        }
+
+        // Full locality list (long-press the dictation locality key).
+        if (showLocalitySheet) {
+            com.hyperwhisper.ui.sections.LocalitySelectorSheet(
+                currentLayout = currentKeyboardLayout,
+                enabledLayouts = appearanceSettings.enabledKeyboardLayouts,
+                onLocalitySelected = { applyLocality(it) },
+                onToggleEnabled = { onToggleLocalityEnabled(it) },
+                onDismiss = { showLocalitySheet = false }
             )
         }
 
@@ -882,6 +953,18 @@ fun KeyboardScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                 } else {
                                     Spacer(modifier = Modifier.width(22.dp))
+                                }
+                                mode.pickerIcon()?.let { icon ->
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = if (isCurrent)
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
                                 }
                                 Text(
                                     text = mode.localizedDisplayName(),

@@ -22,17 +22,25 @@ class LocalLlmRouter @Inject constructor(
 ) {
     companion object {
         private const val TAG = "LocalLlmRouter"
+
+        /**
+         * Pure engine selection by model-file extension. On the companion so it
+         * can be unit-tested without constructing the native engines (which
+         * load `.so` libraries at init and can't run in a JVM unit test).
+         */
+        fun engineFor(modelPath: String): Engine {
+            val lower = modelPath.lowercase()
+            return when {
+                lower.endsWith(".gguf") -> Engine.LLAMA_CPP
+                else -> Engine.GEMMA
+            }
+        }
     }
 
     enum class Engine { GEMMA, LLAMA_CPP }
 
-    fun engineFor(modelPath: String): Engine {
-        val lower = modelPath.lowercase()
-        return when {
-            lower.endsWith(".gguf") -> Engine.LLAMA_CPP
-            else -> Engine.GEMMA
-        }
-    }
+    /** Instance delegate — see [Companion.engineFor]. */
+    fun engineFor(modelPath: String): Engine = Companion.engineFor(modelPath)
 
     suspend fun rewrite(
         modelPath: String,

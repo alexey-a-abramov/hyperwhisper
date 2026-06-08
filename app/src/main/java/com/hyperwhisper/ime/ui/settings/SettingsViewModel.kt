@@ -50,7 +50,9 @@ class SettingsViewModel @Inject constructor(
     private val whisperDownloader: WhisperModelDownloader,
     private val gemmaDownloader: com.hyperwhisper.data.GemmaModelDownloader,
     private val connectionTester: ConnectionTester,
-    private val openRouterDiscoveryService: OpenRouterDiscoveryService
+    private val openRouterDiscoveryService: OpenRouterDiscoveryService,
+    private val configSnapshotProvider: com.hyperwhisper.data.config.ConfigSnapshotProvider,
+    private val configPatchApplier: com.hyperwhisper.data.config.ConfigPatchApplier
 ) : ViewModel() {
 
     companion object {
@@ -455,6 +457,42 @@ class SettingsViewModel @Inject constructor(
         )
         return GsonBuilder().setPrettyPrinting().create().toJson(payload)
     }
+
+    // ============================================================================
+    // Configuration export / import (JSONC, secrets always redacted)
+    // ============================================================================
+
+    /**
+     * Render the full configuration as a commented JSONC document. API keys
+     * are never included (the snapshot is scrubbed at construction).
+     */
+    suspend fun buildConfigExportJsonc(): String {
+        val snapshot = configSnapshotProvider.current()
+        return com.hyperwhisper.data.config.JsoncWriter.write(
+            snapshot,
+            com.hyperwhisper.data.config.ConfigSchema.fields(snapshot),
+            headerLines = listOf(
+                "HyperWhisper configuration export.",
+                "Comments document each setting's meaning and allowed values.",
+                "API keys are never exported; configure them in Settings.",
+            ),
+        )
+    }
+
+    /**
+     * Parse a pasted JSON/JSONC config document and diff it against the
+     * current settings. Returns null when the text contains no parseable
+     * JSON object.
+     */
+    suspend fun parseConfigImport(text: String): com.hyperwhisper.data.config.PendingConfigPatch? {
+        val snapshot = configSnapshotProvider.current()
+        return com.hyperwhisper.data.config.ConfigPatchParser.parseImport(text, snapshot)
+    }
+
+    /** Persist a confirmed import patch. */
+    suspend fun applyConfigPatch(
+        patch: com.hyperwhisper.data.config.PendingConfigPatch,
+    ): com.hyperwhisper.data.config.ApplyResult = configPatchApplier.apply(patch)
 
     /** Forwards to [OpenRouterDiscoveryService.refreshOpenRouterModels]. */
     fun refreshOpenRouterModels() {

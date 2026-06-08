@@ -36,10 +36,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ApiProvider
+import com.hyperwhisper.data.LocalModelInfo
 import com.hyperwhisper.data.ProviderModelSelection
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.util.formatTestedAgo
 import com.hyperwhisper.ui.util.localizedDisplayName
+
+/** One selectable model row: a label, whether it's the active model, and the
+ *  action that commits it (a cloud model id, or a local Whisper file path). */
+private data class ModelChoice(
+    val label: String,
+    val isActive: Boolean,
+    val onPick: () -> Unit,
+)
 
 /**
  * Transcription provider + model picker for the IME.
@@ -60,6 +69,11 @@ fun ProviderModelSelectorDialog(
     configuredProviders: List<ApiProvider>,
     recentSelections: List<ProviderModelSelection>,
     lastTestedAt: Map<ApiProvider, Long> = emptyMap(),
+    // Local Whisper is selected by file path (whisperModelPath), not a cloud
+    // model id — so its rows come from discovered files and a dedicated setter.
+    localWhisperModels: List<LocalModelInfo> = emptyList(),
+    currentLocalWhisperPath: String = "",
+    onLocalWhisperModelSelected: (String) -> Unit = {},
     onProviderModelSelected: (ApiProvider, String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -127,21 +141,56 @@ fun ProviderModelSelectorDialog(
                 items(orderedProviders) { provider ->
                     val isCurrent = provider == currentProvider
                     val isExpanded = provider == expandedProvider
-                    // Pick the model to surface in the collapsed row: the
-                    // current setting if this is the active provider, else
-                    // the most-recently used pair for this provider, else
-                    // its first default.
-                    val suggestedModel = if (isCurrent) {
+                    // Models offered for this provider. Beyond the static
+                    // defaults we fold in the user's CURRENT model (when this
+                    // is the active provider) and any recently-used models for
+                    // it — both possibly custom/discovered ids configured in
+                    // Settings. Without this the list is defaults-only, so
+                    // tapping here silently downgraded a custom model to a
+                    // default (the "I pick it but it reverts" report).
+                    val isLocal = provider == ApiProvider.LOCAL_WHISPER
+                    val providerModels = remember(provider, isCurrent, currentModelId, recentSelections) {
+                        (provider.defaultModels +
+                            recentSelections.filter { it.provider == provider }.map { it.modelId } +
+                            listOfNotNull(currentModelId.takeIf { isCurrent && it.isNotBlank() }))
+                            .filter { it.isNotBlank() }
+                            .distinct()
+                    }
+                    // Selectable rows. Local Whisper is path-based — its rows
+                    // come from discovered files and set whisperModelPath;
+                    // every other provider uses its model-id list.
+                    val choices: List<ModelChoice> = if (isLocal) {
+                        localWhisperModels.map { info ->
+                            ModelChoice(info.name, info.path == currentLocalWhisperPath) {
+                                onLocalWhisperModelSelected(info.path)
+                            }
+                        }
+                    } else {
+                        providerModels.map { model ->
+                            ModelChoice(model, isCurrent && model == currentModelId) {
+                                onProviderModelSelected(provider, model)
+                            }
+                        }
+                    }
+                    // Collapsed-row subtitle: for local, the active file name;
+                    // otherwise the current/recent/first model id.
+                    val suggestedModel = if (isLocal) {
+                        (if (isCurrent) currentLocalWhisperPath.substringAfterLast('/') else "")
+                            .ifBlank { choices.firstOrNull()?.label.orEmpty() }
+                    } else if (isCurrent) {
                         currentModelId
                     } else {
                         recentSelections.firstOrNull { it.provider == provider }?.modelId
-                            ?: provider.defaultModels.firstOrNull().orEmpty()
+                            ?: providerModels.firstOrNull().orEmpty()
                     }
-                    val hasMultiple = provider.defaultModels.size > 1
+                    val hasMultiple = choices.size > 1
                     Surface(
                         onClick = {
                             if (hasMultiple) {
                                 expandedProvider = if (isExpanded) null else provider
+                            } else if (isLocal) {
+                                // Single discovered file commits on tap.
+                                choices.firstOrNull()?.onPick?.invoke()
                             } else {
                                 // Single-model providers commit on tap — no
                                 // point making the user open a list of one.
@@ -218,12 +267,10 @@ fun ProviderModelSelectorDialog(
                                         .padding(start = 12.dp, end = 8.dp, bottom = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
-                                    provider.defaultModels.forEach { model ->
-                                        val isCurrentModel = isCurrent && model == currentModelId
+                                    choices.forEach { choice ->
+                                        val isCurrentModel = choice.isActive
                                         Surface(
-                                            onClick = {
-                                                onProviderModelSelected(provider, model)
-                                            },
+                                            onClick = { choice.onPick() },
                                             modifier = Modifier.fillMaxWidth(),
                                             shape = RoundedCornerShape(6.dp),
                                             color = if (isCurrentModel)
@@ -247,7 +294,7 @@ fun ProviderModelSelectorDialog(
                                                     Spacer(Modifier.size(6.dp))
                                                 }
                                                 Text(
-                                                    text = model,
+                                                    text = choice.label,
                                                     fontSize = 12.sp,
                                                     fontFamily = FontFamily.Monospace,
                                                     color = if (isCurrentModel)

@@ -22,7 +22,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -31,18 +35,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ProcessingStage
 import com.hyperwhisper.ui.util.localizedDisplayName
+import kotlinx.coroutines.delay
 
 /**
  * Circular processing indicator for the post-record stage.
  *
  * Visual contract:
- * - Big enough circle (88dp) that the percentage / counter inside the ring
+ * - Big enough circle (88dp) that the seconds-left counter inside the ring
  *   is readable from a glance without leaning in.
  * - Animated wave glyph next to the counter, subtly pulsing — signals
  *   "actively working" so a stalled UI is distinguishable from an idle one.
- * - The counter is prefixed with "≈" and the stage line ends with "approx"
- *   so users don't read the percentage as a hard ETA. Transcription latency
- *   varies a lot with provider load; we avoid promising what we can't keep.
+ * - The counter shows "≈ Ns" (seconds remaining), extrapolated from how long
+ *   the indicator has been visible and the current progress fraction. The
+ *   "≈" wave-sign prefix and the "approx" stage suffix both reinforce that
+ *   the figure is a rough estimate, not a promise — provider latency varies.
  */
 @Composable
 fun ProcessingIndicator(
@@ -52,6 +58,28 @@ fun ProcessingIndicator(
     audioDurationSeconds: Double = 0.0,
     onCancel: () -> Unit = {}
 ) {
+    // Anchor: when this indicator first composes, record the start time.
+    // Used to extrapolate total inference duration from current progress.
+    val startTimeMs = remember { System.currentTimeMillis() }
+    // Ticker so the seconds-left figure stays fresh even if `progress`
+    // hasn't moved for a beat (network stall, GPU thrash, etc.).
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    // Below this fraction the extrapolation is too noisy to display —
+    // a 5%-progress reading 2s after start would predict 38s and bounce
+    // wildly each tick. Show a "…" placeholder until we have signal.
+    val secondsLeftText: String = if (progress != null && progress > 0.05f) {
+        val elapsedMs = (nowMs - startTimeMs).coerceAtLeast(1L)
+        val totalMs = (elapsedMs / progress.coerceAtMost(1f)).toLong()
+        val remainingMs = (totalMs - elapsedMs).coerceAtLeast(0L)
+        val secondsLeft = ((remainingMs + 500) / 1000).toInt()
+        "${secondsLeft}s"
+    } else "…"
     val fileSizeText = when {
         audioFileSize <= 0 -> ""
         audioFileSize < 1024 -> "${audioFileSize}B"
@@ -107,7 +135,7 @@ fun ProcessingIndicator(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "≈ ${(progress * 100).toInt()}%",
+                        text = "≈ $secondsLeftText",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary

@@ -283,6 +283,24 @@ object ArabicStrings : Strings {
     override val advancedExportSecretsTitle = "تصدير الأسرار إلى الحافظة"
     override val advancedExportSecretsDescription = "ينسخ جميع مفاتيح ونقاط نهاية المزودين بصيغة JSON"
 
+    // تصدير/استيراد الإعدادات + وضع الإعداد الصوتي
+    override val share = "مشاركة"
+    override val advancedExportConfigTitle = "تصدير الإعدادات"
+    override val advancedExportConfigDescription = "جميع الإعدادات بصيغة JSON مع تعليقات (بدون مفاتيح API)"
+    override val advancedImportConfigTitle = "استيراد الإعدادات"
+    override val advancedImportConfigDescription = "الصق JSON الإعدادات وراجع التغييرات قبل التطبيق"
+    override val configCopiedToast = "تم نسخ الإعدادات إلى الحافظة"
+    override val configImportPasteHint = "الصق JSON الإعدادات هنا…"
+    override val configImportPreview = "معاينة التغييرات"
+    override val configImportParseError = "تعذر التحليل — الصق JSON إعدادات صالحًا"
+    override val configImportNoDifferences = "لا توجد اختلافات عن الإعدادات الحالية"
+    override val configImportAppliedToast = "تم تطبيق الإعدادات"
+    override val configChangesTitle = "تغييرات الإعدادات"
+    override val configApplyChanges = "تطبيق"
+    override val configChangesInvalidHeader = "لم يُطبَّق (غير صالح):"
+    override val configNoChangesRecognized = "لم يتم التعرف على تغييرات في الإعدادات — حاول إعادة الصياغة"
+    override val configApplyFailed = "فشل تطبيق تغييرات الإعدادات"
+
     // Appearance section
     override val appearanceSectionColorHeader = "اللون"
     override val appearanceDynamicColorTitle = "اللون الديناميكي"
@@ -603,7 +621,7 @@ object ArabicStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
-    override val keyboardModeAgentMacros = "وحدات ماكرو"
+    override val keyboardModeAgentMacros = "مقاطع نصية"
     override val keyboardModeSpecialChars = "رموز"
     override val keyboardModeSystemKeys = "مفاتيح النظام"
     override val keyboardModeVibeCoding = "Vibe Coding"

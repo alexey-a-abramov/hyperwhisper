@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -44,6 +45,9 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.data.RecordingState
 import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.buttons.AccentKeyWithPopup
+import com.hyperwhisper.ui.buttons.AccentMap
+import com.hyperwhisper.ui.buttons.LocalityKey
 import com.hyperwhisper.ui.buttons.PeriodKeyWithPopup
 import com.hyperwhisper.ui.sections.PasteLastPill
 
@@ -88,6 +92,9 @@ internal fun TextKeyboardSectionNew(
     enableHistoryPanel: Boolean = false,
     onPasteText: (String) -> Unit = {},
     onShowHistory: () -> Unit = {},
+    localityCode: String = "",
+    onCycleLocality: () -> Unit = {},
+    onShowLocalityList: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -1023,6 +1030,20 @@ internal fun TextKeyboardSectionNew(
                                 row.forEach { key ->
                                     if (key.isEmpty()) {
                                         Spacer(modifier = Modifier.weight(1f))
+                                    } else if (!isSpecialChars && AccentMap.accentsFor(key).isNotEmpty()) {
+                                        // Letter with diacritic variants → hold for
+                                        // the Gboard-style accent popup (à á â ä …).
+                                        // Accents are pre-cased to match shift/caps.
+                                        AccentKeyWithPopup(
+                                            baseChar = letterCase(key),
+                                            accents = AccentMap.accentsFor(key).map { letterCase(it) },
+                                            onKeyPress = { out ->
+                                                onKeyPress(out)
+                                                if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
                                     } else {
                                         // Number-row long-press → shifted symbol.
                                         val altSymbol: String? = if (!isSpecialChars) when (key) {
@@ -1107,15 +1128,28 @@ internal fun TextKeyboardSectionNew(
                                     height = keyHeight
                                 )
                                 bottomRowKeys.forEach { key ->
-                                    KeyboardKeyButton(
-                                        label = letterCase(key),
-                                        onClick = {
-                                            onKeyPress(letterCase(key))
-                                            if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        height = keyHeight
-                                    )
+                                    if (AccentMap.accentsFor(key).isNotEmpty()) {
+                                        AccentKeyWithPopup(
+                                            baseChar = letterCase(key),
+                                            accents = AccentMap.accentsFor(key).map { letterCase(it) },
+                                            onKeyPress = { out ->
+                                                onKeyPress(out)
+                                                if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    } else {
+                                        KeyboardKeyButton(
+                                            label = letterCase(key),
+                                            onClick = {
+                                                onKeyPress(letterCase(key))
+                                                if (shiftEnabled && !capsLockEnabled) shiftEnabled = false
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            height = keyHeight
+                                        )
+                                    }
                                 }
                                 RepeatingActionButton(
                                     icon = Icons.Default.Backspace,
@@ -1148,11 +1182,21 @@ internal fun TextKeyboardSectionNew(
                                 onShowHistory = onShowHistory,
                                 weight = 2.0f,
                             )
-                            // Comma
+                            // Locality switcher — same control as the dictation
+                            // row so layout/language switching works while
+                            // typing too. Tap cycles, long-press lists.
+                            LocalityKey(
+                                code = localityCode,
+                                onClick = onCycleLocality,
+                                onLongClick = onShowLocalityList,
+                                modifier = Modifier.weight(0.7f).fillMaxHeight()
+                            )
+                            // Comma — fixed PunctKeyWidth so it matches the
+                            // dictation row's comma/period exactly.
                             KeyboardKeyButton(
                                 label = ",",
                                 onClick = { onKeyPress(",") },
-                                modifier = Modifier.weight(0.7f),
+                                modifier = Modifier.width(KeyboardMetrics.PunctKeyWidth),
                                 height = keyHeight
                             )
                             // Space bar (long-press for layout selector). Reduce
@@ -1167,10 +1211,11 @@ internal fun TextKeyboardSectionNew(
                                 height = keyHeight,
                                 longPressThreshold = 800L
                             )
-                            // Period — long-press shows Gboard-style char popup.
+                            // Period — shared hold-to-grid punctuation popup,
+                            // same component and width as the dictation row.
                             PeriodKeyWithPopup(
                                 onKeyPress = onKeyPress,
-                                modifier = Modifier.weight(0.7f),
+                                modifier = Modifier.width(KeyboardMetrics.PunctKeyWidth),
                                 height = keyHeight
                             )
                             // Enter/Return (long-press for action selector)

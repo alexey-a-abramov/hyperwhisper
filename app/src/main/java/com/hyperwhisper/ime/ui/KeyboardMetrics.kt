@@ -38,6 +38,10 @@ object KeyboardMetrics {
     /** Universal bottom bar — paste pill + space + enter. */
     val BottomBarHeight: Dp = BoardHeight * 0.1375f        // 44dp
 
+    /** Single-character punctuation key width (comma, period) — shared by the
+     *  dictation row and the QWERTY row so the two read identically. */
+    val PunctKeyWidth: Dp = BoardHeight * 0.1375f          // 44dp
+
     /** Padding around the typing-area surface, applied on all four sides. */
     val OuterPadding: Dp = BoardHeight * 0.0125f           // 4dp
 

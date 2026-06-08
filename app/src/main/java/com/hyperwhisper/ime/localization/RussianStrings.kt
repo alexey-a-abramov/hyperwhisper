@@ -283,6 +283,24 @@ object RussianStrings : Strings {
     override val advancedExportSecretsTitle = "Экспорт секретов в буфер обмена"
     override val advancedExportSecretsDescription = "Копирует все ключи и эндпоинты провайдеров в формате JSON"
 
+    // Экспорт/импорт конфигурации + голосовой режим настройки
+    override val share = "Поделиться"
+    override val advancedExportConfigTitle = "Экспорт конфигурации"
+    override val advancedExportConfigDescription = "Все настройки в виде JSON с комментариями (без API-ключей)"
+    override val advancedImportConfigTitle = "Импорт конфигурации"
+    override val advancedImportConfigDescription = "Вставьте JSON конфигурации и проверьте изменения перед применением"
+    override val configCopiedToast = "Конфигурация скопирована в буфер обмена"
+    override val configImportPasteHint = "Вставьте JSON конфигурации сюда…"
+    override val configImportPreview = "Просмотр изменений"
+    override val configImportParseError = "Не удалось разобрать — вставьте корректный JSON конфигурации"
+    override val configImportNoDifferences = "Нет отличий от текущих настроек"
+    override val configImportAppliedToast = "Конфигурация применена"
+    override val configChangesTitle = "Изменения конфигурации"
+    override val configApplyChanges = "Применить"
+    override val configChangesInvalidHeader = "Не применено (ошибки):"
+    override val configNoChangesRecognized = "Изменения настроек не распознаны — попробуйте сказать иначе"
+    override val configApplyFailed = "Не удалось применить изменения конфигурации"
+
     // Appearance section
     override val appearanceSectionColorHeader = "Цвет"
     override val appearanceDynamicColorTitle = "Динамические цвета"
@@ -603,7 +621,7 @@ object RussianStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
-    override val keyboardModeAgentMacros = "Макросы"
+    override val keyboardModeAgentMacros = "Текстовые сниппеты"
     override val keyboardModeSpecialChars = "Символы"
     override val keyboardModeSystemKeys = "Системные клавиши"
     override val keyboardModeVibeCoding = "Vibe Coding"

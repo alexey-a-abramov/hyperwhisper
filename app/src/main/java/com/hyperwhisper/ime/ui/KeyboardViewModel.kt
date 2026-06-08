@@ -26,7 +26,8 @@ import javax.inject.Inject
 class KeyboardViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val voiceRepository: VoiceRepository,
-    private val voiceCommandProcessor: VoiceCommandProcessor,
+    private val configSnapshotProvider: com.hyperwhisper.data.config.ConfigSnapshotProvider,
+    private val configPatchApplier: com.hyperwhisper.data.config.ConfigPatchApplier,
     private val settingsRepository: SettingsRepository,
     private val soundManager: SoundManager,
     private val audioRecorderManager: AudioRecorderManager,
@@ -61,13 +62,13 @@ class KeyboardViewModel @Inject constructor(
     val requestedLayout: SharedFlow<KeyboardInputMode> = _requestedLayout.asSharedFlow()
 
     init {
-        // Pipe voice-command "switch to code" requests into the same channel
+        // Pipe voice-config "switch to code" requests into the same channel
         // KeyboardScreen already consumes for per-app layout recalls. The IME
         // only has one apply-layout path, so consolidating sources keeps it
-        // simple — voice commands and per-app memory both compete for the
-        // same SharedFlow.replay slot.
+        // simple — confirmed config patches and per-app memory both compete
+        // for the same SharedFlow.replay slot.
         viewModelScope.launch {
-            voiceCommandProcessor.keyboardModeRequest.collect { mode ->
+            configPatchApplier.keyboardModeRequest.collect { mode ->
                 _requestedLayout.emit(mode)
             }
         }
@@ -119,7 +120,8 @@ class KeyboardViewModel @Inject constructor(
     private val transcriptionViewModel: TranscriptionViewModel = TranscriptionViewModel(
         context,
         voiceRepository,
-        voiceCommandProcessor,
+        configSnapshotProvider,
+        configPatchApplier,
         settingsRepository,
     )
     private val historyViewModel: HistoryViewModel = HistoryViewModel(
@@ -153,7 +155,8 @@ class KeyboardViewModel @Inject constructor(
     val transcriptionProgress: StateFlow<Float?> = transcriptionViewModel.transcriptionProgress
     val processingStage: StateFlow<ProcessingStage?> = transcriptionViewModel.processingStage
     val processingPhase: StateFlow<ProcessingPhase> = transcriptionViewModel.processingPhase
-    val pendingCommandResult: StateFlow<VoiceCommandResult?> = transcriptionViewModel.pendingCommandResult
+    val pendingConfigPatch: StateFlow<com.hyperwhisper.data.config.PendingConfigPatch?> =
+        transcriptionViewModel.pendingConfigPatch
     val lastAudioFileSize: StateFlow<Long> = transcriptionViewModel.lastAudioFileSize
     val lastAudioDuration: StateFlow<Double> = transcriptionViewModel.lastAudioDuration
 
@@ -195,6 +198,22 @@ class KeyboardViewModel @Inject constructor(
 
     val usageStatistics: StateFlow<UsageStatistics> = settingsRepository.usageStatistics
         .stateIn(viewModelScope, SharingStarted.Eagerly, UsageStatistics())
+
+    // Discovered on-device Whisper model files, for the inline transcription
+    // chip. Local Whisper is selected by file path, so the chip must list the
+    // actual downloaded files (like Settings) rather than the cloud catalog.
+    // Populated on demand via [refreshLocalWhisperModels] (a disk scan).
+    private val _localWhisperModels = MutableStateFlow<List<LocalModelInfo>>(emptyList())
+    val localWhisperModels: StateFlow<List<LocalModelInfo>> = _localWhisperModels.asStateFlow()
+
+    fun refreshLocalWhisperModels() {
+        viewModelScope.launch {
+            runCatching {
+                settingsRepository.localModelRepository.discoverModels()
+                    .filter { it.type == LocalModelType.WHISPER }
+            }.onSuccess { _localWhisperModels.value = it }
+        }
+    }
 
     private fun isProviderConfigured(provider: ApiProvider, settings: ApiSettings): Boolean {
         val config = settings.providerConfigs[provider]
@@ -333,7 +352,7 @@ class KeyboardViewModel @Inject constructor(
         val inWalkieTalkieMode = walkieTalkieMode.value
         val error = transcriptionViewModel.errorMessage.value
         val text = transcriptionViewModel.transcribedText.value
-        val hasPendingCommand = transcriptionViewModel.pendingCommandResult.value != null
+        val hasPendingCommand = transcriptionViewModel.pendingConfigPatch.value != null
 
         when (determineProcessingOutcome(error, text, hasPendingCommand)) {
             ProcessingOutcome.ERROR -> {
@@ -554,6 +573,30 @@ class KeyboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Select an on-device Whisper model from the inline chip. Local Whisper is
+     * driven by [LocalModelSettings.whisperModelPath] (a file path), NOT the
+     * cloud [ApiSettings.modelId] — picking a cloud-style model id here was a
+     * no-op for local mode, which is why the chip "reverted" to the Settings
+     * value. Write the path AND flip the provider to LOCAL_WHISPER in one save
+     * so routing, the mic chip, and transcription all agree.
+     */
+    fun setActiveLocalWhisperModel(path: String) {
+        viewModelScope.launch {
+            val s = apiSettings.value
+            settingsRepository.saveApiSettings(
+                s.copy(
+                    provider = ApiProvider.LOCAL_WHISPER,
+                    localModelSettings = s.localModelSettings.copy(
+                        whisperModelPath = path,
+                        useLocalWhisper = true
+                    )
+                )
+            )
+            Log.d(TAG, "Local Whisper model set to: ${path.substringAfterLast('/')}")
+        }
+    }
+
     // ============================================================================
     // History Operations
     // ============================================================================
@@ -641,17 +684,17 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
-     * Confirm and apply pending configuration command
+     * Apply the pending configuration patch (user tapped Apply in the diff sheet)
      */
-    fun confirmPendingCommand() {
-        transcriptionViewModel.confirmPendingCommand()
+    fun confirmPendingPatch() {
+        transcriptionViewModel.confirmPendingPatch()
     }
 
     /**
-     * Reject pending configuration command
+     * Discard the pending configuration patch (user tapped Cancel)
      */
-    fun rejectPendingCommand() {
-        transcriptionViewModel.rejectPendingCommand()
+    fun rejectPendingPatch() {
+        transcriptionViewModel.rejectPendingPatch()
     }
 
     /**

@@ -63,6 +63,73 @@ object KeyboardLayouts {
         )
     )
 
+    // Swedish QWERTY Layout (with å ä ö)
+    val swedishLayout = LayoutDefinition(
+        topRow = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "å"),
+        middleRow = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"),
+        bottomRow = listOf("z", "x", "c", "v", "b", "n", "m"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "\"", "3" to "#", "4" to "¤", "5" to "%",
+            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to "="
+        )
+    )
+
+    // Italian QWERTY Layout (accents via long-press: à è é ì ò ù)
+    val italianLayout = LayoutDefinition(
+        topRow = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+        middleRow = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+        bottomRow = listOf("z", "x", "c", "v", "b", "n", "m"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "\"", "3" to "£", "4" to "$", "5" to "%",
+            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to "="
+        )
+    )
+
+    // Portuguese QWERTY Layout (with ç; accents via long-press)
+    val portugueseLayout = LayoutDefinition(
+        topRow = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+        middleRow = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l", "ç"),
+        bottomRow = listOf("z", "x", "c", "v", "b", "n", "m"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "\"", "3" to "#", "4" to "$", "5" to "%",
+            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to ")"
+        )
+    )
+
+    // Ukrainian ЙЦУКЕН Layout (і ї є; ґ via long-press of г)
+    val ukrainianLayout = LayoutDefinition(
+        topRow = listOf("й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ї"),
+        middleRow = listOf("ф", "і", "в", "а", "п", "р", "о", "л", "д", "ж", "є"),
+        bottomRow = listOf("я", "ч", "с", "м", "и", "т", "ь", "б", "ю"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "\"", "3" to "№", "4" to ";", "5" to "%",
+            "6" to ":", "7" to "?", "8" to "*", "9" to "(", "0" to ")",
+            "." to ",", "," to "."
+        )
+    )
+
+    // Turkish Q-Layout (with ı ğ ş ü ö ç)
+    val turkishLayout = LayoutDefinition(
+        topRow = listOf("q", "w", "e", "r", "t", "y", "u", "ı", "o", "p", "ğ", "ü"),
+        middleRow = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l", "ş", "i"),
+        bottomRow = listOf("z", "x", "c", "v", "b", "n", "m", "ö", "ç"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "'", "3" to "^", "4" to "+", "5" to "%",
+            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to "="
+        )
+    )
+
+    // Polish programmer's QWERTY (ą ć ę ł ń ó ś ż ź via long-press)
+    val polishLayout = LayoutDefinition(
+        topRow = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+        middleRow = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+        bottomRow = listOf("z", "x", "c", "v", "b", "n", "m"),
+        shiftedSymbols = mapOf(
+            "1" to "!", "2" to "@", "3" to "#", "4" to "$", "5" to "%",
+            "6" to "^", "7" to "&", "8" to "*", "9" to "(", "0" to ")"
+        )
+    )
+
     // Arabic Layout (right-to-left)
     val arabicLayout = LayoutDefinition(
         topRow = listOf("ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"),
@@ -85,6 +152,12 @@ object KeyboardLayouts {
             KeyboardLayout.SPANISH -> spanishLayout
             KeyboardLayout.FRENCH -> frenchLayout
             KeyboardLayout.GERMAN -> germanLayout
+            KeyboardLayout.SWEDISH -> swedishLayout
+            KeyboardLayout.ITALIAN -> italianLayout
+            KeyboardLayout.PORTUGUESE -> portugueseLayout
+            KeyboardLayout.UKRAINIAN -> ukrainianLayout
+            KeyboardLayout.TURKISH -> turkishLayout
+            KeyboardLayout.POLISH -> polishLayout
             KeyboardLayout.ARABIC -> arabicLayout
         }
     }

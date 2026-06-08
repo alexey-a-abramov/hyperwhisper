@@ -283,6 +283,24 @@ object SpanishStrings : Strings {
     override val advancedExportSecretsTitle = "Exportar secretos al portapapeles"
     override val advancedExportSecretsDescription = "Copia todas las claves y endpoints de proveedores como JSON"
 
+    // Exportar/importar configuración + modo de configuración por voz
+    override val share = "Compartir"
+    override val advancedExportConfigTitle = "Exportar configuración"
+    override val advancedExportConfigDescription = "Todos los ajustes como JSON comentado (sin claves API)"
+    override val advancedImportConfigTitle = "Importar configuración"
+    override val advancedImportConfigDescription = "Pega un JSON de configuración y revisa los cambios antes de aplicar"
+    override val configCopiedToast = "Configuración copiada al portapapeles"
+    override val configImportPasteHint = "Pega el JSON de configuración aquí…"
+    override val configImportPreview = "Vista previa de cambios"
+    override val configImportParseError = "No se pudo analizar — pega un JSON de configuración válido"
+    override val configImportNoDifferences = "Sin diferencias con los ajustes actuales"
+    override val configImportAppliedToast = "Configuración aplicada"
+    override val configChangesTitle = "Cambios de configuración"
+    override val configApplyChanges = "Aplicar"
+    override val configChangesInvalidHeader = "No aplicado (inválido):"
+    override val configNoChangesRecognized = "No se reconocieron cambios de ajustes — intenta reformular"
+    override val configApplyFailed = "No se pudieron aplicar los cambios de configuración"
+
     // Appearance section
     override val appearanceSectionColorHeader = "Color"
     override val appearanceDynamicColorTitle = "Color dinámico"
@@ -603,7 +621,7 @@ object SpanishStrings : Strings {
     override val keyboardModeAgentOpencode = "OpenCode"
     override val keyboardModeAgentGemini = "Gemini CLI"
     override val keyboardModeAgentCodex = "Codex CLI"
-    override val keyboardModeAgentMacros = "Macros"
+    override val keyboardModeAgentMacros = "Fragmentos de texto"
     override val keyboardModeSpecialChars = "Símbolos"
     override val keyboardModeSystemKeys = "Teclas del sistema"
     override val keyboardModeVibeCoding = "Vibe Coding"

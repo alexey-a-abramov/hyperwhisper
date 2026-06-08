@@ -293,6 +293,24 @@ interface Strings {
     val advancedExportSecretsTitle: String
     val advancedExportSecretsDescription: String
 
+    // Configuration export/import + voice configuration mode (diff sheet).
+    val share: String
+    val advancedExportConfigTitle: String
+    val advancedExportConfigDescription: String
+    val advancedImportConfigTitle: String
+    val advancedImportConfigDescription: String
+    val configCopiedToast: String
+    val configImportPasteHint: String
+    val configImportPreview: String
+    val configImportParseError: String
+    val configImportNoDifferences: String
+    val configImportAppliedToast: String
+    val configChangesTitle: String
+    val configApplyChanges: String
+    val configChangesInvalidHeader: String
+    val configNoChangesRecognized: String
+    val configApplyFailed: String
+
     // Appearance section group headers + toggle labels.
     val appearanceSectionColorHeader: String
     val appearanceDynamicColorTitle: String

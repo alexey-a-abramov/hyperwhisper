@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -35,28 +34,23 @@ import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.KeyboardMetrics
 import com.hyperwhisper.ui.components.LongPressIndicator
 import com.hyperwhisper.ui.util.localizedDisplayName
-import com.hyperwhisper.ui.util.repeatOnHold
 
 /**
  * Dictation-only top header. Replaces [UniversalKeyboardTopStrip] when the
  * keyboard is in voice mode.
  *
- * Why a separate composable: voice mode wants a different chrome layout —
- * mode chips on the left, gear + backspace stacked on the right — whereas
- * every other layout uses the single-row universal strip with Esc / Tab /
- * Backspace inline. Forking the chrome avoids polluting the universal strip
- * with mode-specific branches.
+ * Layout:
  *
  * ```
- *  [Voice] [A] [Preset]          [⚙️]
- *                                [⌫]
+ *  [🎤] [A] [Preset]                  [⚙️]
  * ```
  *
  * Mode chips stay in the same screen positions as the universal strip so
- * cycling between voice and a typing layout doesn't move the eye. The
- * backspace uses the same rectangular "action chip" styling as the universal
- * strip's backspace (red errorContainer background, KeyboardMetrics.KeyRadius
- * corners, repeat-on-hold) so the design is unified across layouts.
+ * cycling between voice and a typing layout doesn't move the eye. Esc and Tab
+ * used to live below this row but have been moved into the recording area's
+ * lower-left column so the header collapses to a single row and the mic gets
+ * more vertical breathing room. Backspace lives stacked above Enter in the
+ * bottom action row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -65,7 +59,6 @@ fun DictationHeader(
     presetMode: KeyboardInputMode,
     onSelectMode: (KeyboardInputMode) -> Unit,
     onPresetLongPress: () -> Unit,
-    onBackspace: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -76,14 +69,11 @@ fun DictationHeader(
         if (it == KeyboardInputMode.DICTATION || it == KeyboardInputMode.QWERTY)
             KeyboardInputMode.CODE else it
     }
-    // Header is tall enough to stack gear over backspace on the right column.
-    // Each chip in the column is the same height as a normal top-strip chip,
-    // separated by RowGap.
+
     val chipHeight = KeyboardMetrics.TopStripHeight
-    val headerHeight = chipHeight * 2 + KeyboardMetrics.RowGap
 
     Surface(
-        modifier = modifier.fillMaxWidth().height(headerHeight),
+        modifier = modifier.fillMaxWidth().height(chipHeight + KeyboardMetrics.RowGap * 2),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
@@ -94,14 +84,9 @@ fun DictationHeader(
                     horizontal = KeyboardMetrics.OuterPadding,
                     vertical = KeyboardMetrics.RowGap
                 ),
-            // Top-aligned: mode chips on the left sit on the same baseline as
-            // the universal top strip in every other layout. The right column
-            // (gear over backspace) is taller and fills below — gear stays
-            // visually adjacent to the mode chips in the top row.
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.TopStripKeyGap)
         ) {
-            // --- Mode chips, vertically centered in the taller header ---
             ModeChip(
                 isSelected = normalized == KeyboardInputMode.DICTATION,
                 onClick = { onSelectMode(KeyboardInputMode.DICTATION) }
@@ -122,7 +107,6 @@ fun DictationHeader(
             Box(
                 modifier = Modifier
                     .height(chipHeight)
-                    .padding(vertical = KeyboardMetrics.RowGap)
                     .width(KeyboardMetrics.ModeChipWidth)
             ) {
                 Surface(
@@ -152,47 +136,21 @@ fun DictationHeader(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- Right column: gear stacked over backspace ---
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.RowGap)
+            Surface(
+                onClick = onSettings,
+                color = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
+                modifier = Modifier
+                    .height(chipHeight)
+                    .width(KeyboardMetrics.TopStripIconWidth)
             ) {
-                Surface(
-                    onClick = onSettings,
-                    color = Color.Transparent,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
-                    modifier = Modifier
-                        .height(chipHeight)
-                        .width(KeyboardMetrics.TopStripIconWidth)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = strings.settingsDesc,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-                // Backspace — rectangular, red errorContainer, matches the
-                // universal top strip's backspace chip. Repeat-on-hold so a
-                // long press deletes word-by-word, same as everywhere else.
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
-                    modifier = Modifier
-                        .height(chipHeight)
-                        .width(KeyboardMetrics.TopStripIconWidth)
-                        .repeatOnHold(onTrigger = onBackspace)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Backspace,
-                            contentDescription = strings.keyboardBackspaceDesc,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = strings.settingsDesc,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
@@ -200,9 +158,10 @@ fun DictationHeader(
 }
 
 /**
- * Small dictation-action chip — used for the inline Esc / Tab buttons that
- * sit directly under the mic in voice mode. Same shape and colors as the
- * universal top strip's chip buttons so the design reads as one family.
+ * Small dictation-action chip — same shape and colors as the universal top
+ * strip's chip buttons so the design reads as one family. Caller controls
+ * width/height via the passed [modifier]; pass a sized modifier or the chip
+ * will collapse to its content.
  */
 @Composable
 fun DictationActionChip(
@@ -215,17 +174,17 @@ fun DictationActionChip(
         color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
-        modifier = modifier.height(KeyboardMetrics.TopStripHeight)
+        modifier = modifier
     ) {
         Box(
             modifier = Modifier
-                .fillMaxHeight()
+                .fillMaxSize()
                 .padding(horizontal = KeyboardMetrics.BaseUnit * 4),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = label,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -247,7 +206,6 @@ private fun ModeChip(
         shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
         modifier = Modifier
             .height(KeyboardMetrics.TopStripHeight)
-            .padding(vertical = KeyboardMetrics.RowGap)
             .width(KeyboardMetrics.TopStripIconWidth)
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

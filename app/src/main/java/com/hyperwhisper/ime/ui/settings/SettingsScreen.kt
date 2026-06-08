@@ -50,6 +50,8 @@ import com.hyperwhisper.security.SecretsRevealController
 import com.hyperwhisper.security.SecureClipboard
 import com.hyperwhisper.ui.about.AboutActivity
 import com.hyperwhisper.ui.settings.dialogs.AddModeDialog
+import com.hyperwhisper.ui.settings.dialogs.ConfigExportDialog
+import com.hyperwhisper.ui.settings.dialogs.ConfigImportDialog
 import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
 import com.hyperwhisper.ui.settings.dialogs.ProviderKeyInstructionsDialog
 import com.hyperwhisper.ui.settings.sections.AppUpdateSection
@@ -158,6 +160,8 @@ fun SettingsScreen(
     var showAddModeDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<com.hyperwhisper.data.VoiceMode?>(null) }
     var overflowOpen by remember { mutableStateOf(false) }
+    var configExportJsonc by remember { mutableStateOf<String?>(null) }
+    var showConfigImport by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
@@ -413,7 +417,13 @@ fun SettingsScreen(
                                 onOpenApiLogs = { showApiCallLogs = true },
                                 onOpenProviderKeyHelp = { showProviderKeyHelp = true },
                                 techieModeEnabled = appearanceSettings.techieModeEnabled,
-                                onExportSecrets = { gateAndExportSecrets() }
+                                onExportSecrets = { gateAndExportSecrets() },
+                                onExportConfig = {
+                                    coroutineScope.launch {
+                                        configExportJsonc = viewModel.buildConfigExportJsonc()
+                                    }
+                                },
+                                onImportConfig = { showConfigImport = true }
                             )
 
                             SettingsCategory.ABOUT -> {
@@ -466,6 +476,21 @@ fun SettingsScreen(
                 viewModel.updateVoiceMode(updated)
                 editingMode = null
             }
+        )
+    }
+
+    configExportJsonc?.let { jsonc ->
+        ConfigExportDialog(
+            jsonc = jsonc,
+            onDismiss = { configExportJsonc = null }
+        )
+    }
+
+    if (showConfigImport) {
+        ConfigImportDialog(
+            parse = { viewModel.parseConfigImport(it) },
+            apply = { viewModel.applyConfigPatch(it) },
+            onDismiss = { showConfigImport = false }
         )
     }
 }
@@ -637,7 +662,9 @@ private fun AdvancedDetail(
     onOpenApiLogs: () -> Unit,
     onOpenProviderKeyHelp: () -> Unit,
     techieModeEnabled: Boolean,
-    onExportSecrets: () -> Unit
+    onExportSecrets: () -> Unit,
+    onExportConfig: () -> Unit,
+    onImportConfig: () -> Unit
 ) {
     val strings = LocalStrings.current
     androidx.compose.foundation.layout.Column(
@@ -655,6 +682,16 @@ private fun AdvancedDetail(
             title = strings.advancedProviderKeyHelpTitle,
             description = strings.advancedProviderKeyHelpDescription,
             onClick = onOpenProviderKeyHelp
+        )
+        AdvancedRow(
+            title = strings.advancedExportConfigTitle,
+            description = strings.advancedExportConfigDescription,
+            onClick = onExportConfig
+        )
+        AdvancedRow(
+            title = strings.advancedImportConfigTitle,
+            description = strings.advancedImportConfigDescription,
+            onClick = onImportConfig
         )
         if (techieModeEnabled) {
             AdvancedRow(

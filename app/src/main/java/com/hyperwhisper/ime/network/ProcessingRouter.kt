@@ -30,45 +30,50 @@ class ProcessingRouter @Inject constructor(
 ) {
     companion object {
         private const val TAG = "ProcessingRouter"
+
+        /**
+         * Pure two-step decision logic, exposed on the companion so it can be
+         * unit-tested without constructing the DI-heavy router. True if the
+         * request needs transcription + LLM post-processing; false for
+         * providers that handle audio + transformation in one chat call, or
+         * when LLM post-processing is disabled and no translation is required.
+         */
+        fun needsTwoStep(
+            voiceMode: VoiceMode,
+            apiSettings: ApiSettings
+        ): Boolean {
+            // If LLM is disabled (NONE), no post-processing
+            if (apiSettings.llmConfig.provider == LlmProvider.NONE) {
+                return false
+            }
+
+            // Translation is only needed if output language is set AND different
+            // from input. If both are the same (e.g., both "en"), no translation.
+            val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
+                apiSettings.outputLanguage != apiSettings.inputLanguage
+
+            // OpenRouter / Gemini / Antigravity handle audio + translation in one
+            // chat call.
+            if (apiSettings.provider == ApiProvider.OPENROUTER) return false
+            if (apiSettings.provider == ApiProvider.GEMINI) return false
+            if (apiSettings.provider == ApiProvider.ANTIGRAVITY) return false
+
+            // Hugging Face is text-only — requires two-step for all audio input
+            if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
+
+            // Verbatim mode only needs post-processing if translation is required
+            if (voiceMode.id == "verbatim") return needsTranslation
+
+            // All other providers with transformation modes need two-step
+            return true
+        }
     }
 
-    /**
-     * True if the request needs transcription + LLM post-processing. False
-     * for providers that handle audio + transformation in one chat call, or
-     * when LLM post-processing is disabled and no translation is required.
-     */
+    /** Instance delegate — see [Companion.needsTwoStep]. */
     fun needsTwoStepProcessing(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
-    ): Boolean {
-        // If LLM is disabled (NONE), no post-processing
-        if (apiSettings.llmConfig.provider == LlmProvider.NONE) {
-            return false
-        }
-
-        // Translation is only needed if output language is set AND different from input
-        // If both are the same (e.g., both "en"), no translation is needed
-        val needsTranslation = apiSettings.outputLanguage.isNotEmpty() &&
-            apiSettings.outputLanguage != apiSettings.inputLanguage
-
-        // OpenRouter supports audio in chat completions AND translation in one step
-        if (apiSettings.provider == ApiProvider.OPENROUTER) return false
-
-        // Gemini supports audio in chat completions AND translation in one step
-        if (apiSettings.provider == ApiProvider.GEMINI) return false
-
-        // Antigravity provider is OpenAI-compatible chat endpoint with audio support
-        if (apiSettings.provider == ApiProvider.ANTIGRAVITY) return false
-
-        // Hugging Face is text-only - requires two-step for all audio input
-        if (apiSettings.provider == ApiProvider.HUGGINGFACE) return true
-
-        // Verbatim mode only needs post-processing if translation is required
-        if (voiceMode.id == "verbatim") return needsTranslation
-
-        // All other providers with transformation modes need two-step
-        return true
-    }
+    ): Boolean = needsTwoStep(voiceMode, apiSettings)
 
     /**
      * Pick the strategy for single-step processing. On-device Whisper takes

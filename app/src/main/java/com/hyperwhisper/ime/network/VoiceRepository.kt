@@ -29,9 +29,11 @@ class VoiceRepository @Inject constructor(
     private val performanceRepository: PerformanceRepository,
     private val coldStartTracker: ColdStartTracker,
     private val deviceSnapshotProvider: DeviceSnapshotProvider,
+    private val configPromptBuilder: com.hyperwhisper.data.config.ConfigPromptBuilder,
 ) {
     companion object {
         private const val TAG = "VoiceRepository"
+        private const val CONFIGURATION_MODE_ID = "configuration"
     }
 
     /**
@@ -48,6 +50,21 @@ class VoiceRepository @Inject constructor(
         voiceMode: VoiceMode,
         apiSettings: ApiSettings
     ): ApiResult<String> {
+        // Configuration mode: the stored prompt is a placeholder — the real
+        // prompt is generated here from the live settings so it always embeds
+        // the current config and option docs. Translation is force-disabled
+        // for this call: both postProcessText and ChatCompletionStrategy
+        // append a "translate the output" instruction that would corrupt the
+        // mode's JSON output contract.
+        @Suppress("NAME_SHADOWING") val voiceMode =
+            if (voiceMode.id == CONFIGURATION_MODE_ID)
+                voiceMode.copy(systemPrompt = configPromptBuilder.build())
+            else voiceMode
+        @Suppress("NAME_SHADOWING") val apiSettings =
+            if (voiceMode.id == CONFIGURATION_MODE_ID)
+                apiSettings.copy(outputLanguage = "")
+            else apiSettings
+
         val processingStartTime = System.currentTimeMillis()
         val audioFileSizeBytes = audioFile.length()
 
@@ -427,6 +444,14 @@ class VoiceRepository @Inject constructor(
         }
 
         val llm = s.llmConfig
+        // Configuration mode is useless without an LLM to map speech onto
+        // config changes — unless the ASR provider itself is a chat model
+        // that applies the system prompt in a single step.
+        if (voiceMode.id == CONFIGURATION_MODE_ID && llm.provider == LlmProvider.NONE &&
+            (useLocal || !s.provider.usesChatAudioForTranscription())
+        ) {
+            return "Configuration mode needs an LLM. Select an LLM provider in Settings → Post-processing."
+        }
         val needsLlm = llm.provider != LlmProvider.NONE &&
             (voiceMode.id != "verbatim" || s.outputLanguage.isNotEmpty())
         if (needsLlm) {

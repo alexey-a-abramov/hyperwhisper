@@ -29,6 +29,20 @@ class VoiceModesRepository @Inject constructor(
     companion object {
         private val VOICE_MODES_KEY = stringPreferencesKey("voice_modes")
         private val SELECTED_MODE_KEY = stringPreferencesKey("selected_mode")
+
+        const val CONFIGURATION_MODE_ID = "configuration"
+
+        /**
+         * The configuration mode's REAL prompt is generated at processing time
+         * by ConfigPromptBuilder (it must embed the live settings), so the
+         * stored prompt is only a placeholder shown in the Voice Modes editor.
+         * Older builds persisted a 100-line static prompt; [normalizeModes]
+         * replaces it at read time so it can never go stale.
+         */
+        const val CONFIGURATION_PROMPT_PLACEHOLDER =
+            "This mode's prompt is generated at runtime from your current settings — " +
+                "it always documents every available option and its current value. " +
+                "Editing this text has no effect."
     }
 
     /**
@@ -37,7 +51,7 @@ class VoiceModesRepository @Inject constructor(
      */
     val voiceModes: Flow<List<VoiceMode>> = dataStore.data.map { preferences ->
         val modesJson = preferences[VOICE_MODES_KEY]
-        if (modesJson.isNullOrEmpty()) {
+        val modes: List<VoiceMode> = if (modesJson.isNullOrEmpty()) {
             getDefaultModes()
         } else {
             try {
@@ -46,6 +60,20 @@ class VoiceModesRepository @Inject constructor(
             } catch (e: Exception) {
                 getDefaultModes()
             }
+        }
+        normalizeModes(modes)
+    }
+
+    /**
+     * The configuration mode's stored prompt is irrelevant (generated at
+     * runtime) — normalize it on every read so users who persisted the old
+     * static prompt see the placeholder instead.
+     */
+    private fun normalizeModes(modes: List<VoiceMode>): List<VoiceMode> = modes.map { mode ->
+        if (mode.id == CONFIGURATION_MODE_ID && mode.systemPrompt != CONFIGURATION_PROMPT_PLACEHOLDER) {
+            mode.copy(systemPrompt = CONFIGURATION_PROMPT_PLACEHOLDER)
+        } else {
+            mode
         }
     }
 
@@ -179,103 +207,10 @@ class VoiceModesRepository @Inject constructor(
             isBuiltIn = false
         ),
         VoiceMode(
-            id = "configuration",
+            id = CONFIGURATION_MODE_ID,
             name = "Configuration",
-            description = "Control keyboard settings with your voice. Say commands like 'change language to Spanish' or 'enable dark mode'.",
-            systemPrompt = """You are a voice command interpreter for HyperWhisper keyboard settings. Parse the user's spoken command and output ONLY a valid JSON object.
-
-## Output Format
-{
-  "command": "change_setting",
-  "setting": "SETTING_NAME",
-  "value": "VALUE"
-}
-
-## Available Settings
-
-### Language Settings
-| Setting | Description | Values |
-|---------|-------------|--------|
-| input_language | Speech recognition language | Language codes ("en", "ru", "es", "zh", "ja", "de", "fr", "ar", "hi", etc.) or full names ("English", "Spanish", "Chinese", etc.) |
-| output_language | Translation target language | Same as input_language |
-| ui_language | Interface language | "en" (English), "ru" (Russian), "ar" (Arabic), or language names |
-
-### Mode Settings
-| Setting | Description | Values |
-|---------|-------------|--------|
-| voice_mode | Voice processing mode | "verbatim", "fix_grammar", "polite", "prompt_formatter", "llm_response", "configuration" |
-| enable_configuration_mode | Toggle command mode | "true", "false", "on", "off", "enable", "disable" |
-
-### Appearance Settings
-| Setting | Description | Values |
-|---------|-------------|--------|
-| theme | App color theme | "system", "light", "dark", "auto" |
-
-### Feature Toggles
-| Setting | Description | Values |
-|---------|-------------|--------|
-| enable_history | Transcription history | "true", "false", "on", "off", "enable", "disable" |
-| enable_techie_mode | Developer/debug mode | "true", "false", "on", "off", "enable", "disable" |
-
-## Examples
-
-User: "Change input language to Spanish"
-{"command": "change_setting", "setting": "input_language", "value": "spanish"}
-
-User: "I want to speak in Japanese"
-{"command": "change_setting", "setting": "input_language", "value": "japanese"}
-
-User: "Translate to French"
-{"command": "change_setting", "setting": "output_language", "value": "french"}
-
-User: "Switch to dark mode"
-{"command": "change_setting", "setting": "theme", "value": "dark"}
-
-User: "Use light theme"
-{"command": "change_setting", "setting": "theme", "value": "light"}
-
-User: "Follow system theme"
-{"command": "change_setting", "setting": "theme", "value": "system"}
-
-User: "Enable history"
-{"command": "change_setting", "setting": "enable_history", "value": "true"}
-
-User: "Turn off history"
-{"command": "change_setting", "setting": "enable_history", "value": "false"}
-
-User: "Change mode to verbatim"
-{"command": "change_setting", "setting": "voice_mode", "value": "verbatim"}
-
-User: "Use fix grammar mode"
-{"command": "change_setting", "setting": "voice_mode", "value": "fix_grammar"}
-
-User: "Switch to polite mode"
-{"command": "change_setting", "setting": "voice_mode", "value": "polite"}
-
-User: "Enable developer mode"
-{"command": "change_setting", "setting": "enable_techie_mode", "value": "true"}
-
-User: "Turn off techie mode"
-{"command": "change_setting", "setting": "enable_techie_mode", "value": "false"}
-
-User: "Exit configuration mode"
-{"command": "change_setting", "setting": "enable_configuration_mode", "value": "false"}
-
-User: "Turn off command mode"
-{"command": "change_setting", "setting": "enable_configuration_mode", "value": "false"}
-
-User: "Change interface to Russian"
-{"command": "change_setting", "setting": "ui_language", "value": "russian"}
-
-User: "Set UI language to Arabic"
-{"command": "change_setting", "setting": "ui_language", "value": "arabic"}
-
-## Important Rules
-1. Output ONLY the JSON object, no explanations or additional text
-2. Use lowercase for setting names and values
-3. For languages, accept both codes and full names
-4. For boolean settings, normalize to "true" or "false"
-5. Match user intent even if phrasing varies (e.g., "dark theme" = "dark mode")""",
+            description = "Control keyboard settings with your voice. Say things like 'change language to Spanish', 'use the ocean theme', or 'switch keyboard to code'. Changes are shown for confirmation before being applied.",
+            systemPrompt = CONFIGURATION_PROMPT_PLACEHOLDER,
             model = "gpt-4o-mini",
             processingMode = "two-step",
             isBuiltIn = false

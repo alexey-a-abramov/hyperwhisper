@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
 
 enum class EnterAction {
     NEWLINE,
@@ -42,7 +41,8 @@ fun EnterActionSelectorDialog(
 
     // IMEs cannot host real Android Dialogs (BadTokenException — token null
     // is not valid). Render as a full-screen overlay inside the IME composition.
-    BackHandler(onBack = onDismiss)
+    // No BackHandler — IMEs don't provide an OnBackPressedDispatcherOwner, so
+    // calling it crashes (IllegalStateException); dismiss via the Close button.
     Surface(
         modifier = Modifier.fillMaxSize().padding(8.dp),
         shape = RoundedCornerShape(16.dp),

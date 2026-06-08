@@ -76,9 +76,6 @@ class VoiceInputMethodService : InputMethodService(),
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
-    lateinit var voiceCommandProcessor: com.hyperwhisper.data.VoiceCommandProcessor
-
-    @Inject
     lateinit var transcriptionStrategy: TranscriptionStrategy
 
     @Inject

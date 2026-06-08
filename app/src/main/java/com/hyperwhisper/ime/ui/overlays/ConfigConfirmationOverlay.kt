@@ -1,11 +1,10 @@
 package com.hyperwhisper.ui.overlays
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,20 +25,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hyperwhisper.data.config.PendingConfigPatch
+import com.hyperwhisper.localization.LocalStrings
+import com.hyperwhisper.ui.components.ConfigDiffList
 
 /**
- * Configuration confirmation overlay
- * Shows when voice commands would change settings
- * Requires user confirmation before applying
+ * Configuration patch confirmation overlay (diff sheet).
+ *
+ * Shown after configuration-mode dictation produced a pending patch. Lists
+ * every change as "Setting: old → new" plus any per-change validation errors.
+ * NOTHING is persisted until the user taps Apply — Cancel discards the whole
+ * patch.
  */
 @Composable
-fun ConfigurationConfirmationDialog(
-    settingChanged: String?,
-    newValue: String?,
-    message: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+fun ConfigPatchConfirmationOverlay(
+    patch: PendingConfigPatch,
+    onApply: () -> Unit,
+    onCancel: () -> Unit,
 ) {
+    val strings = LocalStrings.current
+
     // Full-screen overlay within keyboard
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -51,7 +56,7 @@ fun ConfigurationConfirmationDialog(
                 .fillMaxSize()
                 .padding(16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -59,53 +64,47 @@ fun ConfigurationConfirmationDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Title
                 Text(
-                    text = "Configuration Change",
-                    fontSize = 22.sp,
+                    text = strings.configChangesTitle,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Change summary
-                if (settingChanged != null && newValue != null) {
-                    Text(
-                        text = "Setting: $settingChanged",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = "New Value: $newValue",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                Spacer(Modifier.size(12.dp))
 
-                Spacer(Modifier.height(8.dp))
-
-                // Full message
-                Text(
-                    text = message,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    lineHeight = 20.sp
+                ConfigDiffList(
+                    patch = patch,
+                    invalidHeader = strings.configChangesInvalidHeader,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                 )
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.size(12.dp))
 
-                // Action buttons
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Confirm button
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = onCancel,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Text(
+                            strings.cancel.uppercase(),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.width(12.dp))
+
                     Button(
-                        onClick = onConfirm,
-                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onApply,
+                        enabled = patch.valid.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -113,27 +112,12 @@ fun ConfigurationConfirmationDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Confirm",
+                            contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Apply Change".uppercase(),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // Cancel button
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    ) {
-                        Text(
-                            "Cancel".uppercase(),
+                            strings.configApplyChanges.uppercase(),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )

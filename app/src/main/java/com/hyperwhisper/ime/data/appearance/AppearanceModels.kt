@@ -91,7 +91,7 @@ enum class KeyboardInputMode(val displayName: String) {
     // Cross-agent macro palette — hardcoded prompt phrases the user reuses
     // regardless of which CLI is on the other end. Trial; may consolidate or
     // promote to a category-within-agent if it proves too much of a switch tax.
-    AGENT_MACROS("Macros"),
+    AGENT_MACROS("Text Snippets"),
 
     // --- Experimental layouts. Surfaced via the preset slot (long-press to
     // rebind) but kept out of the default swipe-cycle so they don't crowd
@@ -136,18 +136,30 @@ enum class KeyboardInputMode(val displayName: String) {
     }
 }
 
-// Keyboard layout options (language-specific)
+// Keyboard layout options (language-specific).
+//
+// A "locality" unifies two concepts under one pick: the on-screen typing
+// layout AND the speech-input language ([inputLanguageCode], ISO-639-1).
+// Selecting a locality sets both, so "switch to Russian" flips the ЙЦУКЕН
+// keys and points dictation at Russian in a single tap.
 enum class KeyboardLayout(
     val code: String,
     val displayName: String,
-    val nativeName: String
+    val nativeName: String,
+    val inputLanguageCode: String
 ) {
-    ENGLISH("EN", "English", "English"),
-    RUSSIAN("RU", "Russian", "Русский"),
-    SPANISH("ES", "Spanish", "Español"),
-    FRENCH("FR", "French", "Français"),
-    GERMAN("DE", "German", "Deutsch"),
-    ARABIC("AR", "Arabic", "العربية")
+    ENGLISH("EN", "English", "English", "en"),
+    RUSSIAN("RU", "Russian", "Русский", "ru"),
+    SPANISH("ES", "Spanish", "Español", "es"),
+    FRENCH("FR", "French", "Français", "fr"),
+    GERMAN("DE", "German", "Deutsch", "de"),
+    SWEDISH("SV", "Swedish", "Svenska", "sv"),
+    ITALIAN("IT", "Italian", "Italiano", "it"),
+    PORTUGUESE("PT", "Portuguese", "Português", "pt"),
+    UKRAINIAN("UK", "Ukrainian", "Українська", "uk"),
+    TURKISH("TR", "Turkish", "Türkçe", "tr"),
+    POLISH("PL", "Polish", "Polski", "pl"),
+    ARABIC("AR", "Arabic", "العربية", "ar")
 }
 
 // Appearance settings data class
@@ -168,7 +180,7 @@ data class AppearanceSettings(
      */
     val enabledAgentKeyboards: Set<String> = emptySet(),
     val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
-    val saveOriginalAudioFiles: Boolean = false, // Save audio files for playback/reprocessing from history
+    val saveOriginalAudioFiles: Boolean = true, // Save audio files for playback/reprocessing from history
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
     val unlimitedHistory: Boolean = false, // If true, maxHistoryItems is ignored
     val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION, // Remember last keyboard mode

@@ -5,7 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.audio.SoundManager
 import com.hyperwhisper.data.SettingsRepository
-import com.hyperwhisper.data.VoiceCommandProcessor
+import com.hyperwhisper.data.config.ConfigPatchApplier
+import com.hyperwhisper.data.config.ConfigSnapshotProvider
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.ui.KeyboardViewModel
 import dagger.Module
@@ -45,7 +46,8 @@ object AppModule {
     fun provideViewModelFactory(
         @ApplicationContext context: Context,
         voiceRepository: VoiceRepository,
-        voiceCommandProcessor: VoiceCommandProcessor,
+        configSnapshotProvider: ConfigSnapshotProvider,
+        configPatchApplier: ConfigPatchApplier,
         settingsRepository: SettingsRepository,
         soundManager: SoundManager,
         audioRecorderManager: AudioRecorderManager,
@@ -59,7 +61,8 @@ object AppModule {
                     return KeyboardViewModel(
                         context,
                         voiceRepository,
-                        voiceCommandProcessor,
+                        configSnapshotProvider,
+                        configPatchApplier,
                         settingsRepository,
                         soundManager,
                         audioRecorderManager,

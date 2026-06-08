@@ -95,7 +95,7 @@ fun KeyboardBottomBar(
     }
 }
 
-private fun hasPasteContent(
+internal fun hasPasteContent(
     lastTranscribedText: String,
     transcriptionHistory: List<TranscriptionHistoryItem>
 ): Boolean = lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()

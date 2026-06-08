@@ -43,6 +43,8 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_PRESET_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_preset_keyboard_mode")
         private val APPEARANCE_ENABLED_AGENTS_KEY = stringSetPreferencesKey("appearance_enabled_agents")
         private val APPEARANCE_PER_APP_LAYOUT_KEY = booleanPreferencesKey("appearance_per_app_layout_memory")
+        private val APPEARANCE_CURRENT_LAYOUT_KEY = stringPreferencesKey("appearance_current_keyboard_layout")
+        private val APPEARANCE_ENABLED_LAYOUTS_KEY = stringSetPreferencesKey("appearance_enabled_keyboard_layouts")
     }
 
     /**
@@ -85,7 +87,7 @@ class AppearanceRepository @Inject constructor(
             enableHistoryPanel = preferences[APPEARANCE_ENABLE_HISTORY_KEY] ?: true,
             techieModeEnabled = preferences[APPEARANCE_TECHIE_MODE_KEY] ?: false,
             showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false,
-            saveOriginalAudioFiles = preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] ?: false,
+            saveOriginalAudioFiles = preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] ?: true,
             maxHistoryItems = preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY]?.toIntOrNull() ?: 20,
             unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false,
             lastKeyboardInputMode = preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY]?.let {
@@ -103,7 +105,28 @@ class AppearanceRepository @Inject constructor(
                 }
             } ?: KeyboardInputMode.CODE,
             enabledAgentKeyboards = preferences[APPEARANCE_ENABLED_AGENTS_KEY] ?: emptySet(),
-            perAppLayoutMemoryEnabled = preferences[APPEARANCE_PER_APP_LAYOUT_KEY] ?: true
+            perAppLayoutMemoryEnabled = preferences[APPEARANCE_PER_APP_LAYOUT_KEY] ?: true,
+            currentKeyboardLayout = preferences[APPEARANCE_CURRENT_LAYOUT_KEY]?.let {
+                try {
+                    KeyboardLayout.valueOf(it)
+                } catch (e: Exception) {
+                    KeyboardLayout.ENGLISH
+                }
+            } ?: KeyboardLayout.ENGLISH,
+            // Parse stored enum names, dropping any that no longer exist; an
+            // empty/missing set falls back to English so the cycle always has
+            // at least one locality.
+            enabledKeyboardLayouts = preferences[APPEARANCE_ENABLED_LAYOUTS_KEY]
+                ?.mapNotNull { name ->
+                    try {
+                        KeyboardLayout.valueOf(name)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                ?.toSet()
+                ?.takeIf { it.isNotEmpty() }
+                ?: setOf(KeyboardLayout.ENGLISH)
         )
     }
 
@@ -129,6 +152,9 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_PRESET_KEYBOARD_MODE_KEY] = settings.presetKeyboardMode.name
             preferences[APPEARANCE_ENABLED_AGENTS_KEY] = settings.enabledAgentKeyboards
             preferences[APPEARANCE_PER_APP_LAYOUT_KEY] = settings.perAppLayoutMemoryEnabled
+            preferences[APPEARANCE_CURRENT_LAYOUT_KEY] = settings.currentKeyboardLayout.name
+            preferences[APPEARANCE_ENABLED_LAYOUTS_KEY] =
+                settings.enabledKeyboardLayouts.map { it.name }.toSet()
         }
     }
 }
