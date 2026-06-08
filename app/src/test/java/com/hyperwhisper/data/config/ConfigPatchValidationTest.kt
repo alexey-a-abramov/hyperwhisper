@@ -41,21 +41,21 @@ class ConfigPatchValidationTest {
 
     @Test
     fun boolSynonymsResolve() {
-        val patch = parse("""[{"path": "appearance.techieMode", "value": "on"}]""")
+        val patch = parse("""[{"path": "system.techieMode", "value": "on"}]""")
         assertEquals(true, patch.valid.single().newValue)
     }
 
     @Test
     fun nativeBooleanAccepted() {
-        val patch = parse("""[{"path": "appearance.techieMode", "value": true}]""")
+        val patch = parse("""[{"path": "system.techieMode", "value": true}]""")
         assertEquals(true, patch.valid.single().newValue)
     }
 
     @Test
     fun outOfRangeIntRejected() {
-        val patch = parse("""[{"path": "localModels.threads", "value": 99}]""")
+        val patch = parse("""[{"path": "system.localInferenceThreads", "value": 99}]""")
         assertTrue(patch.valid.isEmpty())
-        assertEquals("localModels.threads", patch.errors.single().path)
+        assertEquals("system.localInferenceThreads", patch.errors.single().path)
     }
 
     @Test
@@ -73,14 +73,22 @@ class ConfigPatchValidationTest {
 
     @Test
     fun keyboardModeSynonymResolves() {
-        val patch = parse("""[{"path": "appearance.keyboardMode", "value": "code"}]""")
+        val patch = parse("""[{"path": "output.keyboardMode", "value": "code"}]""")
+        assertEquals("CODE", patch.valid.single().newValue)
+    }
+
+    @Test
+    fun deadKeyboardModeCoercesToCode() {
+        // NUMPAD/SYSTEM_KEYS/VIBE_CODING are no longer offered as choices but
+        // must still parse (coerced to CODE via the CODE synonym list).
+        val patch = parse("""[{"path": "output.keyboardMode", "value": "NUMPAD"}]""")
         assertEquals("CODE", patch.valid.single().newValue)
     }
 
     @Test
     fun enumSetReplacesWholeSet() {
         val patch = parse(
-            """[{"path": "appearance.enabledKeyboardLayouts", "value": ["english", "RUSSIAN"]}]"""
+            """[{"path": "output.enabledKeyboardLayouts", "value": ["english", "RUSSIAN"]}]"""
         )
         assertEquals(setOf("ENGLISH", "RUSSIAN"), patch.valid.single().newValue)
     }
@@ -123,7 +131,7 @@ class ConfigPatchValidationTest {
 
     @Test
     fun voiceModeSelectionResolvesByName() {
-        val patch = parse("""[{"path": "voiceModes.selected", "value": "Configuration"}]""")
+        val patch = parse("""[{"path": "postProcessing.voiceModes.selected", "value": "Configuration"}]""")
         assertEquals("configuration", patch.valid.single().newValue)
     }
 }

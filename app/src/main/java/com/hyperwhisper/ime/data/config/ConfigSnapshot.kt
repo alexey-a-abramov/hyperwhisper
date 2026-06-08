@@ -13,6 +13,30 @@ import javax.inject.Singleton
  * the [ConfigSchema] field registry reads from and writes to (via pure
  * copy-based setters); it is what gets rendered to JSONC for the LLM prompt,
  * the export feature, and the import diff.
+ *
+ * ------------------------------------------------------------------------
+ * MEMBERSHIP DECISION — what is (not) exported/imported
+ * ------------------------------------------------------------------------
+ * The snapshot covers exactly three repositories' worth of state:
+ *   - [api]          (ApiSettings: ASR + LLM provider config, local models)
+ *   - [appearance]   (AppearanceSettings: theme + keyboard + history + audio)
+ *   - [voiceModes]   (+ the [selectedModeId] of the active mode)
+ *
+ * The following are DELIBERATELY EXCLUDED from export/import as device-local /
+ * ephemeral state, and are intentionally NOT surfaced as [ConfigField]s in
+ * [ConfigSchema] (so any future field gets classified on purpose, not by
+ * accident):
+ *   1. The per-app layout MEMORY MAP (PerAppLayoutMemory device store). The
+ *      enable/disable preference (output.perAppLayoutMemory) IS exported, but
+ *      the remembered app→layout associations are device-specific and are not.
+ *   2. recentlyUsedProviderModels MRU tracking (ProviderModelTrackingRepository) —
+ *      transient usage history, not a setting.
+ *   3. recentEmojis — managed automatically by the emoji keyboard; it lives in
+ *      [AppearanceSettings] for runtime use but is no longer a ConfigField, so
+ *      it is neither prompted, exported, nor imported.
+ *   4. The built-in "Configuration" voice mode — device-local machinery rather
+ *      than user content. The voiceModes list round-trips, but this entry is
+ *      treated as ephemeral/built-in.
  */
 data class ConfigSnapshot(
     val api: ApiSettings,

@@ -32,6 +32,10 @@ class SettingsRepository @Inject constructor(
 
     val apiSettings: Flow<ApiSettings> = apiSettingsRepository.apiSettings
 
+    /** Suspends until [apiSettings] reflects the first real DataStore emission.
+     *  See [ApiSettingsRepository.awaitLoaded]. */
+    suspend fun awaitApiSettingsLoaded() = apiSettingsRepository.awaitLoaded()
+
     suspend fun saveApiSettings(settings: ApiSettings) =
         apiSettingsRepository.saveApiSettings(settings)
 

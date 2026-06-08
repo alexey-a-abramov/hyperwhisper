@@ -70,6 +70,10 @@ enum class SettingsCategory(
 sealed class SettingsRoute {
     object Home : SettingsRoute()
     data class Detail(val category: SettingsCategory) : SettingsRoute()
+
+    /** Full-screen API call logs viewer. [origin] is the route system back
+     *  (and the close affordance) returns to. */
+    data class ApiLogs(val origin: SettingsRoute = Home) : SettingsRoute()
 }
 
 @Composable

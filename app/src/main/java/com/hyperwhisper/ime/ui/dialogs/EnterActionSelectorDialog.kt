@@ -1,8 +1,8 @@
 package com.hyperwhisper.ui.dialogs
 
 import android.view.inputmethod.EditorInfo
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,8 +18,7 @@ import androidx.compose.ui.unit.sp
 
 enum class EnterAction {
     NEWLINE,
-    SUBMIT,
-    LINE_BREAK
+    SUBMIT
 }
 
 @Composable
@@ -29,8 +27,12 @@ fun EnterActionSelectorDialog(
     onActionSelected: (EnterAction) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Determine the best default action based on editor info
-    val isMultiLine = editorInfo?.inputType?.and(android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+    // Determine the best default action based on editor info. When there's
+    // no editorInfo we know nothing about the field — don't assume
+    // multi-line (the old `?.and(...) != 0` null-compared to true).
+    val isMultiLine = editorInfo?.inputType
+        ?.let { (it and android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0 }
+        ?: false
     val imeAction = editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
 
     val recommendedAction = when {
@@ -40,15 +42,30 @@ fun EnterActionSelectorDialog(
     }
 
     // IMEs cannot host real Android Dialogs (BadTokenException — token null
-    // is not valid). Render as a full-screen overlay inside the IME composition.
-    // No BackHandler — IMEs don't provide an OnBackPressedDispatcherOwner, so
-    // calling it crashes (IllegalStateException); dismiss via the Close button.
-    Surface(
-        modifier = Modifier.fillMaxSize().padding(8.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
-    ) {
+    // is not valid). Render as a full-screen overlay inside the IME
+    // composition: a tap-to-dismiss scrim behind a centered card, the same
+    // pattern as the preset picker in KeyboardScreen. No BackHandler — IMEs
+    // don't provide an OnBackPressedDispatcherOwner, so calling it crashes
+    // (IllegalStateException).
+    Box(modifier = Modifier.fillMaxSize()) {
+        val scrimSource = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = scrimSource
+                ) { onDismiss() }
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.Center)
+                .padding(8.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -85,18 +102,10 @@ fun EnterActionSelectorDialog(
                     isRecommended = recommendedAction == EnterAction.SUBMIT,
                     onClick = { onActionSelected(EnterAction.SUBMIT) }
                 )
-
-                // Line break option (same as newline but explicit)
-                ActionOption(
-                    icon = Icons.Default.Notes,
-                    title = "Line Break",
-                    description = "Add blank line (double ↵)",
-                    isRecommended = false,
-                    onClick = { onActionSelected(EnterAction.LINE_BREAK) }
-                )
             }
         }
     }
+}
 
 @Composable
 private fun ActionOption(

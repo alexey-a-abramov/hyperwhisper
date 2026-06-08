@@ -109,7 +109,9 @@ data class ApiSettings(
     val baseUrl: String = "", // Deprecated - kept for migration, use providerConfigs instead
     val apiKeys: Map<ApiProvider, String> = emptyMap(), // Per-provider API keys
     val providerConfigs: Map<ApiProvider, ProviderConfig> = emptyMap(), // Per-provider configuration
-    val modelId: String = "whisper-1",
+    // Derived from the provider so the data-class default can never drift from
+    // the repository's read-fallback (provider.defaultModels.first()).
+    val modelId: String = provider.defaultModels.firstOrNull() ?: "",
     val inputLanguage: String = "", // ISO-639-1 code for speech input - empty for auto-detect
     val outputLanguage: String = "", // ISO-639-1 code for output - empty to keep original
     val llmConfig: LlmConfig = LlmConfig(), // LLM configuration for post-processing

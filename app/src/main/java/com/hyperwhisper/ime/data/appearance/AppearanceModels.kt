@@ -170,7 +170,7 @@ data class AppearanceSettings(
     val uiLanguage: String = "en", // UI language code (en, ru, etc.)
     val uiScale: UIScaleOption = UIScaleOption.MEDIUM,
     val fontFamily: FontFamilyOption = FontFamilyOption.DEFAULT,
-    val autoCopyToClipboard: Boolean = false,
+    val autoCopyToClipboard: Boolean = true, // Matches AppearanceRepository read-fallback (true); was false here, a silent drift.
     val enableHistoryPanel: Boolean = true,
     val techieModeEnabled: Boolean = false, // Show technical details like logs and field info
     /**

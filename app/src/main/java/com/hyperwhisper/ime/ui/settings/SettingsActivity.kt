@@ -44,9 +44,8 @@ class SettingsActivity : FragmentActivity() {
     @Inject
     lateinit var biometricGate: BiometricGate
 
-    // Update dialog state
+    // Update dialog state — UpdateDialogHost shows whenever this is non-null.
     private var updateInfo by mutableStateOf<com.hyperwhisper.ime.update.UpdateInfo?>(null)
-    private var showUpdateDialog by mutableStateOf(false)
 
     // Permission request launcher
     private val requestPermissionLauncher = registerForActivityResult(
@@ -88,12 +87,7 @@ class SettingsActivity : FragmentActivity() {
                     ) {
                         SettingsScreen(
                             viewModel = viewModel,
-                            initialProvider = initialProvider,
-                            updateManager = updateManager,
-                            onShowUpdateDialog = { info ->
-                                updateInfo = info
-                                showUpdateDialog = true
-                            }
+                            initialProvider = initialProvider
                         )
                     }
                 }
@@ -103,10 +97,7 @@ class SettingsActivity : FragmentActivity() {
                 com.hyperwhisper.ime.update.UpdateDialogHost(
                     updateInfo = updateInfo,
                     updateManager = updateManager,
-                    onDismiss = {
-                        updateInfo = null
-                        showUpdateDialog = false
-                    }
+                    onDismiss = { updateInfo = null }
                 )
             }
         }
@@ -121,7 +112,6 @@ class SettingsActivity : FragmentActivity() {
             when (val result = updateManager.checkForUpdates()) {
                 is UpdateCheckResult.UpdateAvailable -> {
                     updateInfo = result.updateInfo
-                    showUpdateDialog = true
                 }
                 else -> {}
             }

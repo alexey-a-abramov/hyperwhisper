@@ -3,7 +3,6 @@ package com.hyperwhisper.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -274,40 +273,6 @@ private fun CategoryTab(
 }
 
 @Composable
-private fun EmojiGrid(
-    emojis: List<String>,
-    onEmojiClick: (String) -> Unit,
-    emojisPerRow: Int
-) {
-    val strings = LocalStrings.current
-    if (emojis.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = strings.emojiNoEmojisFound,
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 14.sp
-            )
-        }
-    } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(emojisPerRow),
-            horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing),
-            verticalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
-        ) {
-            items(emojis) { emoji ->
-                EmojiButton(
-                    emoji = emoji,
-                    onClick = { onEmojiClick(emoji) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun EmojiButton(
     emoji: String,
     onClick: () -> Unit
@@ -331,6 +296,3 @@ private fun EmojiButton(
         }
     }
 }
-
-// Note: UnifiedModeSwitcher is already defined in KeyboardScreen.kt
-// We'll use it here by importing it

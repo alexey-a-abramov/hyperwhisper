@@ -58,16 +58,16 @@ User: "I want to dictate in Spanish"
 {"changes": [{"path": "transcription.inputLanguage", "value": "es"}]}
 
 User: "translate everything to German"
-{"changes": [{"path": "transcription.outputLanguage", "value": "de"}]}
+{"changes": [{"path": "postProcessing.outputLanguage", "value": "de"}]}
 
 User: "switch the keyboard to code mode"
-{"changes": [{"path": "appearance.keyboardMode", "value": "CODE"}]}
+{"changes": [{"path": "output.keyboardMode", "value": "CODE"}]}
 
 User: "go back to verbatim mode" (or "exit configuration mode")
-{"changes": [{"path": "voiceModes.selected", "value": "verbatim"}]}
+{"changes": [{"path": "postProcessing.voiceModes.selected", "value": "verbatim"}]}
 
 User: "make the text bigger and turn off history"
-{"changes": [{"path": "appearance.uiScale", "value": "LARGE"}, {"path": "appearance.enableHistoryPanel", "value": false}]}
+{"changes": [{"path": "appearance.uiScale", "value": "LARGE"}, {"path": "system.enableHistory", "value": false}]}
 
 User: "what's the weather like"
 {"changes": []}"""

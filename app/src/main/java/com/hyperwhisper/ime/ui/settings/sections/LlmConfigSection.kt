@@ -12,15 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -53,7 +49,6 @@ fun LlmConfigSection(
     onLlmModelIdChange: (String) -> Unit,
     onResetLlmDefaults: () -> Unit,
     onReuseLlmKeyForProvider: () -> Unit,
-    onShowLlmInfo: () -> Unit,
     postProcessingTestState: ConnectionTestState = ConnectionTestState.Idle,
     postProcessingTestLog: List<TestLogEntry> = emptyList(),
     onTestPostProcessing: () -> Unit = {},
@@ -239,28 +234,14 @@ fun LlmConfigSection(
             Spacer(Modifier.padding(vertical = 8.dp))
         }
 
-        // Model selector with info button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LlmModelSelector(
-                selectedModel = llmModelId,
-                availableModels = llmProvider.defaultModels,
-                showFreeFilter = llmProvider == LlmProvider.OPENROUTER,
-                onModelSelected = onLlmModelIdChange,
-                modifier = Modifier.weight(1f)
-            )
-
-            IconButton(onClick = onShowLlmInfo) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = strings.llmConfigModelInfoDesc,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        // Model selector
+        LlmModelSelector(
+            selectedModel = llmModelId,
+            availableModels = llmProvider.defaultModels,
+            showFreeFilter = llmProvider == LlmProvider.OPENROUTER,
+            onModelSelected = onLlmModelIdChange,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(Modifier.padding(vertical = 8.dp))
 

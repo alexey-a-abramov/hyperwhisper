@@ -141,7 +141,6 @@ class KeyboardViewModel @Inject constructor(
     val recordingDuration: StateFlow<Long> = recordingViewModel.recordingDuration
     val walkieTalkieMode: StateFlow<Boolean> = recordingViewModel.walkieTalkieMode
     val modeChangeMessage: StateFlow<String?> = recordingViewModel.modeChangeMessage
-    val needsConfirmation: StateFlow<Boolean> = recordingViewModel.needsConfirmation
     val showCancelConfirmation: StateFlow<Boolean> = recordingViewModel.showCancelConfirmation
     val finalRecordingDuration: StateFlow<Long> = recordingViewModel.finalRecordingDuration
     val recordingWasCut: StateFlow<Boolean> = recordingViewModel.recordingWasCut
@@ -264,8 +263,7 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
-     * Stop recording
-     * If duration > 30s, will require confirmation before processing
+     * Stop recording and process the captured audio automatically.
      */
     fun stopRecording() {
         viewModelScope.launch {
@@ -283,28 +281,6 @@ class KeyboardViewModel @Inject constructor(
             Log.d(TAG, "Recording stopped - processing automatically")
             processAudioFile(stopResult.audioFile)
         }
-    }
-
-    /**
-     * User confirmed the recording - dismiss dialog (processing already started)
-     */
-    fun confirmRecording() {
-        viewModelScope.launch {
-            Log.d(TAG, "User confirmed - dismissing dialog (processing already in progress)")
-            recordingViewModel.confirmRecording()
-            recordingViewModel.clearRecordingWasCutFlag()
-            // Processing already started in stopRecording(), just dismiss the dialog
-        }
-    }
-
-    /**
-     * User rejected the recording - cancel ongoing processing and discard
-     */
-    fun rejectRecording() {
-        Log.d(TAG, "User rejected - canceling transcription and discarding recording")
-        cancelTranscription() // Cancel any ongoing processing
-        recordingViewModel.rejectRecording()
-        recordingViewModel.clearRecordingWasCutFlag()
     }
 
     /**
@@ -744,7 +720,10 @@ class KeyboardViewModel @Inject constructor(
     }
 
     init {
-        // Set up callback for when max recording duration is reached
+        // Single owner of the 3-minute cap: AudioRecorderManager fires this
+        // exactly once per recording, and it routes through the same
+        // stopRecording() path as a manual stop so the audio is always
+        // transcribed instead of discarded.
         audioRecorderManager.onMaxDurationReached = {
             Log.d(TAG, "Max recording duration reached - auto-stopping recording")
             viewModelScope.launch {

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.*
@@ -250,6 +251,38 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Deep-link entry point (Settings opened with an explicit provider).
+     * Waits for the first REAL DataStore emission before persisting, then
+     * derives every field from the freshly read settings — the save can never
+     * merge into the placeholder [ApiSettings] defaults and wipe stored API
+     * keys or configuration.
+     */
+    fun applyInitialProvider(provider: ApiProvider) {
+        viewModelScope.launch {
+            try {
+                settingsRepository.awaitApiSettingsLoaded()
+                val current = settingsRepository.apiSettings.first()
+                saveApiSettingsInternal(
+                    provider = provider,
+                    baseUrl = current.providerConfigs[provider]?.customBaseUrl
+                        ?.ifEmpty { provider.defaultEndpoint }
+                        ?: provider.defaultEndpoint,
+                    apiKey = current.apiKeys[provider] ?: "",
+                    requiresAuth = current.providerConfigs[provider]?.requiresAuth
+                        ?: provider.requiresAuth,
+                    modelId = current.modelId.ifEmpty {
+                        provider.defaultModels.firstOrNull() ?: ""
+                    },
+                    inputLanguage = current.inputLanguage,
+                    outputLanguage = current.outputLanguage
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error applying deep-linked provider", e)
+            }
+        }
+    }
+
+    /**
      * Suspend version that waits for the save to complete before returning.
      * Use this when you need to ensure settings are saved before proceeding (e.g., before closing activity).
      */
@@ -275,8 +308,11 @@ class SettingsViewModel @Inject constructor(
         outputLanguage: String
     ) {
         try {
-            // Get current settings to preserve other provider data and LLM config
-            val currentSettings = apiSettings.value
+            // Get current settings to preserve other provider data and LLM
+            // config. Read the persisted flow directly — the eagerly-seeded
+            // [apiSettings] StateFlow may still hold placeholder defaults
+            // before the first DataStore emission lands.
+            val currentSettings = settingsRepository.apiSettings.first()
             val updatedApiKeys = currentSettings.apiKeys.toMutableMap()
             updatedApiKeys[provider] = apiKey.trim()
 
@@ -294,7 +330,11 @@ class SettingsViewModel @Inject constructor(
                 modelId = modelId.trim(),
                 inputLanguage = inputLanguage.trim(),
                 outputLanguage = outputLanguage.trim(),
-                llmConfig = currentSettings.llmConfig // Preserve LLM config
+                llmConfig = currentSettings.llmConfig, // Preserve LLM config
+                // Preserve local-model config and tested-at badges — leaving
+                // these at their defaults would wipe them on every cloud save.
+                localModelSettings = currentSettings.localModelSettings,
+                lastTestedAt = currentSettings.lastTestedAt
             )
             settingsRepository.saveApiSettings(settings)
             Log.d(TAG, "API settings saved: $provider, $baseUrl, requiresAuth: $requiresAuth, model: $modelId")

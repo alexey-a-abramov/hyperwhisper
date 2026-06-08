@@ -195,8 +195,10 @@ private fun MaxHistoryField(
     }
 }
 
+/** Canonical section group header — shared across the settings sections
+ *  (AppearanceSection reuses it; keep the single copy here). */
 @Composable
-private fun GroupHeader(text: String) {
+internal fun GroupHeader(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
@@ -205,8 +207,10 @@ private fun GroupHeader(text: String) {
     )
 }
 
+/** Canonical titled switch row — shared across the settings sections
+ *  (AppearanceSection reuses it; keep the single copy here). */
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     title: String,
     description: String,
     checked: Boolean,

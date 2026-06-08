@@ -17,12 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import android.widget.Toast
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,14 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.ime.update.UpdateProbeDetails
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.settings.sections.AppUpdateSection
-import com.hyperwhisper.ui.util.localizedDisplayName
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,13 +50,9 @@ fun AboutScreen(
     buildDate: String = "",
     usageStatistics: com.hyperwhisper.data.UsageStatistics,
     techieModeEnabled: Boolean = false,
-    integrationResults: List<ProviderIntegrationResult> = emptyList(),
-    integrationRunning: Boolean = false,
     updateProbeDetails: UpdateProbeDetails? = null,
     updateManager: com.hyperwhisper.ime.update.UpdateManager? = null,
     onClearStatistics: () -> Unit,
-    onRunIntegrationTests: () -> Unit = {},
-    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit = {},
     onRefreshUpdateProbe: (() -> Unit)? = null,
     onShowUpdateDialog: (com.hyperwhisper.ime.update.UpdateInfo) -> Unit = {}
 ) {
@@ -775,221 +762,7 @@ private fun ProbeResultItem(result: com.hyperwhisper.ime.update.ApkProbeResult) 
     }
 }
 
-@Composable
-private fun IntegrationTestSection(
-    running: Boolean,
-    results: List<ProviderIntegrationResult>,
-    onRun: () -> Unit,
-    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+// Provider integration tests (and their JSON export) live in
+// Settings → Local models (LocalModelsSection); the duplicate section that
+// used to live here was removed.
 
-    val configured = results.filter { it.configured }
-    val notConfigured = results.filter { !it.configured }
-    val passCount = configured.count { it.success }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Provider Integration Tests",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                if (results.isNotEmpty()) {
-                    Text(
-                        text = "$passCount/${configured.size} pass · ${notConfigured.size} skipped",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Action row — Run-all + Copy-JSON.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Button(
-                    onClick = onRun,
-                    enabled = !running,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (running) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.size(6.dp))
-                        Text("Running…", fontSize = 12.sp)
-                    } else {
-                        Text("Run all providers", fontSize = 12.sp)
-                    }
-                }
-                if (results.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = {
-                            val json = buildResultsJson(results)
-                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(json))
-                            Toast.makeText(
-                                context,
-                                "Copied ${results.size} results as JSON",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    ) { Text("Copy JSON", fontSize = 12.sp) }
-                }
-            }
-
-            if (results.isNotEmpty()) {
-                Divider()
-                if (configured.isNotEmpty()) {
-                    Text(
-                        text = "CONFIGURED · ${configured.size}",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
-                    configured.forEach { result ->
-                        DenseResultRow(result, onOpenProviderConfiguration)
-                    }
-                }
-                if (notConfigured.isNotEmpty()) {
-                    Spacer(Modifier.size(2.dp))
-                    Text(
-                        text = "NOT CONFIGURED · ${notConfigured.size}",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 1.sp
-                    )
-                    notConfigured.forEach { result ->
-                        DenseResultRow(result, onOpenProviderConfiguration)
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-/**
- * Single-row dense view of one [ProviderIntegrationResult]. Layout:
- *   [✓/✗/–] provider-name           HTTP·N ms · message  [Configure]
- * Status glyph + name on the left, key facts on the right; tap-to-open
- * configuration link compressed to a small "Configure" affordance.
- */
-@Composable
-private fun DenseResultRow(
-    result: ProviderIntegrationResult,
-    onOpenProviderConfiguration: (com.hyperwhisper.data.ApiProvider) -> Unit
-) {
-    val statusGlyph: String
-    val statusColor: androidx.compose.ui.graphics.Color
-    when {
-        !result.configured -> {
-            statusGlyph = "–"
-            statusColor = MaterialTheme.colorScheme.onSurfaceVariant
-        }
-        result.success -> {
-            statusGlyph = "✓"
-            statusColor = MaterialTheme.colorScheme.primary
-        }
-        else -> {
-            statusGlyph = "✗"
-            statusColor = MaterialTheme.colorScheme.error
-        }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = statusGlyph,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = statusColor,
-            modifier = Modifier.padding(end = 6.dp)
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = result.provider.localizedDisplayName(),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
-            // Single compressed detail line so 12+ providers fit without scrolling.
-            val detail = buildString {
-                result.statusCode?.let { append("HTTP ").append(it).append(" · ") }
-                if (result.configured) append(result.durationMs).append(" ms · ")
-                append(result.message)
-            }
-            Text(
-                text = detail,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2
-            )
-        }
-        TextButton(
-            onClick = { onOpenProviderConfiguration(result.provider) },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = 6.dp, vertical = 0.dp
-            )
-        ) {
-            Text(
-                "Configure",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-/**
- * Build a JSON array of all integration test results for the user to paste
- * into a bug report or diff against a previous run. Hand-rolled rather than
- * Gson-based because this composable doesn't have a Gson injected and the
- * shape is trivial.
- */
-private fun buildResultsJson(results: List<ProviderIntegrationResult>): String {
-    fun esc(s: String): String = s
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-    val items = results.joinToString(",\n") { r ->
-        buildString {
-            append("  {")
-            append("\"provider\":\"").append(esc(r.provider.name)).append("\",")
-            append("\"displayName\":\"").append(esc(r.provider.displayName)).append("\",")
-            append("\"configured\":").append(r.configured).append(',')
-            append("\"success\":").append(r.success).append(',')
-            append("\"durationMs\":").append(r.durationMs).append(',')
-            append("\"statusCode\":").append(r.statusCode?.toString() ?: "null").append(',')
-            append("\"message\":\"").append(esc(r.message)).append("\"")
-            append("}")
-        }
-    }
-    return "[\n$items\n]\n"
-}

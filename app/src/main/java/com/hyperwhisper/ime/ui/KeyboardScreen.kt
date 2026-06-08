@@ -55,7 +55,6 @@ import com.hyperwhisper.ui.selectors.LlmModelSelectorDialog
 import com.hyperwhisper.ui.selectors.ProviderModelSelectorDialog
 import com.hyperwhisper.ui.dialogs.EnterActionSelectorDialog
 import com.hyperwhisper.ui.dialogs.EnterAction
-import com.hyperwhisper.ui.dialogs.LayoutSelectorDialog
 import com.hyperwhisper.ui.util.localizedDisplayName
 
 internal val KeyboardSurfaceColor = Color(0xFF000000)
@@ -145,19 +144,22 @@ fun KeyboardScreen(
     var showTimerText by remember { mutableStateOf(true) }
     var showModeDialog by remember { mutableStateOf(false) }
     var showProviderModelDialog by remember { mutableStateOf(false) }
-    var keyboardInputMode by remember { mutableStateOf(appearanceSettings.lastKeyboardInputMode) }
+    // Normalized at the source so a legacy persisted mode (NUMPAD, etc.)
+    // never renders, not even for the first frame.
+    var keyboardInputMode by remember {
+        mutableStateOf(appearanceSettings.lastKeyboardInputMode.normalize())
+    }
     // Snapshot of the most recent non-agent mode, so picking a command from
     // an agent palette can drop the user back into the typing layout they
     // came from instead of stranding them on the chips grid.
     var lastNonAgentMode by remember {
         mutableStateOf(
             if (appearanceSettings.lastKeyboardInputMode.isAgent) KeyboardInputMode.QWERTY
-            else appearanceSettings.lastKeyboardInputMode
+            else appearanceSettings.lastKeyboardInputMode.normalize()
         )
     }
     var currentKeyboardLayout by remember { mutableStateOf(appearanceSettings.currentKeyboardLayout) }
     var emojiSearchQuery by remember { mutableStateOf("") }
-    var showLayoutSelector by remember { mutableStateOf(false) }
     // Full locality list, opened by long-pressing the dictation locality key.
     var showLocalitySheet by remember { mutableStateOf(false) }
     var showEnterActionSelector by remember { mutableStateOf(false) }
@@ -225,10 +227,6 @@ fun KeyboardScreen(
             onSpace()
             lastSpacePressTime = currentTime
         }
-    }
-
-    val handleSpaceLongPress = {
-        showLayoutSelector = true
     }
 
     val handleEnterLongPress = {
@@ -468,7 +466,6 @@ fun KeyboardScreen(
                     onDisableWalkieTalkieMode = { viewModel.disableWalkieTalkieMode() },
                     onPressStartRecording = { viewModel.startRecording() },
                     onPressReleaseRecording = { viewModel.stopRecording() },
-                    onConfirmRecording = { viewModel.confirmRecording() },
                     onToggleTimer = { showTimerText = !showTimerText },
                     onDelete = onDelete,
                     onDeleteAll = onDeleteAll,
@@ -594,17 +591,13 @@ fun KeyboardScreen(
                 TextKeyboardSectionNew(
                     mode = keyboardInputMode,
                     layout = currentKeyboardLayout,
-                    recordingState = recordingState,
-                    recordingDuration = recordingDuration,
                     lastTranscribedText = lastTranscribedText,
                     transcriptionHistory = transcriptionHistory,
                     enableHistoryPanel = appearanceSettings.enableHistoryPanel,
                     onPasteText = onTextCommit,
                     onShowHistory = { showHistoryPanel = true },
-                    onModeChange = { keyboardInputMode = it },
                     onKeyPress = onTextCommit,
                     onSpacePress = handleSpacePress,
-                    onSpaceLongPress = handleSpaceLongPress,
                     onEnterLongPress = handleEnterLongPress,
                     onDelete = onDelete,
                     onEnter = onEnter,
@@ -616,13 +609,8 @@ fun KeyboardScreen(
                     onPageDown = onPageDown,
                     onHome = onHome,
                     onEnd = onEnd,
-                    onInsert = onInsert,
-                    onForwardDelete = onForwardDelete,
                     onEscape = onEscape,
                     onTab = onTab,
-                    onReturnToDictation = { keyboardInputMode = KeyboardInputMode.DICTATION },
-                    onStartRecording = { viewModel.startRecording() },
-                    onStopRecording = { viewModel.stopRecording() },
                     localityCode = currentKeyboardLayout.code,
                     onCycleLocality = onCycleLocality,
                     onShowLocalityList = { showLocalitySheet = true },
@@ -749,39 +737,6 @@ fun KeyboardScreen(
             )
         }
 
-        // Show Layout Selector Dialog
-        if (showLayoutSelector) {
-            LayoutSelectorDialog(
-                currentLayout = currentKeyboardLayout,
-                currentMode = keyboardInputMode,
-                enabledLayouts = appearanceSettings.enabledKeyboardLayouts,
-                currentInputLanguage = apiSettings.inputLanguage,
-                currentOutputLanguage = apiSettings.outputLanguage,
-                currentVoiceMode = voiceModes.firstOrNull { it.id == selectedModeId },
-                onLayoutSelected = { layout ->
-                    currentKeyboardLayout = layout
-                    val updatedSettings = appearanceSettings.copy(currentKeyboardLayout = layout)
-                    viewModel.updateKeyboardLayout(updatedSettings)
-                },
-                onModeSelected = { mode ->
-                    keyboardInputMode = mode
-                },
-                onShowInputLanguageDialog = {
-                    showLayoutSelector = false
-                    showInputLanguageDialog = true
-                },
-                onShowOutputLanguageDialog = {
-                    showLayoutSelector = false
-                    showOutputLanguageDialog = true
-                },
-                onShowVoiceModeDialog = {
-                    showLayoutSelector = false
-                    showModeDialog = true
-                },
-                onDismiss = { showLayoutSelector = false }
-            )
-        }
-
         // Full locality list (long-press the dictation locality key).
         if (showLocalitySheet) {
             com.hyperwhisper.ui.sections.LocalitySelectorSheet(
@@ -816,7 +771,6 @@ fun KeyboardScreen(
                     when (action) {
                         EnterAction.NEWLINE -> onTextCommit("\n")
                         EnterAction.SUBMIT -> onEnter()
-                        EnterAction.LINE_BREAK -> onTextCommit("\n")
                     }
                     showEnterActionSelector = false
                 },

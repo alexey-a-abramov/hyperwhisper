@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -92,14 +93,43 @@ class ApiSettingsRepository(
      */
     val apiSettingsState: StateFlow<ApiSettings> = _apiSettingsState.asStateFlow()
 
-    /** Synchronous accessor for the cached snapshot. Returns defaults until primed. */
-    fun snapshot(): ApiSettings = _apiSettingsState.value
+    private val _isLoaded = MutableStateFlow(false)
+
+    /**
+     * True once [apiSettingsState] reflects a real DataStore emission rather
+     * than the placeholder defaults it is seeded with. Writers that merge into
+     * the current settings must wait for this (see [awaitLoaded]) or they can
+     * persist the placeholder and wipe stored configuration.
+     */
+    val isLoaded: StateFlow<Boolean> = _isLoaded.asStateFlow()
+
+    /** Suspends until the first real DataStore emission has been applied. */
+    suspend fun awaitLoaded() {
+        _isLoaded.first { it }
+    }
+
+    /**
+     * Synchronous accessor for the cached snapshot. If the internal collector
+     * hasn't primed the cache yet, this blocks on a direct first read of the
+     * persisted settings instead of serving placeholder defaults — network
+     * interceptors and DI providers must never observe an empty-keys
+     * [ApiSettings].
+     */
+    fun snapshot(): ApiSettings =
+        if (_isLoaded.value) {
+            _apiSettingsState.value
+        } else {
+            runBlocking { apiSettings.first() }
+        }
 
     init {
         scope.launch {
             migratePlaintextSecretsIfNeeded()
             migrateLlmKeyToPerProviderIfNeeded()
-            apiSettings.collect { _apiSettingsState.value = it }
+            apiSettings.collect {
+                _apiSettingsState.value = it
+                _isLoaded.value = true
+            }
         }
     }
 
@@ -198,7 +228,7 @@ class ApiSettingsRepository(
             baseUrl = preferences[BASE_URL_KEY] ?: provider.defaultEndpoint,
             apiKeys = apiKeysMap,
             providerConfigs = providerConfigs,
-            modelId = preferences[MODEL_ID_KEY] ?: provider.defaultModels.firstOrNull() ?: "whisper-1",
+            modelId = preferences[MODEL_ID_KEY] ?: provider.defaultModels.firstOrNull() ?: "",
             inputLanguage = preferences[INPUT_LANGUAGE_KEY] ?: "",
             outputLanguage = preferences[OUTPUT_LANGUAGE_KEY] ?: "",
             llmConfig = llmConfig.copy(lastTestedAt = llmLastTestedAt),
@@ -529,7 +559,7 @@ class ApiSettingsRepository(
     suspend fun resetToDefaults(provider: ApiProvider) {
         dataStore.edit { preferences ->
             preferences[BASE_URL_KEY] = provider.defaultEndpoint
-            preferences[MODEL_ID_KEY] = provider.defaultModels.firstOrNull() ?: "whisper-1"
+            preferences[MODEL_ID_KEY] = provider.defaultModels.firstOrNull() ?: ""
         }
     }
 

@@ -61,7 +61,9 @@ class ConfigSchemaRoundTripTest {
                 currentKeyboardLayout = KeyboardLayout.RUSSIAN,
                 enabledKeyboardLayouts = setOf(KeyboardLayout.ENGLISH, KeyboardLayout.RUSSIAN),
                 enabledAgentKeyboards = setOf("AGENT_CLAUDE_CODE"),
-                recentEmojis = listOf("😀", "🎉"),
+                // recentEmojis is intentionally NOT set here: it is device-local
+                // ephemeral state, deliberately excluded from the registry, so it
+                // no longer round-trips through export/import (see ConfigSchema).
             ),
             voiceModes = ConfigTestFixtures.defaultVoiceModes() +
                 VoiceMode(id = "custom", name = "Custom", systemPrompt = "Custom prompt"),

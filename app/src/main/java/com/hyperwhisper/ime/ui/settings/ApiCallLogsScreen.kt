@@ -36,6 +36,28 @@ fun ApiCallLogsScreen(
     val groupedLogs = remember(logs) {
         logs.groupBy { "${it.provider.displayName} / ${it.modelId}" }
     }
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text(strings.clearLogs) },
+            text = { Text("${strings.apiCallLogsStatTotal}: ${statistics.totalCalls}") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearConfirm = false
+                        onClearLogs()
+                    }
+                ) { Text(strings.clearAll) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -73,7 +95,7 @@ fun ApiCallLogsScreen(
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconButton(onClick = onClearLogs) {
+                        IconButton(onClick = { showClearConfirm = true }) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = strings.clearLogs,

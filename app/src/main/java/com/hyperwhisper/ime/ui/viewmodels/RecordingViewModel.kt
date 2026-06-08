@@ -12,7 +12,9 @@ import java.io.File
 
 /**
  * ViewModel for managing audio recording state
- * Handles recording lifecycle and timeout monitoring
+ * Handles recording lifecycle. The 3-minute timeout is owned by
+ * AudioRecorderManager, which notifies KeyboardViewModel exactly once;
+ * this class must not auto-stop on duration itself.
  *
  * Note: Not a @HiltViewModel - created internally by KeyboardViewModel
  */
@@ -24,7 +26,6 @@ class RecordingViewModel(
 
     companion object {
         private const val TAG = "RecordingViewModel"
-        private const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
     }
 
     // Recording state
@@ -362,19 +363,6 @@ class RecordingViewModel(
             }
             // Keep PROCESSING state if that's what we're in
             // It will be cleared when transcription completes
-        }
-    }
-
-    init {
-        // Monitor recording duration for timeout
-        viewModelScope.launch {
-            recordingDuration.collect { duration ->
-                if (duration >= MAX_RECORDING_DURATION_MS && recordingState.value == RecordingState.RECORDING) {
-                    Log.d(TAG, "Max recording duration reached, auto-stopping")
-                    _recordingWasCut.value = true
-                    stopRecording()
-                }
-            }
         }
     }
 }

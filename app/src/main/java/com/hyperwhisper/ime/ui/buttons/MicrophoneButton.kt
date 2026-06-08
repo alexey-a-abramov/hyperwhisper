@@ -20,7 +20,6 @@ fun MicrophoneButton(
     onDisableWalkieTalkieMode: () -> Unit = {},
     onPressStartRecording: () -> Unit = {},
     onPressReleaseRecording: () -> Unit = {},
-    onConfirmRecording: () -> Unit = {},
     walkieTalkieMode: Boolean = false,
     recordingDuration: Long = 0L,
     transcriptionProgress: Float? = null,
@@ -45,7 +44,12 @@ fun MicrophoneButton(
                     walkieTalkieMode = walkieTalkieMode
                 )
             }
-            RecordingState.RECORDING -> {
+            // RECORDING_COMPLETE_AWAITING_CONFIRMATION is a legacy state —
+            // nothing transitions into it anymore (recordings always process
+            // automatically). Kept in the branch so the when stays exhaustive
+            // over the enum; rendered the same as RECORDING.
+            RecordingState.RECORDING,
+            RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION -> {
                 RecordingMicButton(
                     onClick = onStopRecording,
                     onDoubleTap = if (walkieTalkieMode) onDisableWalkieTalkieMode else ({}),
@@ -53,19 +57,10 @@ fun MicrophoneButton(
                     walkieTalkieMode = walkieTalkieMode
                 )
             }
-            RecordingState.RECORDING_COMPLETE_AWAITING_CONFIRMATION -> {
-                AwaitingConfirmationButton(
-                    recordingDuration = recordingDuration,
-                    onClick = onConfirmRecording
-                )
-            }
             RecordingState.PROCESSING -> {
                 // Always show the determinate-style ProcessingIndicator (big
                 // circle, pulsing wave glyph, ≈ % counter, stage label) so
-                // the user gets continuous progress info. Earlier code only
-                // hit this branch when processingPhase == IDLE; the phase-
-                // animated `ProcessingMicButton` won out the rest of the
-                // time, hiding the real progress UI. Phase info is still
+                // the user gets continuous progress info. Phase info is
                 // conveyed via the stage label inside ProcessingIndicator.
                 ProcessingIndicator(
                     progress = transcriptionProgress,

@@ -30,7 +30,7 @@ class ConfigPatchApplier @Inject constructor(
 ) {
     companion object {
         private const val TAG = "ConfigPatchApplier"
-        const val KEYBOARD_MODE_PATH = "appearance.keyboardMode"
+        const val KEYBOARD_MODE_PATH = "output.keyboardMode"
 
         /** Pure core: apply changes to a snapshot. Exposed for tests. */
         fun fold(snapshot: ConfigSnapshot, changes: List<ResolvedChange>): ConfigSnapshot =

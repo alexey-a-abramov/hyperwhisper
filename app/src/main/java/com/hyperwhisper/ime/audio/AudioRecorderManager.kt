@@ -29,6 +29,7 @@ class AudioRecorderManager @Inject constructor(
     private var currentAudioFile: File? = null
     private var isRecording = false
     private var recordingStartTime: Long = 0
+    private var maxDurationNotified = false
     private var timerJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -107,6 +108,7 @@ class AudioRecorderManager @Inject constructor(
                     recordingStartTime = System.currentTimeMillis()
                     _recordingDuration.value = 0L
                     _recordingCutDueToTimeout.value = false
+                    maxDurationNotified = false
 
                     // Acquire wake lock to keep recording during screen lock
                     acquireWakeLock()
@@ -219,11 +221,14 @@ class AudioRecorderManager @Inject constructor(
                 val elapsed = System.currentTimeMillis() - recordingStartTime
                 _recordingDuration.value = elapsed
 
-                // Check if max duration reached
-                if (elapsed >= MAX_RECORDING_DURATION_MS) {
+                // Check if max duration reached - notify exactly once per recording.
+                // The callback owns stopping the recording via the same path as a
+                // manual stop, so the audio file is always handed off for processing.
+                if (elapsed >= MAX_RECORDING_DURATION_MS && !maxDurationNotified) {
+                    maxDurationNotified = true
                     _recordingCutDueToTimeout.value = true
                     onMaxDurationReached?.invoke()
-                    Log.d(TAG, "Max recording duration reached - callback invoked")
+                    Log.d(TAG, "Max recording duration reached - one-shot stop callback invoked")
                 }
 
                 delay(100) // Update every 100ms for smooth timer

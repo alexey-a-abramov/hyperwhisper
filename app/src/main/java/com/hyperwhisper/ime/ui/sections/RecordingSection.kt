@@ -37,7 +37,6 @@ import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.buttons.MicrophoneButton
 import com.hyperwhisper.ui.buttons.RepeatableDeleteButton
 import com.hyperwhisper.ui.components.InputFieldInfo
-import com.hyperwhisper.ui.indicators.RecordingTimer
 
 /**
  * Recording section - the main interactive area.
@@ -70,7 +69,6 @@ fun RecordingSection(
     onDisableWalkieTalkieMode: () -> Unit = {},
     onPressStartRecording: () -> Unit = {},
     onPressReleaseRecording: () -> Unit = {},
-    onConfirmRecording: () -> Unit = {},
     onToggleTimer: () -> Unit,
     onDelete: () -> Unit = {},
     onDeleteAll: () -> Unit = {},
@@ -208,7 +206,6 @@ fun RecordingSection(
                     onDisableWalkieTalkieMode = onDisableWalkieTalkieMode,
                     onPressStartRecording = onPressStartRecording,
                     onPressReleaseRecording = onPressReleaseRecording,
-                    onConfirmRecording = onConfirmRecording,
                     walkieTalkieMode = walkieTalkieMode,
                     recordingDuration = recordingDuration,
                     transcriptionProgress = transcriptionProgress,

@@ -7,8 +7,7 @@ data class VoiceMode(
     val systemPrompt: String = "",
     val model: String = "whisper-1",
     val processingMode: String = "direct",
-    val isBuiltIn: Boolean = false,
-    val inputLanguageHint: String = "" // Hint for input language if model supports it
+    val isBuiltIn: Boolean = false
 )
 
 enum class RecordingState {
@@ -45,11 +44,3 @@ enum class ProcessingStage(val displayName: String, val progressStart: Float, va
     WAITING_API("Waiting for API...", 0.3f, 0.9f),
     FINISHING("Finishing...", 0.95f, 1.0f)
 }
-
-/**
- * Recording settings
- */
-data class RecordingSettings(
-    val maxRecordingDuration: Long = 180000L, // 3 minutes in milliseconds
-    val warnAtSecondsRemaining: Int = 30
-)

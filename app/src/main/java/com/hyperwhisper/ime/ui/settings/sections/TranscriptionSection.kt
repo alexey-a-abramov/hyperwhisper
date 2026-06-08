@@ -75,9 +75,6 @@ import com.hyperwhisper.data.LocalModelInfo
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.data.LocalModelSettings
 import com.hyperwhisper.data.LocalModelType
-import com.hyperwhisper.data.WhisperDownloadState
-import com.hyperwhisper.data.WhisperModelCatalog
-import com.hyperwhisper.data.WhisperModelEntry
 import com.hyperwhisper.network.OpenRouterModelInfo
 import com.hyperwhisper.ui.settings.ConnectionTestState
 import com.hyperwhisper.ui.settings.SettingsStatusLabels
@@ -103,7 +100,6 @@ fun TranscriptionSection(
     discoveredModels: List<LocalModelInfo>,
     connectionTestState: ConnectionTestState,
     transcriptionTestLog: List<TestLogEntry> = emptyList(),
-    whisperDownloadStates: Map<String, WhisperDownloadState> = emptyMap(),
     retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState> = emptyMap(),
     onSaveCloud: (
         provider: ApiProvider,
@@ -123,9 +119,6 @@ fun TranscriptionSection(
     onShowApiCallLogs: () -> Unit,
     onSetActiveCloud: () -> Unit = {},
     onSetActiveLocalModel: (String) -> Unit = {},
-    onStartWhisperDownload: (String) -> Unit = {},
-    onCancelWhisperDownload: (String) -> Unit = {},
-    onDeleteDownloadedWhisper: (String) -> Unit = {},
     openRouterModels: List<OpenRouterModelInfo> = emptyList(),
     openRouterRefreshing: Boolean = false,
     openRouterError: String? = null,
@@ -323,6 +316,11 @@ private fun CloudPanel(
         onSave(provider, baseUrl, apiKey, requiresAuth, modelId, inputLanguage, outputLanguage)
     }
 
+    // Debounce per-keystroke persistence for the free-text fields (API key,
+    // base URL) so the resulting settings emission doesn't rebuild field
+    // state mid-typing. Flushed on dispose, so no edit is lost.
+    val debouncedPersist = com.hyperwhisper.ui.settings.rememberDebouncedSaver { persist() }
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ActiveSourceCard(
             isActive = cloudActive,
@@ -338,6 +336,9 @@ private fun CloudPanel(
                 lastTestedAt = apiSettings.lastTestedAt,
                 retestProgress = retestProgress,
                 onProviderSelected = { newProvider ->
+                    // Persist any in-flight text edits for the OLD provider
+                    // before its field state is replaced below.
+                    debouncedPersist.flush()
                     provider = newProvider
                     val newApiKey = apiSettings.apiKeys[newProvider] ?: ""
                     val newConfig = apiSettings.providerConfigs[newProvider]
@@ -387,7 +388,7 @@ private fun CloudPanel(
                 value = apiKey,
                 onValueChange = {
                     apiKey = it
-                    persist()
+                    debouncedPersist.schedule()
                 },
                 singleLine = true,
                 placeholder = { Text(if (requiresAuth) strings.transcriptionApiKeyRequiredHint else strings.transcriptionApiKeyOptionalHint) },
@@ -472,7 +473,7 @@ private fun CloudPanel(
                 value = baseUrl,
                 onValueChange = {
                     baseUrl = it
-                    persist()
+                    debouncedPersist.schedule()
                 },
                 singleLine = true,
                 label = { Text(strings.transcriptionApiEndpointLabel) },

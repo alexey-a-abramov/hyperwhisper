@@ -92,7 +92,9 @@ object KeyboardLayouts {
         bottomRow = listOf("z", "x", "c", "v", "b", "n", "m"),
         shiftedSymbols = mapOf(
             "1" to "!", "2" to "\"", "3" to "#", "4" to "$", "5" to "%",
-            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to ")"
+            // 0 maps to "=" per the European pattern shared with the German /
+            // Swedish / Italian layouts above (was a copy-paste duplicate ")").
+            "6" to "&", "7" to "/", "8" to "(", "9" to ")", "0" to "="
         )
     )
 

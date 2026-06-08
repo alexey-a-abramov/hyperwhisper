@@ -59,9 +59,11 @@ class ConfigPromptBuilderTest {
 
     @Test
     fun embedsCurrentValues() {
-        // Defaults from the fixture snapshot
+        // Defaults from the fixture snapshot. ApiSettings.modelId is derived
+        // from provider.defaultModels.first(); for the default OPENAI provider
+        // that is "gpt-4o-transcribe" (no longer the legacy "whisper-1").
         assertTrue(prompt.contains("OCEAN_DEEP"))
-        assertTrue(prompt.contains("whisper-1"))
+        assertTrue(prompt.contains("gpt-4o-transcribe"))
     }
 
     @Test

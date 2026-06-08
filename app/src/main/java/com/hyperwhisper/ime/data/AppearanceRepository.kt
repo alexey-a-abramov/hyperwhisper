@@ -45,6 +45,18 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_PER_APP_LAYOUT_KEY = booleanPreferencesKey("appearance_per_app_layout_memory")
         private val APPEARANCE_CURRENT_LAYOUT_KEY = stringPreferencesKey("appearance_current_keyboard_layout")
         private val APPEARANCE_ENABLED_LAYOUTS_KEY = stringSetPreferencesKey("appearance_enabled_keyboard_layouts")
+        private val APPEARANCE_RECENT_EMOJIS_KEY = stringPreferencesKey("appearance_recent_emojis")
+
+        /**
+         * Separator for the recent-emojis joined string. Recency ORDER matters
+         * here, so a stringSetPreferencesKey (the enabledKeyboardLayouts
+         * pattern) won't do — sets drop ordering. Newline never appears inside
+         * an emoji cluster, so it's a safe delimiter.
+         */
+        private const val RECENT_EMOJIS_SEPARATOR = "\n"
+
+        /** Same cap as the in-memory recency logic (KeyboardScreen keeps 10). */
+        private const val MAX_RECENT_EMOJIS = 10
     }
 
     /**
@@ -126,7 +138,14 @@ class AppearanceRepository @Inject constructor(
                 }
                 ?.toSet()
                 ?.takeIf { it.isNotEmpty() }
-                ?: setOf(KeyboardLayout.ENGLISH)
+                ?: setOf(KeyboardLayout.ENGLISH),
+            // Most-recent-first emoji list; order is preserved by storing a
+            // joined string rather than a preference set.
+            recentEmojis = preferences[APPEARANCE_RECENT_EMOJIS_KEY]
+                ?.split(RECENT_EMOJIS_SEPARATOR)
+                ?.filter { it.isNotBlank() }
+                ?.take(MAX_RECENT_EMOJIS)
+                ?: emptyList()
         )
     }
 
@@ -155,6 +174,9 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_CURRENT_LAYOUT_KEY] = settings.currentKeyboardLayout.name
             preferences[APPEARANCE_ENABLED_LAYOUTS_KEY] =
                 settings.enabledKeyboardLayouts.map { it.name }.toSet()
+            preferences[APPEARANCE_RECENT_EMOJIS_KEY] = settings.recentEmojis
+                .take(MAX_RECENT_EMOJIS)
+                .joinToString(RECENT_EMOJIS_SEPARATOR)
         }
     }
 }

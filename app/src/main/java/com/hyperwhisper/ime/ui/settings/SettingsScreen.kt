@@ -54,7 +54,6 @@ import com.hyperwhisper.ui.settings.dialogs.ConfigExportDialog
 import com.hyperwhisper.ui.settings.dialogs.ConfigImportDialog
 import com.hyperwhisper.ui.settings.dialogs.EditModeDialog
 import com.hyperwhisper.ui.settings.dialogs.ProviderKeyInstructionsDialog
-import com.hyperwhisper.ui.settings.sections.AppUpdateSection
 import com.hyperwhisper.ui.settings.sections.AppearanceSection
 import com.hyperwhisper.ui.settings.sections.KeyboardBehaviorSection
 import com.hyperwhisper.ui.settings.sections.LlmConfigSection
@@ -67,8 +66,6 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     initialProvider: ApiProvider? = null,
-    updateManager: com.hyperwhisper.ime.update.UpdateManager? = null,
-    onShowUpdateDialog: (com.hyperwhisper.ime.update.UpdateInfo) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val apiSettings by viewModel.apiSettings.collectAsState()
@@ -131,32 +128,24 @@ fun SettingsScreen(
         )
     }
 
-    // Apply initial provider once
-    var initialProviderApplied by remember { mutableStateOf(false) }
-    LaunchedEffect(initialProvider, apiSettings) {
-        if (initialProvider != null && !initialProviderApplied) {
-            initialProviderApplied = true
-            // Persist via VM so the rest of the app picks it up
-            viewModel.saveApiSettings(
-                provider = initialProvider,
-                baseUrl = apiSettings.providerConfigs[initialProvider]?.customBaseUrl?.ifEmpty { initialProvider.defaultEndpoint }
-                    ?: initialProvider.defaultEndpoint,
-                apiKey = apiSettings.apiKeys[initialProvider] ?: "",
-                requiresAuth = apiSettings.providerConfigs[initialProvider]?.requiresAuth ?: initialProvider.requiresAuth,
-                modelId = apiSettings.modelId.ifEmpty { initialProvider.defaultModels.firstOrNull() ?: "" },
-                inputLanguage = apiSettings.inputLanguage,
-                outputLanguage = apiSettings.outputLanguage
-            )
+    // Apply the deep-linked provider once. The ViewModel gates the save on the
+    // first real DataStore emission, so it can never merge into placeholder
+    // defaults and wipe stored API keys.
+    LaunchedEffect(initialProvider) {
+        if (initialProvider != null) {
+            viewModel.applyInitialProvider(initialProvider)
         }
     }
 
-    BackHandler(enabled = route is SettingsRoute.Detail) {
-        route = SettingsRoute.Home
+    BackHandler(enabled = route !is SettingsRoute.Home) {
+        route = when (val current = route) {
+            is SettingsRoute.ApiLogs -> current.origin
+            else -> SettingsRoute.Home
+        }
     }
 
     // Cross-cutting dialogs
     var showProviderKeyHelp by remember { mutableStateOf(false) }
-    var showApiCallLogs by remember { mutableStateOf(false) }
     var showAddModeDialog by remember { mutableStateOf(false) }
     var editingMode by remember { mutableStateOf<com.hyperwhisper.data.VoiceMode?>(null) }
     var overflowOpen by remember { mutableStateOf(false) }
@@ -166,7 +155,9 @@ fun SettingsScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            // The API logs route renders its own header (title + clear +
+            // close), so the shared app bar is suppressed there.
+            if (route !is SettingsRoute.ApiLogs) TopAppBar(
                 title = {
                     val current = route
                     val title = if (current is SettingsRoute.Detail) current.category.localizedTitle()
@@ -223,7 +214,7 @@ fun SettingsScreen(
                                 text = { Text(strings.viewApiLogs) },
                                 onClick = {
                                     overflowOpen = false
-                                    showApiCallLogs = true
+                                    route = SettingsRoute.ApiLogs(origin = route)
                                 }
                             )
                             if (appearanceSettings.techieModeEnabled) {
@@ -273,6 +264,16 @@ fun SettingsScreen(
                 val retestProgress by viewModel.retestProgress.collectAsState()
                 val retestRunning by viewModel.retestRunning.collectAsState()
                 when (current) {
+                    is SettingsRoute.ApiLogs -> {
+                        ApiCallLogsScreen(
+                            logs = apiCallLogs,
+                            statistics = apiCallStatistics,
+                            onClearLogs = {
+                                coroutineScope.launch { viewModel.clearApiCallLogs() }
+                            },
+                            onDismiss = { route = current.origin }
+                        )
+                    }
                     is SettingsRoute.Home -> {
                         SettingsHomeScreen(
                             apiSettings = apiSettings,
@@ -294,7 +295,6 @@ fun SettingsScreen(
                                 discoveredModels = discoveredModels,
                                 connectionTestState = connectionTestState,
                                 transcriptionTestLog = transcriptionTestLog,
-                                whisperDownloadStates = whisperDownloadStates,
                                 onSaveCloud = { p, b, k, r, m, i, o ->
                                     viewModel.saveApiSettings(p, b, k, r, m, i, o)
                                 },
@@ -309,12 +309,9 @@ fun SettingsScreen(
                                 },
                                 onResetConnectionState = { viewModel.resetConnectionTestState() },
                                 onShowProviderKeyHelp = { showProviderKeyHelp = true },
-                                onShowApiCallLogs = { showApiCallLogs = true },
+                                onShowApiCallLogs = { route = SettingsRoute.ApiLogs(origin = current) },
                                 onSetActiveCloud = { viewModel.setActiveCloudProvider() },
                                 onSetActiveLocalModel = { viewModel.setActiveLocalWhisperModel(it) },
-                                onStartWhisperDownload = { viewModel.startWhisperDownload(it) },
-                                onCancelWhisperDownload = { viewModel.cancelWhisperDownload(it) },
-                                onDeleteDownloadedWhisper = { viewModel.deleteDownloadedWhisperModel(it) },
                                 openRouterModels = openRouterModels,
                                 openRouterRefreshing = openRouterRefreshing,
                                 openRouterError = openRouterError,
@@ -414,7 +411,7 @@ fun SettingsScreen(
                             )
 
                             SettingsCategory.ADVANCED -> AdvancedDetail(
-                                onOpenApiLogs = { showApiCallLogs = true },
+                                onOpenApiLogs = { route = SettingsRoute.ApiLogs(origin = current) },
                                 onOpenProviderKeyHelp = { showProviderKeyHelp = true },
                                 techieModeEnabled = appearanceSettings.techieModeEnabled,
                                 onExportSecrets = { gateAndExportSecrets() },
@@ -444,17 +441,6 @@ fun SettingsScreen(
         ProviderKeyInstructionsDialog(
             provider = apiSettings.provider,
             onDismiss = { showProviderKeyHelp = false }
-        )
-    }
-
-    if (showApiCallLogs) {
-        ApiCallLogsScreen(
-            logs = apiCallLogs,
-            statistics = apiCallStatistics,
-            onClearLogs = {
-                coroutineScope.launch { viewModel.clearApiCallLogs() }
-            },
-            onDismiss = { showApiCallLogs = false }
         )
     }
 
@@ -563,6 +549,11 @@ private fun PostProcessingDetail(
         )
     }
 
+    // Debounce per-keystroke persistence for the free-text fields so the
+    // resulting settings emission doesn't rebuild field state mid-typing.
+    // Flushed on dispose, so no edit is lost.
+    val debouncedPersist = rememberDebouncedSaver { persist() }
+
     Box(modifier = Modifier.padding(16.dp)) {
         LlmConfigSection(
             llmProvider = llmProvider,
@@ -579,6 +570,10 @@ private fun PostProcessingDetail(
                 matched?.let { apiSettings.apiKeys[it].orEmpty() }.orEmpty()
             },
             onLlmProviderChange = { newProvider ->
+                // The handler below folds the current field values into the
+                // per-provider maps itself, so a pending debounced save is
+                // redundant — drop it.
+                debouncedPersist.cancelPending()
                 // Save the current view's edits into the per-provider maps for
                 // the OLD provider before swapping to the NEW provider's stored
                 // values. Without this step a user editing a key and then
@@ -621,8 +616,8 @@ private fun PostProcessingDetail(
                     )
                 )
             },
-            onLlmBaseUrlChange = { llmBaseUrl = it; persist() },
-            onLlmApiKeyChange = { llmApiKey = it; persist() },
+            onLlmBaseUrlChange = { llmBaseUrl = it; debouncedPersist.schedule() },
+            onLlmApiKeyChange = { llmApiKey = it; debouncedPersist.schedule() },
             onLlmRequiresAuthChange = { llmRequiresAuth = it; persist() },
             onLlmModelIdChange = { llmModelId = it; persist() },
             onResetLlmDefaults = {
@@ -641,7 +636,6 @@ private fun PostProcessingDetail(
                     onUpdateProviderApiKey(matched, llmApiKey)
                 }
             },
-            onShowLlmInfo = { /* deprecated info dialog removed in new UI */ },
             postProcessingTestState = postProcessingTestState,
             postProcessingTestLog = postProcessingTestLog,
             onTestPostProcessing = onTestPostProcessing,
