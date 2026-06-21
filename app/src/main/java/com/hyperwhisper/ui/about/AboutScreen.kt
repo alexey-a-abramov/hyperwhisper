@@ -48,6 +48,7 @@ fun AboutScreen(
     versionName: String,
     versionCode: Int,
     buildDate: String = "",
+    apiSettings: com.hyperwhisper.data.ApiSettings = com.hyperwhisper.data.ApiSettings(),
     usageStatistics: com.hyperwhisper.data.UsageStatistics,
     techieModeEnabled: Boolean = false,
     updateProbeDetails: UpdateProbeDetails? = null,
@@ -122,6 +123,11 @@ fun AboutScreen(
                     )
                 }
             }
+
+            // Active configuration — moved here from the Settings home so the
+            // landing page stays pure navigation; "what am I running" reads
+            // naturally next to version + usage.
+            com.hyperwhisper.ui.settings.ActiveConfigurationCard(apiSettings = apiSettings)
 
             // App update — moved here from the (now removed) Settings → Updates
             // tile so version and "check for updates" live next to each other.

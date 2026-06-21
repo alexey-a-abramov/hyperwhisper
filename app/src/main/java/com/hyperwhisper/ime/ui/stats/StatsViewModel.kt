@@ -2,6 +2,8 @@ package com.hyperwhisper.ui.stats
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hyperwhisper.data.SettingsRepository
+import com.hyperwhisper.data.prediction.CalibrationSummary
 import com.hyperwhisper.data.telemetry.ColdStartKind
 import com.hyperwhisper.data.telemetry.PerformanceRepository
 import com.hyperwhisper.data.telemetry.SessionLatencyRow
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -41,13 +44,29 @@ data class ModelSummary(
     val coldStartBreakdown: Map<ColdStartKind, ColdBucket>
 )
 
+/** State of the "Recalculate" progress-prediction calibration action. */
+sealed interface PredictionUiState {
+    object Idle : PredictionUiState
+    object Running : PredictionUiState
+    data class Done(val summary: CalibrationSummary) : PredictionUiState
+}
+
 @HiltViewModel
 class StatsViewModel @Inject constructor(
-    private val perf: PerformanceRepository
+    private val perf: PerformanceRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _window = MutableStateFlow(TimeWindow.D7)
     val window: StateFlow<TimeWindow> = _window.asStateFlow()
+
+    /** Whether local progress is predicted from gathered statistics (default ON). */
+    val predictionEnabled: StateFlow<Boolean> = settingsRepository.apiSettings
+        .map { it.localModelSettings.statisticsPrediction ?: true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    private val _predictionStatus = MutableStateFlow<PredictionUiState>(PredictionUiState.Idle)
+    val predictionStatus: StateFlow<PredictionUiState> = _predictionStatus.asStateFlow()
 
     val totalCount: StateFlow<Int> = perf.totalCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -67,6 +86,29 @@ class StatsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setWindow(tw: TimeWindow) { _window.value = tw }
+
+    fun setPredictionEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.apiSettings.first()
+            settingsRepository.saveApiSettings(
+                current.copy(
+                    localModelSettings = current.localModelSettings.copy(
+                        statisticsPrediction = enabled
+                    )
+                )
+            )
+        }
+    }
+
+    /** Recompute local progress-prediction coefficients from the gathered sessions. */
+    fun recalculate() {
+        viewModelScope.launch {
+            _predictionStatus.value = PredictionUiState.Running
+            _predictionStatus.value = PredictionUiState.Done(
+                settingsRepository.recalculateLocalPrediction()
+            )
+        }
+    }
 
     fun exportJsonl(onResult: (File?) -> Unit) {
         viewModelScope.launch {

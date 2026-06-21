@@ -202,6 +202,16 @@ object ConfigSchema {
                     s.copy(api = s.api.copy(localModelSettings = s.api.localModelSettings.copy(whisperModelPath = v as String)))
                 },
             ),
+            ConfigField(
+                path = "transcription.statisticsPrediction",
+                type = ConfigValueType.Bool,
+                description = "Estimate local transcription progress from gathered timing statistics instead of a fixed heuristic",
+                label = "Statistics-based progress",
+                get = { it.api.localModelSettings.statisticsPrediction ?: true },
+                set = { s, v ->
+                    s.copy(api = s.api.copy(localModelSettings = s.api.localModelSettings.copy(statisticsPrediction = v as Boolean)))
+                },
+            ),
         )
 
         // Per-provider endpoint overrides — patchable + exported, hidden from

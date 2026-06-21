@@ -37,6 +37,13 @@ interface TranscriptionSessionDao {
     """)
     fun latencyRowsSince(sinceEpochMs: Long): Flow<List<SessionLatencyRow>>
 
+    @Query("""
+        SELECT model_id, audio_duration_ms, total_wall_ms
+          FROM sessions
+         WHERE session_type = :type AND success = 1 AND audio_duration_ms > 0
+    """)
+    suspend fun calibrationRows(type: SessionType): List<CalibrationRow>
+
     @Query("DELETE FROM sessions WHERE started_at < :cutoffEpochMs")
     suspend fun pruneOlderThan(cutoffEpochMs: Long): Int
 

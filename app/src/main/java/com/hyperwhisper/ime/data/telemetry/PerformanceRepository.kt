@@ -41,6 +41,16 @@ class PerformanceRepository @Inject constructor(
 
     fun totalCount(): Flow<Int> = dao.totalCount()
 
+    /** Rows for fitting progress-prediction coefficients. Best-effort — empty on error. */
+    suspend fun calibrationRows(type: SessionType): List<CalibrationRow> {
+        return try {
+            dao.calibrationRows(type)
+        } catch (t: Throwable) {
+            Log.e(TAG, "calibrationRows failed", t)
+            emptyList()
+        }
+    }
+
     suspend fun pruneOlderThan90Days(): Int {
         return try {
             val cutoff = System.currentTimeMillis() - NINETY_DAYS_MS

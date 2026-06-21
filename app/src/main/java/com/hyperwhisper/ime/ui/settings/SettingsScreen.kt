@@ -277,10 +277,6 @@ fun SettingsScreen(
                     is SettingsRoute.Home -> {
                         SettingsHomeScreen(
                             apiSettings = apiSettings,
-                            retestProgress = retestProgress,
-                            retestRunning = retestRunning,
-                            onRetestAll = { viewModel.retestAllProviders() },
-                            onClearRetestProgress = { viewModel.resetRetestProgress() },
                             onCategorySelected = { route = SettingsRoute.Detail(it) }
                         )
                     }
@@ -411,6 +407,15 @@ fun SettingsScreen(
                             )
 
                             SettingsCategory.ADVANCED -> AdvancedDetail(
+                                retestProgress = retestProgress,
+                                retestRunning = retestRunning,
+                                onRetestAll = { viewModel.retestAllProviders() },
+                                onClearRetestProgress = { viewModel.resetRetestProgress() },
+                                onOpenLatencyStats = {
+                                    context.startActivity(
+                                        Intent(context, com.hyperwhisper.ui.stats.StatsActivity::class.java)
+                                    )
+                                },
                                 onOpenApiLogs = { route = SettingsRoute.ApiLogs(origin = current) },
                                 onOpenProviderKeyHelp = { showProviderKeyHelp = true },
                                 techieModeEnabled = appearanceSettings.techieModeEnabled,
@@ -653,6 +658,11 @@ private fun PostProcessingDetail(
 
 @Composable
 private fun AdvancedDetail(
+    retestProgress: Map<String, com.hyperwhisper.network.ConnectionTester.RetestRowState>,
+    retestRunning: Boolean,
+    onRetestAll: () -> Unit,
+    onClearRetestProgress: () -> Unit,
+    onOpenLatencyStats: () -> Unit,
     onOpenApiLogs: () -> Unit,
     onOpenProviderKeyHelp: () -> Unit,
     techieModeEnabled: Boolean,
@@ -667,6 +677,19 @@ private fun AdvancedDetail(
             .fillMaxSize(),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
     ) {
+        // Diagnostics hub: re-test providers + latency stats live here so the
+        // home screen stays pure navigation.
+        RetestProvidersCard(
+            running = retestRunning,
+            progress = retestProgress,
+            onRetestAll = onRetestAll,
+            onClearProgress = onClearRetestProgress,
+        )
+        AdvancedRow(
+            title = "Latency Stats",
+            description = "Per-model p50/p95, cold-start breakdown, progress-prediction calibration, JSONL export",
+            onClick = onOpenLatencyStats
+        )
         AdvancedRow(
             title = strings.advancedApiLogsTitle,
             description = strings.advancedApiLogsDescription,

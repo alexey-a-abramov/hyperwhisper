@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -52,6 +54,8 @@ fun StatsScreen(
     val summaries by viewModel.summaries.collectAsState()
     val recent by viewModel.recent.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
+    val predictionEnabled by viewModel.predictionEnabled.collectAsState()
+    val predictionStatus by viewModel.predictionStatus.collectAsState()
 
     Scaffold(
         topBar = {
@@ -95,6 +99,15 @@ fun StatsScreen(
                     selected = window,
                     onSelect = viewModel::setWindow,
                     totalCount = totalCount
+                )
+            }
+
+            item {
+                PredictionCard(
+                    enabled = predictionEnabled,
+                    status = predictionStatus,
+                    onToggle = viewModel::setPredictionEnabled,
+                    onRecalculate = viewModel::recalculate
                 )
             }
 
@@ -156,6 +169,76 @@ private fun WindowSelector(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp)
         )
+    }
+}
+
+@Composable
+private fun PredictionCard(
+    enabled: Boolean,
+    status: PredictionUiState,
+    onToggle: (Boolean) -> Unit,
+    onRecalculate: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Statistics-based progress",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = "Predict the local progress bar from these gathered timings instead of a fixed guess.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = onToggle)
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onRecalculate,
+                    enabled = status != PredictionUiState.Running
+                ) {
+                    Text(if (status == PredictionUiState.Running) "Recalculating…" else "Recalculate")
+                }
+                Text(
+                    text = predictionStatusText(status),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+private fun predictionStatusText(status: PredictionUiState): String = when (status) {
+    is PredictionUiState.Idle -> "Tap to calibrate from recorded sessions."
+    is PredictionUiState.Running -> "Analyzing sessions…"
+    is PredictionUiState.Done -> {
+        val s = status.summary
+        if (s.modelsCalibrated > 0)
+            "Calibrated ${s.modelsCalibrated} model(s) from ${s.totalSessions} session(s)."
+        else
+            "Not enough data yet (${s.totalSessions} session(s)) — keep dictating, then recalculate."
     }
 }
 

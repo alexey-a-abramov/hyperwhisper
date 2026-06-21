@@ -52,6 +52,9 @@ class AboutActivity : ComponentActivity() {
             val usageStatistics by settingsRepository.usageStatistics.collectAsState(
                 initial = com.hyperwhisper.data.UsageStatistics()
             )
+            val apiSettings by settingsRepository.apiSettings.collectAsState(
+                initial = com.hyperwhisper.data.ApiSettings()
+            )
 
             // Update probe details state
             var updateProbeDetails by remember { mutableStateOf<UpdateProbeDetails?>(null) }
@@ -73,6 +76,7 @@ class AboutActivity : ComponentActivity() {
                         versionName = versionName,
                         versionCode = versionCode,
                         buildDate = BuildConfig.BUILD_DATE,
+                        apiSettings = apiSettings,
                         usageStatistics = usageStatistics,
                         techieModeEnabled = appearanceSettings.techieModeEnabled,
                         updateProbeDetails = updateProbeDetails,

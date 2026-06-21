@@ -27,5 +27,10 @@ data class LocalModelSettings(
     val useLocalWhisper: Boolean = false,
     val useLocalGemma: Boolean = false,
     val threads: Int = 4,
-    val autoDiscover: Boolean = true
+    val autoDiscover: Boolean = true,
+    // Statistics-based progress prediction for local transcription. Nullable so
+    // existing persisted JSON (field absent) reads back as the default-ON value
+    // via `?: true` — a plain `Boolean = true` would be forced to false by gson
+    // on upgrade. Read everywhere as `statisticsPrediction ?: true`.
+    val statisticsPrediction: Boolean? = null
 )
