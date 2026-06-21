@@ -165,6 +165,10 @@ class KeyboardViewModel @Inject constructor(
 
     val transcriptionHistory: StateFlow<List<TranscriptionHistoryItem>> = historyViewModel.transcriptionHistory
 
+    /** Latest successful history-reprocess result. Non-null until the UI
+     *  consumes it into the paste-last buffer and calls [clearReprocessedText]. */
+    val reprocessedText: StateFlow<String?> = historyViewModel.reprocessedText
+
     // ============================================================================
     // Settings State - From SettingsRepository
     // ============================================================================
@@ -306,10 +310,12 @@ class KeyboardViewModel @Inject constructor(
         val appearance = appearanceSettings.value
         // Always persist the source audio during processing so a failed
         // transcription / post-processing run can be reprocessed from history.
-        // The original `saveOriginalAudioFiles` setting now governs whether
-        // audio is *retained* after a successful run (cleanup happens below).
+        // The `saveOriginalAudioFiles` setting governs whether audio is
+        // *retained* afterwards — applied uniformly to every outcome below so
+        // a failed run is kept for reprocessing exactly when a successful one
+        // would be.
         val shouldSaveAudio = true
-        val keepAudioAfterSuccess = appearance.saveOriginalAudioFiles
+        val keepAudio = appearance.saveOriginalAudioFiles
         settingsRepository.trackProviderModelUsage(settings.provider, settings.modelId)
 
         if (mode == null) {
@@ -330,12 +336,23 @@ class KeyboardViewModel @Inject constructor(
         val text = transcriptionViewModel.transcribedText.value
         val hasPendingCommand = transcriptionViewModel.pendingConfigPatch.value != null
 
+        // Apply the retention setting once, for every outcome. When the user
+        // opted out we drop the persisted copy and the history path so nothing
+        // is kept; otherwise the path flows into history so failed runs get a
+        // play + reprocess affordance just like successful ones.
+        val historyAudioPath = if (keepAudio) {
+            savedAudioPath
+        } else {
+            savedAudioPath?.let { runCatching { java.io.File(it).delete() } }
+            null
+        }
+
         when (determineProcessingOutcome(error, text, hasPendingCommand)) {
             ProcessingOutcome.ERROR -> {
                 soundManager.playErrorSound()
                 recordingViewModel.setError(error ?: "Unknown transcription error")
                 if (!inWalkieTalkieMode) {
-                    historyViewModel.addToHistory("", savedAudioPath)
+                    historyViewModel.addToHistory("", historyAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with error")
             }
@@ -344,7 +361,7 @@ class KeyboardViewModel @Inject constructor(
                 soundManager.playSuccessSound()
                 recordingViewModel.setIdle()
                 if (!inWalkieTalkieMode) {
-                    historyViewModel.addToHistory("", savedAudioPath)
+                    historyViewModel.addToHistory("", historyAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with pending configuration command")
             }
@@ -352,12 +369,6 @@ class KeyboardViewModel @Inject constructor(
                 soundManager.playSuccessSound()
                 recordingViewModel.setIdle()
                 if (!inWalkieTalkieMode) {
-                    // Honour the user's "save original audio files" setting on
-                    // success: if they opted out, drop the audio path before
-                    // recording history (the file gets cleaned up by the temp
-                    // delete below).
-                    val historyAudioPath = if (keepAudioAfterSuccess) savedAudioPath else null
-                    if (!keepAudioAfterSuccess) savedAudioPath?.let { runCatching { java.io.File(it).delete() } }
                     historyViewModel.addToHistory(text, historyAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished successfully with text")
@@ -367,7 +378,7 @@ class KeyboardViewModel @Inject constructor(
                 soundManager.playErrorSound()
                 recordingViewModel.setError(noResultMessage)
                 if (!inWalkieTalkieMode) {
-                    historyViewModel.addToHistory("", savedAudioPath)
+                    historyViewModel.addToHistory("", historyAudioPath)
                 }
                 Log.d(TAG, "processAudioFile: finished with empty transcription")
             }
@@ -431,7 +442,29 @@ class KeyboardViewModel @Inject constructor(
     fun setInputLanguage(languageCode: String) {
         viewModelScope.launch {
             val currentSettings = apiSettings.value
-            val updatedSettings = currentSettings.copy(inputLanguage = languageCode)
+            var updatedSettings = currentSettings.copy(inputLanguage = languageCode)
+            // Bring back the transcription model last used for this language, if
+            // one was remembered — so switching language also restores its
+            // preferred model (e.g. base.en for English, multilingual base for
+            // Russian). Applied in the same save so it can't loop back into the
+            // record path below.
+            settingsRepository.recallLanguageModel(languageCode)?.let { choice ->
+                val restoredBaseUrl = currentSettings.providerConfigs[choice.provider]
+                    ?.customBaseUrl?.ifEmpty { choice.provider.defaultEndpoint }
+                    ?: choice.provider.defaultEndpoint
+                updatedSettings = updatedSettings.copy(
+                    provider = choice.provider,
+                    baseUrl = restoredBaseUrl,
+                    modelId = choice.modelId,
+                    localModelSettings = currentSettings.localModelSettings.copy(
+                        useLocalWhisper = choice.useLocalWhisper,
+                        whisperModelPath = if (choice.useLocalWhisper && choice.whisperModelPath.isNotEmpty())
+                            choice.whisperModelPath
+                        else currentSettings.localModelSettings.whisperModelPath,
+                    ),
+                )
+                Log.d(TAG, "Restored model for $languageCode: ${choice.provider.displayName}/${choice.modelId} (local=${choice.useLocalWhisper})")
+            }
             settingsRepository.saveApiSettings(updatedSettings)
             // Track language usage
             settingsRepository.trackLanguageUsage(languageCode)
@@ -545,6 +578,17 @@ class KeyboardViewModel @Inject constructor(
             )
             settingsRepository.saveApiSettings(updatedSettings)
             settingsRepository.trackProviderModelUsage(provider, modelId)
+            // Remember this model for the language that's active right now, so
+            // it comes back when the user returns to this language.
+            settingsRepository.rememberLanguageModel(
+                currentSettings.inputLanguage,
+                LanguageModelChoice(
+                    provider = provider,
+                    modelId = modelId,
+                    useLocalWhisper = pickingLocal,
+                    whisperModelPath = updatedLocalSettings.whisperModelPath,
+                ),
+            )
             Log.d(TAG, "Provider/model changed to: ${provider.displayName} / $modelId (local=$pickingLocal)")
         }
     }
@@ -569,6 +613,16 @@ class KeyboardViewModel @Inject constructor(
                     )
                 )
             )
+            // Remember this whisper model for the active language.
+            settingsRepository.rememberLanguageModel(
+                s.inputLanguage,
+                LanguageModelChoice(
+                    provider = ApiProvider.LOCAL_WHISPER,
+                    modelId = s.modelId,
+                    useLocalWhisper = true,
+                    whisperModelPath = path,
+                ),
+            )
             Log.d(TAG, "Local Whisper model set to: ${path.substringAfterLast('/')}")
         }
     }
@@ -585,51 +639,54 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
-     * Reprocess audio from history with current settings
+     * Surface any saved-but-unlinked audio into history (and tidy legacy file
+     * names). Called when the history panel opens.
+     */
+    fun reconcileAudioHistory() {
+        historyViewModel.reconcileAudioHistory()
+    }
+
+    /**
+     * Reprocess audio from history with current settings. Shows the same
+     * determinate processing indicator (ring + % + ETA) as a live recording,
+     * driven off the saved audio file, and resolves cleanly on both success
+     * and failure (the old flow watched only the success channel, so a failed
+     * reprocess — e.g. a rejected API key — left the UI stuck "processing").
      */
     fun reprocessWithCurrentSettings(item: TranscriptionHistoryItem) {
         viewModelScope.launch {
             recordingViewModel.setProcessing()
             val settings = apiSettings.value
             val mode = selectedMode.value
+
+            val audioFile = item.audioFilePath?.let { java.io.File(it) }?.takeIf { it.exists() }
+            if (audioFile != null) {
+                transcriptionViewModel.startProgressAnimation(audioFile, settings)
+            }
+
+            // Suspends until the run resolves; reprocess reports failures via
+            // its errorMessage rather than the success channel.
             historyViewModel.reprocessWithCurrentSettings(item, settings, mode)
 
-            // Monitor reprocessing result
-            historyViewModel.reprocessedText
-                .filterNotNull()
-                .take(1)
-                .collect { text ->
-                    // Update transcribed text for UI
-                    // Note: The history is already updated by HistoryViewModel
-                    recordingViewModel.setIdle()
-                    historyViewModel.clearReprocessedText()
-                }
+            val error = historyViewModel.errorMessage.value
+            if (error != null) {
+                transcriptionViewModel.cancelProgressAnimation()
+                recordingViewModel.setError(error)
+                historyViewModel.clearReprocessedText()
+            } else {
+                transcriptionViewModel.finishProgressAnimation()
+                recordingViewModel.setIdle()
+                // Leave reprocessedText set: the screen consumes it into the
+                // paste-last buffer (so the paste button previews it) and then
+                // calls clearReprocessedText().
+            }
         }
     }
 
-    /**
-     * Reprocess audio from history with new settings
-     */
-    fun reprocessWithNewSettings(
-        item: TranscriptionHistoryItem,
-        newSettings: ApiSettings,
-        newMode: VoiceMode
-    ) {
-        viewModelScope.launch {
-            recordingViewModel.setProcessing()
-            historyViewModel.reprocessWithNewSettings(item, newSettings, newMode)
-
-            // Monitor reprocessing result
-            historyViewModel.reprocessedText
-                .filterNotNull()
-                .take(1)
-                .collect { text ->
-                    // Update transcribed text for UI
-                    // Note: The history is already updated by HistoryViewModel
-                    recordingViewModel.setIdle()
-                    historyViewModel.clearReprocessedText()
-                }
-        }
+    /** Clear the consumed reprocess result. Called by the UI after it lands in
+     *  the paste-last buffer. */
+    fun clearReprocessedText() {
+        historyViewModel.clearReprocessedText()
     }
 
     // ============================================================================

@@ -3,7 +3,6 @@ package com.hyperwhisper.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.media.MediaPlayer
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -37,13 +36,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import kotlinx.coroutines.delay
 import com.hyperwhisper.data.RecordingState
-import com.hyperwhisper.data.TranscriptionHistoryItem
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.overlays.ConfigInfoDialog
 import com.hyperwhisper.ui.overlays.ConfigPatchConfirmationOverlay
 import com.hyperwhisper.ui.overlays.ErrorOverlay
-import com.hyperwhisper.ui.panels.ReprocessSettingsDialog
+import com.hyperwhisper.ui.panels.HistoryAudioPlayer
 import com.hyperwhisper.ui.panels.TranscriptionHistoryPanel
 import com.hyperwhisper.ui.sections.BottomActionsRow
 import com.hyperwhisper.ui.sections.LanguageModelRow
@@ -60,6 +58,10 @@ import com.hyperwhisper.ui.util.localizedDisplayName
 internal val KeyboardSurfaceColor = Color(0xFF000000)
 internal val KeyboardKeyColor = Color(0xFFFFFFFF)
 internal val KeyboardKeyTextColor = Color(0xFF000000)
+// Pressed-state fill + thin edge for the letter/number keys, so each key reads
+// as a distinct, divided touch target and the one under the finger is obvious.
+internal val KeyboardKeyPressedColor = Color(0xFF90CAF9)
+internal val KeyboardKeyBorderColor = Color(0xFFB0B0B0)
 // Canonical action-button palette. Same yellow/red/green across every layout
 // (QWERTY, Code, Emoji, Dictation's bottom row) so muscle memory transfers.
 internal val KeyboardSpaceColor = Color(0xFFFFEB3B)
@@ -120,6 +122,7 @@ fun KeyboardScreen(
     val transcriptionProgress by viewModel.transcriptionProgress.collectAsState()
     val processingStage by viewModel.processingStage.collectAsState()
     val transcriptionHistory by viewModel.transcriptionHistory.collectAsState()
+    val reprocessedText by viewModel.reprocessedText.collectAsState()
     val voiceModes by viewModel.voiceModes.collectAsState()
     val selectedModeId by viewModel.selectedModeId.collectAsState()
     val apiSettings by viewModel.apiSettings.collectAsState()
@@ -287,6 +290,23 @@ fun KeyboardScreen(
         }
     }
 
+    // Re-transcribe from history doesn't type into the active field — instead
+    // the result lands in the paste-last buffer, so the paste button previews
+    // its first characters and one tap inserts it. Mirrors a live
+    // transcription's clipboard behaviour, minus the auto-commit.
+    LaunchedEffect(reprocessedText) {
+        reprocessedText?.let { text ->
+            if (text.isNotEmpty()) {
+                lastTranscribedText = text
+                if (appearanceSettings.autoCopyToClipboard) {
+                    val clip = ClipData.newPlainText("Transcribed Text", text)
+                    clipboardManager.setPrimaryClip(clip)
+                }
+            }
+            viewModel.clearReprocessedText()
+        }
+    }
+
     // Show walkie-talkie mode change message
     LaunchedEffect(modeChangeMessage) {
         modeChangeMessage?.let { message ->
@@ -388,7 +408,11 @@ fun KeyboardScreen(
                     ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
                     context.startActivity(intent)
                 }
-            } else null
+            } else null,
+            pasteText = lastTranscribedText.ifEmpty { transcriptionHistory.firstOrNull()?.text.orEmpty() },
+            enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+            onPaste = onTextCommit,
+            onShowHistory = { showHistoryPanel = true }
         )
     }
 
@@ -438,7 +462,11 @@ fun KeyboardScreen(
                             context, com.hyperwhisper.ui.settings.SettingsActivity::class.java
                         ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
                         context.startActivity(intent)
-                    }
+                    },
+                    pasteText = lastTranscribedText.ifEmpty { transcriptionHistory.firstOrNull()?.text.orEmpty() },
+                    enableHistoryPanel = appearanceSettings.enableHistoryPanel,
+                    onPaste = onTextCommit,
+                    onShowHistory = { showHistoryPanel = true }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -510,7 +538,8 @@ fun KeyboardScreen(
                     onShowLocalityList = { showLocalitySheet = true },
                     onSpace = handleSpacePress,
                     onEnter = onEnter,
-                    onDelete = onDelete
+                    onDelete = onDelete,
+                    onDeleteAll = onDeleteAll
                 )
             } else if (keyboardInputMode.isAgent) {
                 topStrip()
@@ -780,7 +809,18 @@ fun KeyboardScreen(
 
         // Show History Panel
         if (showHistoryPanel) {
-            var selectedItemForReprocess by remember { mutableStateOf<TranscriptionHistoryItem?>(null) }
+            // Surface any saved-but-unlinked audio (and normalise legacy file
+            // names) each time the panel opens, so orphaned recordings from
+            // this session show up with play + reprocess.
+            LaunchedEffect(Unit) { viewModel.reconcileAudioHistory() }
+
+            // Single-stream player for history playback: one recording at a
+            // time, play/pause toggle, 1-minute pause decay. Released when the
+            // panel leaves composition so nothing keeps playing in the
+            // background.
+            val historyPlayer = remember { HistoryAudioPlayer(coroutineScope) }
+            val playbackState by historyPlayer.state.collectAsState()
+            DisposableEffect(Unit) { onDispose { historyPlayer.release() } }
 
             TranscriptionHistoryPanel(
                 history = transcriptionHistory,
@@ -789,59 +829,32 @@ fun KeyboardScreen(
                     showHistoryPanel = false
                 },
                 onClearAll = { viewModel.clearHistory() },
-                onDismiss = { showHistoryPanel = false },
-                onPlayAudio = { item ->
-                    val audioPath = item.audioFilePath
-                    if (audioPath.isNullOrBlank()) {
-                        Toast.makeText(context, "No saved audio for this entry", Toast.LENGTH_SHORT).show()
-                    } else {
-                        val audioFile = java.io.File(audioPath)
-                        if (!audioFile.exists()) {
-                            Toast.makeText(context, "Saved audio file not found", Toast.LENGTH_SHORT).show()
-                        } else {
-                            try {
-                                val mediaPlayer = MediaPlayer().apply {
-                                    setDataSource(audioPath)
-                                    setOnPreparedListener { it.start() }
-                                    setOnCompletionListener { it.release() }
-                                    setOnErrorListener { mp, _, _ ->
-                                        mp.release()
-                                        true
-                                    }
-                                    prepareAsync()
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Unable to play audio", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
+                onDismiss = {
+                    historyPlayer.stop()
+                    showHistoryPanel = false
+                },
+                onCopy = { item ->
+                    val clip = ClipData.newPlainText("Transcribed Text", item.text)
+                    clipboardManager.setPrimaryClip(clip)
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                 },
                 onReprocessWithCurrentSettings = { item ->
                     viewModel.reprocessWithCurrentSettings(item)
                     showHistoryPanel = false
                 },
-                onReprocessWithNewSettings = { item ->
-                    selectedItemForReprocess = item
-                }
-            )
-
-            // Dialog for selecting new settings for reprocessing
-            selectedItemForReprocess?.let { item ->
-                ReprocessSettingsDialog(
-                    item = item,
-                    currentApiSettings = apiSettings,
-                    currentVoiceModes = voiceModes,
-                    currentSelectedModeId = selectedModeId,
-                    onConfirm = { newSettings, newMode ->
-                        viewModel.reprocessWithNewSettings(item, newSettings, newMode)
-                        selectedItemForReprocess = null
-                        showHistoryPanel = false
-                    },
-                    onDismiss = {
-                        selectedItemForReprocess = null
+                playback = playbackState,
+                onTogglePlay = { item ->
+                    val audioPath = item.audioFilePath
+                    when {
+                        audioPath.isNullOrBlank() ->
+                            Toast.makeText(context, "No saved audio for this entry", Toast.LENGTH_SHORT).show()
+                        !java.io.File(audioPath).exists() ->
+                            Toast.makeText(context, "Saved audio file not found", Toast.LENGTH_SHORT).show()
+                        else -> historyPlayer.toggle(item.id, audioPath)
                     }
-                )
-            }
+                },
+                onSeek = { fraction -> historyPlayer.seekTo(fraction) }
+            )
         }
 
         // Long-press preset picker. Voice and QWERTY have dedicated slots in

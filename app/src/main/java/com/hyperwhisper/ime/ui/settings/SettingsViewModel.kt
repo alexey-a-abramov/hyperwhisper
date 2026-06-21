@@ -581,9 +581,20 @@ class SettingsViewModel @Inject constructor(
     /** Mark a specific local Whisper model as active (and switch to local mode). */
     fun setActiveLocalWhisperModel(path: String) {
         viewModelScope.launch {
-            val s = apiSettings.value.localModelSettings
+            val settings = apiSettings.value
             settingsRepository.updateLocalModelSettings(
-                s.copy(whisperModelPath = path, useLocalWhisper = true)
+                settings.localModelSettings.copy(whisperModelPath = path, useLocalWhisper = true)
+            )
+            // Remember this whisper model for the active input language, so the
+            // keyboard restores it when the user returns to that language.
+            settingsRepository.rememberLanguageModel(
+                settings.inputLanguage,
+                com.hyperwhisper.data.LanguageModelChoice(
+                    provider = settings.provider,
+                    modelId = settings.modelId,
+                    useLocalWhisper = true,
+                    whisperModelPath = path,
+                ),
             )
         }
     }

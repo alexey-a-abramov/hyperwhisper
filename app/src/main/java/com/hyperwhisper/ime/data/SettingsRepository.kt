@@ -22,9 +22,11 @@ class SettingsRepository @Inject constructor(
     private val usageStatisticsRepository: UsageStatisticsRepository,
     private val historyRepository: HistoryRepository,
     private val languageTrackingRepository: LanguageTrackingRepository,
+    private val languageModelMemory: LanguageModelMemory,
     private val providerModelTrackingRepository: ProviderModelTrackingRepository,
     private val apiCallLogRepository: ApiCallLogRepository,
-    val localModelRepository: LocalModelRepository
+    val localModelRepository: LocalModelRepository,
+    private val localPredictionCalibrator: com.hyperwhisper.data.prediction.LocalPredictionCalibrator,
 ) {
     // ============================================================================
     // API Settings - Delegated to ApiSettingsRepository
@@ -38,6 +40,13 @@ class SettingsRepository @Inject constructor(
 
     suspend fun saveApiSettings(settings: ApiSettings) =
         apiSettingsRepository.saveApiSettings(settings)
+
+    // Per-language transcription-model memory.
+    suspend fun rememberLanguageModel(languageCode: String, choice: LanguageModelChoice) =
+        languageModelMemory.remember(languageCode, choice)
+
+    suspend fun recallLanguageModel(languageCode: String): LanguageModelChoice? =
+        languageModelMemory.recall(languageCode)
 
     suspend fun updateProviderApiKey(provider: ApiProvider, apiKey: String) =
         apiSettingsRepository.updateProviderApiKey(provider, apiKey)
@@ -135,6 +144,9 @@ class SettingsRepository @Inject constructor(
     suspend fun updateHistoryItem(itemId: String, newText: String) =
         historyRepository.updateHistoryItem(itemId, newText)
 
+    suspend fun reconcileAudioFiles() =
+        historyRepository.reconcileAudioFiles()
+
     suspend fun clearHistory() =
         historyRepository.clearHistory()
 
@@ -185,4 +197,33 @@ class SettingsRepository @Inject constructor(
         modelId: String,
         audioFileSize: Long,
     ): Long = apiCallLogRepository.estimateTranscriptionMs(provider, modelId, audioFileSize)
+
+    /**
+     * Progress-bar wall-clock estimate that picks the right source for the run.
+     *
+     * For local Whisper with statistics-based prediction enabled, use the
+     * per-model coefficient fit from the telemetry `sessions` history (keyed on
+     * the same `"Whisper:<file>"` id the telemetry writer uses). If no usable
+     * coefficient exists yet, fall back to the cloud-style byte heuristic so the
+     * bar still animates.
+     */
+    suspend fun estimateTranscriptionMs(
+        settings: ApiSettings,
+        audioFileSize: Long,
+        audioDurationMs: Long,
+    ): Long {
+        val local = settings.localModelSettings
+        if (local.useLocalWhisper && (local.statisticsPrediction ?: true)) {
+            val modelName = java.io.File(local.whisperModelPath).name.ifBlank { "unknown" }
+            val telemetryId = "Whisper:$modelName"
+            localPredictionCalibrator.estimateMs(telemetryId, audioDurationMs)?.let { return it }
+        }
+        return apiCallLogRepository.estimateTranscriptionMs(
+            settings.provider, settings.modelId, audioFileSize,
+        )
+    }
+
+    /** Recompute local progress-prediction coefficients from telemetry history. */
+    suspend fun recalculateLocalPrediction(): com.hyperwhisper.data.prediction.CalibrationSummary =
+        localPredictionCalibrator.recalibrate()
 }

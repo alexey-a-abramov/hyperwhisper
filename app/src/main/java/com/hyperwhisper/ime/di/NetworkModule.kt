@@ -82,9 +82,11 @@ object NetworkModule {
         usageStatisticsRepository: UsageStatisticsRepository,
         historyRepository: HistoryRepository,
         languageTrackingRepository: LanguageTrackingRepository,
+        languageModelMemory: com.hyperwhisper.data.LanguageModelMemory,
         providerModelTrackingRepository: ProviderModelTrackingRepository,
         apiCallLogRepository: ApiCallLogRepository,
-        localModelRepository: com.hyperwhisper.data.LocalModelRepository
+        localModelRepository: com.hyperwhisper.data.LocalModelRepository,
+        localPredictionCalibrator: com.hyperwhisper.data.prediction.LocalPredictionCalibrator
     ): SettingsRepository = SettingsRepository(
         apiSettingsRepository,
         voiceModesRepository,
@@ -92,9 +94,11 @@ object NetworkModule {
         usageStatisticsRepository,
         historyRepository,
         languageTrackingRepository,
+        languageModelMemory,
         providerModelTrackingRepository,
         apiCallLogRepository,
-        localModelRepository
+        localModelRepository,
+        localPredictionCalibrator
     )
 
     @Provides
