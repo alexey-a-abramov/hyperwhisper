@@ -71,6 +71,7 @@ class HistoryRepositoryTest {
             gson = gson,
             appearanceSettings = appearance(max = 50, unlimited = false),
             historyDao = dao,
+            audioDir = File(tmp.root, "audio"),
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
 
@@ -100,6 +101,7 @@ class HistoryRepositoryTest {
             gson = Gson(),
             appearanceSettings = appearance(max = 3, unlimited = false),
             historyDao = dao,
+            audioDir = File(tmp.root, "audio"),
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
 
@@ -117,6 +119,7 @@ class HistoryRepositoryTest {
             gson = Gson(),
             appearanceSettings = unlimitedSettings,
             historyDao = dao,
+            audioDir = File(tmp.root, "audio"),
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
         repeat(5) { i -> unlimitedRepo.addToHistory(text = "u-$i") }
@@ -134,6 +137,7 @@ class HistoryRepositoryTest {
             gson = Gson(),
             appearanceSettings = appearance(max = 100, unlimited = false),
             historyDao = dao,
+            audioDir = File(tmp.root, "audio"),
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob()),
         )
         repo.addToHistory(text = "a")

@@ -38,6 +38,16 @@ class FakeHistoryDao : HistoryDao {
         }.sortedByDescending { it.timestamp }
     }
 
+    override suspend fun updateAudioPath(id: String, path: String?) {
+        rows.value = rows.value.map {
+            if (it.id == id) it.copy(audioFilePath = path) else it
+        }
+    }
+
+    override suspend fun deleteById(id: String) {
+        rows.value = rows.value.filterNot { it.id == id }
+    }
+
     override suspend fun deleteAll() {
         rows.value = emptyList()
     }
