@@ -49,6 +49,14 @@ class AudioRecorderManager @Inject constructor(
     private var wavWriter: WavWriter? = null
     private var currentAudioFile: File? = null
 
+    // Live chunking (streaming Phase 3) — active only when [onChunkReady] is set
+    // by an orchestrator; otherwise recording behaves exactly as before.
+    var onChunkReady: ((File, Int) -> Unit)? = null
+    private var chunker: AudioChunker? = null
+    private var chunkWriter: WavWriter? = null
+    private var chunkDir: File? = null
+    private var chunkIndex = 0
+
     @Volatile
     private var isRecording = false
     private var recordingStartTime: Long = 0
@@ -168,6 +176,16 @@ class AudioRecorderManager @Inject constructor(
             maxDurationNotified = false
 
             acquireWakeLock()
+            // Set up live chunking when an orchestrator is listening.
+            if (onChunkReady != null) {
+                val dir = File(context.cacheDir, "stream_chunks").apply {
+                    runCatching { deleteRecursively() }; mkdirs()
+                }
+                chunkDir = dir
+                chunker = AudioChunker()
+                chunkIndex = 0
+                chunkWriter = WavWriter(File(dir, "chunk_0.wav"), SAMPLE_RATE, channels = 1, bitsPerSample = 16)
+            }
             record.startRecording()
             startReadLoop(record, writer)
             startTimer()
@@ -198,8 +216,7 @@ class AudioRecorderManager @Inject constructor(
                     when {
                         n > 0 -> {
                             writer.write(buf, n)
-                            // Phase 2 seam: hand (buf, n) to the chunk segmenter
-                            // here to slice on silence and dispatch ASR live.
+                            feedChunk(buf, n)
                         }
                         n < 0 -> {
                             Log.e(TAG, "AudioRecord.read error ($n)")
@@ -211,6 +228,41 @@ class AudioRecorderManager @Inject constructor(
                 Log.e(TAG, "Read loop error", e)
             }
         }
+    }
+
+    /**
+     * Feed a frame to the live chunker. No-op unless chunking is active. On a
+     * silence/length boundary it finalizes the current chunk WAV, emits it via
+     * [onChunkReady] (so the orchestrator can dispatch ASR while recording
+     * continues), and opens the next chunk. Runs on the read thread; the
+     * callback only hands off a file, so it must not block.
+     */
+    private fun feedChunk(buf: ByteArray, n: Int) {
+        val ch = chunker ?: return
+        val cw = chunkWriter ?: return
+        cw.write(buf, n)
+        if (ch.accept(buf, n)) {
+            runCatching { cw.close() }
+            val idx = chunkIndex
+            chunkDir?.let { dir -> onChunkReady?.invoke(File(dir, "chunk_$idx.wav"), idx) }
+            chunkIndex = idx + 1
+            chunkWriter = chunkDir?.let {
+                WavWriter(File(it, "chunk_$chunkIndex.wav"), SAMPLE_RATE, channels = 1, bitsPerSample = 16)
+            }
+        }
+    }
+
+    /** Close and emit the trailing partial chunk at stop, if it holds speech. */
+    private fun finalizeLastChunk() {
+        val cw = chunkWriter ?: return
+        runCatching { cw.close() }
+        if (chunker?.hasPendingSpeech() == true) {
+            val idx = chunkIndex
+            chunkDir?.let { dir -> onChunkReady?.invoke(File(dir, "chunk_$idx.wav"), idx) }
+        }
+        chunkWriter = null
+        chunker = null
+        chunkDir = null
     }
 
     /**
@@ -238,6 +290,7 @@ class AudioRecorderManager @Inject constructor(
 
             wavWriter?.close()
             wavWriter = null
+            finalizeLastChunk()
 
             stopTimer()
             releaseWakeLock()
@@ -278,6 +331,11 @@ class AudioRecorderManager @Inject constructor(
             } catch (_: Exception) {
             }
             wavWriter = null
+            // Discard the in-progress chunk without emitting it.
+            runCatching { chunkWriter?.close() }
+            chunkWriter = null
+            chunker = null
+            chunkDir = null
             stopTimer()
             releaseWakeLock()
             cleanup()

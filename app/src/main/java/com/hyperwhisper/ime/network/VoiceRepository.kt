@@ -490,6 +490,61 @@ class VoiceRepository @Inject constructor(
      * Post-process transcribed text using a chat model
      * Uses a simple text-to-text chat completion
      */
+    /**
+     * ASR-only transcription of a single streamed chunk — no LLM, no telemetry
+     * session. Routes to local Whisper or the cloud transcription strategy just
+     * like step 1 of [processAudio]. The streaming path calls this per chunk;
+     * the single second-level pass runs later over the assembled transcript via
+     * [postProcessStreamed].
+     */
+    suspend fun transcribeChunk(
+        audioFile: File,
+        voiceMode: VoiceMode,
+        apiSettings: ApiSettings,
+    ): ApiResult<String> {
+        val base64 = audioRecorderManager.audioFileToBase64(audioFile)
+            .getOrElse { return ApiResult.Error("Chunk encode failed: ${it.message}") }
+        val step = if (apiSettings.localModelSettings.useLocalWhisper)
+            localProcessingStrategy else transcriptionStrategy
+        return step.processAudio(
+            audioFile = audioFile,
+            audioBase64 = base64,
+            voiceMode = voiceMode.copy(systemPrompt = "Transcribe the audio exactly as spoken."),
+            modelId = apiSettings.modelId,
+            timer = null,
+        )
+    }
+
+    /**
+     * Run the one second-level (LLM) pass over the assembled streamed
+     * transcript. No-op (returns the text unchanged) when LLM is disabled or the
+     * text is blank.
+     */
+    suspend fun postProcessStreamed(
+        fullText: String,
+        voiceMode: VoiceMode,
+        apiSettings: ApiSettings,
+    ): ApiResult<String> {
+        if (fullText.isBlank() ||
+            apiSettings.llmConfig.provider == com.hyperwhisper.data.LlmProvider.NONE
+        ) {
+            return ApiResult.Success(fullText)
+        }
+        return postProcessText(
+            transcribedText = fullText,
+            voiceMode = voiceMode,
+            apiSettings = apiSettings,
+            transcriptionModel = apiSettings.modelId,
+            audioDurationSeconds = 0.0,
+            transcriptionTokens = null,
+            transcriptionTimeMs = 0L,
+            audioFileSizeBytes = 0L,
+            processingStartTime = System.currentTimeMillis(),
+            previousSessionId = null,
+            device = deviceSnapshotProvider.snapshot(),
+        )
+    }
+
     private suspend fun postProcessText(
         transcribedText: String,
         voiceMode: VoiceMode,
