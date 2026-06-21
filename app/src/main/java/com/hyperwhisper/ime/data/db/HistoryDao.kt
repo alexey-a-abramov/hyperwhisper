@@ -27,6 +27,13 @@ interface HistoryDao {
     @Query("UPDATE history SET text = :newText, timestamp = :newTimestamp WHERE id = :id")
     suspend fun updateText(id: String, newText: String, newTimestamp: Long)
 
+    /** Re-point (or clear) a row's audio file path after reconciling with disk. */
+    @Query("UPDATE history SET audioFilePath = :path WHERE id = :id")
+    suspend fun updateAudioPath(id: String, path: String?)
+
+    @Query("DELETE FROM history WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("DELETE FROM history")
     suspend fun deleteAll()
 

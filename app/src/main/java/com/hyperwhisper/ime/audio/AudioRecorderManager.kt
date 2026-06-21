@@ -1,11 +1,15 @@
 package com.hyperwhisper.audio
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Build
 import android.os.PowerManager
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.hyperwhisper.utils.TraceLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,16 +25,36 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Microphone capture, streamed straight to a 16 kHz mono PCM WAV on disk via
+ * raw [AudioRecord].
+ *
+ * Replaces the previous MediaRecorder/M4A implementation: MediaRecorder only
+ * surfaced one finished file at stop, which blocked both long recordings and
+ * any transcribe-while-recording flow. AudioRecord hands us live PCM frames in
+ * a read loop, which (a) lets the recording run far longer (streamed to disk,
+ * not buffered) and (b) gives a clean seam to slice chunks for incremental
+ * transcription (see the read loop's "Phase 2 seam").
+ *
+ * The public surface is unchanged so callers (RecordingViewModel,
+ * KeyboardViewModel, VoiceRepository) are untouched; the only observable
+ * difference is the output file is now `.wav` instead of `.m4a`, which every
+ * downstream consumer (cloud ASR, AudioDecoder's WAV fast-path) already handles.
+ */
 @Singleton
 class AudioRecorderManager @Inject constructor(
     private val context: Context
 ) {
-    private var mediaRecorder: MediaRecorder? = null
+    private var audioRecord: AudioRecord? = null
+    private var wavWriter: WavWriter? = null
     private var currentAudioFile: File? = null
+
+    @Volatile
     private var isRecording = false
     private var recordingStartTime: Long = 0
     private var maxDurationNotified = false
     private var timerJob: Job? = null
+    private var readJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     private val _recordingDuration = MutableStateFlow(0L)
@@ -46,9 +70,16 @@ class AudioRecorderManager @Inject constructor(
 
     companion object {
         private const val TAG = "AudioRecorderManager"
-        private const val SAMPLE_RATE = 16000
-        private const val BIT_RATE = 128000
-        const val MAX_RECORDING_DURATION_MS = 180000L // 3 minutes
+        const val SAMPLE_RATE = 16000
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        private const val AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT
+        // ~100ms read frames (16kHz * 2 bytes/sample * 0.1s) — small enough for
+        // tight duration tracking and future VAD framing, big enough to avoid
+        // busy-looping the read thread.
+        private const val READ_FRAME_BYTES = 3200
+        // Streaming to disk lifts the old 3-minute cap; keep a generous safety
+        // bound so a forgotten recording can't fill storage unbounded.
+        const val MAX_RECORDING_DURATION_MS = 1_800_000L // 30 minutes
     }
 
     /**
@@ -61,91 +92,124 @@ class AudioRecorderManager @Inject constructor(
                 return@withContext Result.failure(IllegalStateException("Already recording"))
             }
 
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                return@withContext Result.failure(
+                    SecurityException("RECORD_AUDIO permission not granted")
+                )
+            }
+
             TraceLogger.trace("AudioRecorder", "Starting audio recording session")
 
-            // Create temp file
             val audioFile = File.createTempFile(
                 "audio_${System.currentTimeMillis()}",
-                ".m4a",
+                ".wav",
                 context.cacheDir
             )
             currentAudioFile = audioFile
             TraceLogger.trace("AudioRecorder", "Created temp file: ${audioFile.absolutePath}")
 
-            // Try VOICE_RECOGNITION first (works better for keyboards/background services)
-            // Fall back to MIC if that fails
+            val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_ENCODING)
+            if (minBuf <= 0) {
+                cleanup()
+                return@withContext Result.failure(
+                    IOException("AudioRecord.getMinBufferSize failed ($minBuf)")
+                )
+            }
+            // ~1s internal ring buffer (or platform minimum) so a momentarily
+            // busy read thread doesn't drop samples.
+            val recordBufSize = maxOf(minBuf, SAMPLE_RATE * 2)
+
+            // Try VOICE_RECOGNITION first (tuned for keyboards/background
+            // services), fall back to MIC then CAMCORDER.
             val audioSources = listOf(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION to "VOICE_RECOGNITION",
                 MediaRecorder.AudioSource.MIC to "MIC",
                 MediaRecorder.AudioSource.CAMCORDER to "CAMCORDER"
             )
 
+            var record: AudioRecord? = null
             var lastException: Exception? = null
-
-            for ((audioSource, sourceName) in audioSources) {
+            for ((source, name) in audioSources) {
                 try {
-                    TraceLogger.trace("AudioRecorder", "Trying audio source: $sourceName")
-
-                    // Initialize MediaRecorder
-                    mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        MediaRecorder(context)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        MediaRecorder()
-                    }.apply {
-                        setAudioSource(audioSource)
-                        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                        setAudioSamplingRate(SAMPLE_RATE)
-                        setAudioEncodingBitRate(BIT_RATE)
-                        setOutputFile(audioFile.absolutePath)
-
-                        prepare()
-                        start()
+                    val r = AudioRecord(source, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_ENCODING, recordBufSize)
+                    if (r.state != AudioRecord.STATE_INITIALIZED) {
+                        r.release()
+                        throw IOException("AudioRecord not initialized for $name")
                     }
-
-                    isRecording = true
-                    recordingStartTime = System.currentTimeMillis()
-                    _recordingDuration.value = 0L
-                    _recordingCutDueToTimeout.value = false
-                    maxDurationNotified = false
-
-                    // Acquire wake lock to keep recording during screen lock
-                    acquireWakeLock()
-
-                    // Start timer
-                    startTimer()
-
-                    Log.d(TAG, "Recording started with $sourceName: ${audioFile.absolutePath}")
-                    TraceLogger.trace("AudioRecorder", "Recording started successfully with $sourceName")
-                    return@withContext Result.success(Unit)
-
+                    record = r
+                    TraceLogger.trace("AudioRecorder", "AudioRecord ready with $name")
+                    break
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to start recording with $sourceName: ${e.message}")
-                    TraceLogger.trace("AudioRecorder", "Failed with $sourceName: ${e.message}")
+                    Log.w(TAG, "AudioRecord failed with $name: ${e.message}")
                     lastException = e
-                    mediaRecorder?.release()
-                    mediaRecorder = null
-                    // Continue to next audio source
                 }
             }
 
-            // All audio sources failed
-            val errorMessage = "Failed to access microphone with any audio source. " +
-                "Last error: ${lastException?.message}. " +
-                "Please ensure microphone permission is granted and no other app is using it."
+            if (record == null) {
+                val msg = "Failed to access microphone with any audio source. " +
+                    "Last error: ${lastException?.message}. Ensure microphone permission is " +
+                    "granted and no other app holds the mic."
+                Log.e(TAG, msg, lastException)
+                TraceLogger.error("AudioRecorder", msg, lastException)
+                cleanup()
+                return@withContext Result.failure(Exception(msg, lastException))
+            }
 
-            Log.e(TAG, errorMessage, lastException)
-            TraceLogger.error("AudioRecorder", errorMessage, lastException)
+            val writer = WavWriter(audioFile, SAMPLE_RATE, channels = 1, bitsPerSample = 16)
 
-            cleanup()
-            Result.failure(Exception(errorMessage, lastException))
+            audioRecord = record
+            wavWriter = writer
+            isRecording = true
+            recordingStartTime = System.currentTimeMillis()
+            _recordingDuration.value = 0L
+            _recordingCutDueToTimeout.value = false
+            maxDurationNotified = false
 
+            acquireWakeLock()
+            record.startRecording()
+            startReadLoop(record, writer)
+            startTimer()
+
+            Log.d(TAG, "Recording started: ${audioFile.absolutePath}")
+            TraceLogger.trace("AudioRecorder", "Recording started successfully")
+            Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error starting recording", e)
             TraceLogger.error("AudioRecorder", "Unexpected error starting recording", e)
             cleanup()
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Blocking-read loop on an IO thread: pull PCM frames from [record] and
+     * append them to [writer] until [isRecording] clears. The current read
+     * finishes (≤ one frame) after the flag flips, then the loop exits and
+     * [stopRecording] joins it before releasing the device.
+     */
+    private fun startReadLoop(record: AudioRecord, writer: WavWriter) {
+        readJob = scope.launch(Dispatchers.IO) {
+            val buf = ByteArray(READ_FRAME_BYTES)
+            try {
+                while (isRecording) {
+                    val n = record.read(buf, 0, buf.size)
+                    when {
+                        n > 0 -> {
+                            writer.write(buf, n)
+                            // Phase 2 seam: hand (buf, n) to the chunk segmenter
+                            // here to slice on silence and dispatch ASR live.
+                        }
+                        n < 0 -> {
+                            Log.e(TAG, "AudioRecord.read error ($n)")
+                            break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Read loop error", e)
+            }
         }
     }
 
@@ -158,22 +222,29 @@ class AudioRecorderManager @Inject constructor(
                 return@withContext Result.failure(IllegalStateException("Not recording"))
             }
 
-            mediaRecorder?.apply {
-                try {
-                    stop()
-                    release()
-                } catch (e: RuntimeException) {
-                    Log.e(TAG, "Error stopping recording", e)
-                }
-            }
-            mediaRecorder = null
             isRecording = false
+            readJob?.join()
+            readJob = null
+
+            audioRecord?.let { r ->
+                try {
+                    r.stop()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping AudioRecord", e)
+                }
+                r.release()
+            }
+            audioRecord = null
+
+            wavWriter?.close()
+            wavWriter = null
 
             stopTimer()
             releaseWakeLock()
 
             val file = currentAudioFile
-            if (file != null && file.exists() && file.length() > 0) {
+            currentAudioFile = null
+            if (file != null && file.exists() && file.length() > WavWriter.HEADER_SIZE) {
                 Log.d(TAG, "Recording stopped: ${file.absolutePath}, size: ${file.length()} bytes")
                 Result.success(file)
             } else {
@@ -191,18 +262,22 @@ class AudioRecorderManager @Inject constructor(
      */
     suspend fun cancelRecording() = withContext(Dispatchers.IO) {
         try {
-            if (isRecording) {
-                mediaRecorder?.apply {
-                    try {
-                        stop()
-                    } catch (e: RuntimeException) {
-                        Log.e(TAG, "Error canceling recording", e)
-                    }
-                    release()
+            isRecording = false
+            readJob?.join()
+            readJob = null
+            audioRecord?.let { r ->
+                try {
+                    r.stop()
+                } catch (_: Exception) {
                 }
-                mediaRecorder = null
-                isRecording = false
+                r.release()
             }
+            audioRecord = null
+            try {
+                wavWriter?.close()
+            } catch (_: Exception) {
+            }
+            wavWriter = null
             stopTimer()
             releaseWakeLock()
             cleanup()
@@ -308,7 +383,7 @@ class AudioRecorderManager @Inject constructor(
             "m4a" -> "mp4"
             "wav" -> "wav"
             "mp3" -> "mp3"
-            else -> "mp4" // default to mp4
+            else -> "wav" // recordings are WAV now
         }
     }
 
@@ -333,9 +408,22 @@ class AudioRecorderManager @Inject constructor(
      * Release resources
      */
     fun release() {
-        mediaRecorder?.release()
-        mediaRecorder = null
         isRecording = false
+        readJob?.cancel()
+        readJob = null
+        audioRecord?.let { r ->
+            try {
+                r.stop()
+            } catch (_: Exception) {
+            }
+            r.release()
+        }
+        audioRecord = null
+        try {
+            wavWriter?.close()
+        } catch (_: Exception) {
+        }
+        wavWriter = null
         cleanup()
     }
 

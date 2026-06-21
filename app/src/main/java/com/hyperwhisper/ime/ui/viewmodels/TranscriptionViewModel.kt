@@ -129,35 +129,12 @@ class TranscriptionViewModel(
                     // `processingStage` at rough thirds so the stage label
                     // still has something to say while the bar fills.
                     val estimateMs = settingsRepository.estimateTranscriptionMs(
-                        provider = settings.provider,
-                        modelId = settings.modelId,
+                        settings = settings,
                         audioFileSize = audioFile.length(),
+                        audioDurationMs = (_lastAudioDuration.value * 1000).toLong(),
                     )
-                    Log.d(TAG, "Progress estimate: ${estimateMs}ms for ${audioFile.length()} bytes via ${settings.provider}/${settings.modelId}")
-                    val progressJob = launch {
-                        val tickMs = 100L
-                        val targetCap = 0.95f
-                        val started = System.currentTimeMillis()
-                        // Stage labels — purely cosmetic now that progress is
-                        // continuous, but they keep the indicator's stage
-                        // line meaningful as the bar fills.
-                        val stageBreakpoints = listOf(
-                            0.0f to (ProcessingStage.PREPARING to ProcessingPhase.PREPARING_AUDIO),
-                            0.15f to (ProcessingStage.UPLOADING to ProcessingPhase.SENDING_TO_SERVER),
-                            0.30f to (ProcessingStage.WAITING_API to ProcessingPhase.WAITING_FOR_RESPONSE),
-                            0.85f to (ProcessingStage.FINISHING to ProcessingPhase.RECEIVING_DATA),
-                        )
-                        while (true) {
-                            val elapsed = System.currentTimeMillis() - started
-                            val frac = (elapsed.toFloat() / estimateMs.toFloat()).coerceIn(0f, targetCap)
-                            _transcriptionProgress.value = frac
-                            // Pick the latest stage breakpoint we've passed.
-                            val (stage, phase) = stageBreakpoints.last { it.first <= frac }.second
-                            if (_processingStage.value != stage) _processingStage.value = stage
-                            if (_processingPhase.value != phase) _processingPhase.value = phase
-                            kotlinx.coroutines.delay(tickMs)
-                        }
-                    }
+                    Log.d(TAG, "Progress estimate: ${estimateMs}ms for ${audioFile.length()} bytes / ${"%.2f".format(_lastAudioDuration.value)}s via ${settings.provider}/${settings.modelId} (local=${settings.localModelSettings.useLocalWhisper})")
+                    val progressJob = launch { animateProgressToCap(estimateMs) }
 
                     // Process audio through API
                     val result = voiceRepository.processAudio(audioFile, mode, settings)
@@ -287,6 +264,89 @@ class TranscriptionViewModel(
         }
     }
 
+    // ── External progress driving ────────────────────────────────────────
+    // History reprocessing calls VoiceRepository directly (not [processAudio]),
+    // so it can't piggyback on the live progress loop. These let an external
+    // orchestrator (KeyboardViewModel) drive the same determinate indicator —
+    // ring + % + ETA — over the same per-provider time estimate.
+
+    private var progressAnimationJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Animate progress 0 → 95% over [estimateMs], flipping the cosmetic stage
+     * labels at rough thirds. Caps at 95% so the bar can't sit dead at 100%
+     * before the real result lands. Shared by [processAudio] and the external
+     * reprocess path below.
+     */
+    private suspend fun animateProgressToCap(estimateMs: Long) {
+        val tickMs = 100L
+        val targetCap = 0.95f
+        val started = System.currentTimeMillis()
+        val stageBreakpoints = listOf(
+            0.0f to (ProcessingStage.PREPARING to ProcessingPhase.PREPARING_AUDIO),
+            0.15f to (ProcessingStage.UPLOADING to ProcessingPhase.SENDING_TO_SERVER),
+            0.30f to (ProcessingStage.WAITING_API to ProcessingPhase.WAITING_FOR_RESPONSE),
+            0.85f to (ProcessingStage.FINISHING to ProcessingPhase.RECEIVING_DATA),
+        )
+        while (true) {
+            val elapsed = System.currentTimeMillis() - started
+            val frac = (elapsed.toFloat() / estimateMs.toFloat()).coerceIn(0f, targetCap)
+            _transcriptionProgress.value = frac
+            val (stage, phase) = stageBreakpoints.last { it.first <= frac }.second
+            if (_processingStage.value != stage) _processingStage.value = stage
+            if (_processingPhase.value != phase) _processingPhase.value = phase
+            kotlinx.coroutines.delay(tickMs)
+        }
+    }
+
+    /**
+     * Begin the determinate progress animation for an inference run happening
+     * outside [processAudio] (history reprocessing). Sizes the estimate from
+     * [audioFile] exactly like the live path. Pair with [finishProgressAnimation]
+     * on success or [cancelProgressAnimation] on failure.
+     */
+    fun startProgressAnimation(audioFile: File, settings: ApiSettings) {
+        progressAnimationJob?.cancel()
+        val sizeBytes = runCatching { audioFile.length() }.getOrDefault(0L)
+        _lastAudioFileSize.value = sizeBytes
+        _lastAudioDuration.value = calculateAudioDuration(audioFile)
+        _processingPhase.value = ProcessingPhase.PREPARING_AUDIO
+        _processingStage.value = ProcessingStage.PREPARING
+        _transcriptionProgress.value = ProcessingStage.PREPARING.progressStart
+        progressAnimationJob = viewModelScope.launch {
+            val estimateMs = settingsRepository.estimateTranscriptionMs(
+                settings = settings,
+                audioFileSize = sizeBytes,
+                audioDurationMs = (_lastAudioDuration.value * 1000).toLong(),
+            )
+            animateProgressToCap(estimateMs)
+        }
+    }
+
+    /** Snap to 100% then clear — the result arrived successfully. */
+    fun finishProgressAnimation() {
+        progressAnimationJob?.cancel()
+        progressAnimationJob = null
+        _processingStage.value = ProcessingStage.FINISHING
+        _processingPhase.value = ProcessingPhase.COMPLETE
+        _transcriptionProgress.value = 1.0f
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(150)
+            _transcriptionProgress.value = null
+            _processingStage.value = null
+            _processingPhase.value = ProcessingPhase.IDLE
+        }
+    }
+
+    /** Clear the progress UI immediately without the 100% flash — on failure. */
+    fun cancelProgressAnimation() {
+        progressAnimationJob?.cancel()
+        progressAnimationJob = null
+        _transcriptionProgress.value = null
+        _processingStage.value = null
+        _processingPhase.value = ProcessingPhase.IDLE
+    }
+
     /**
      * Save audio file to persistent storage for reprocessing
      * Returns the absolute path to the saved file, or null on error
@@ -294,18 +354,24 @@ class TranscriptionViewModel(
     private fun saveAudioFileToPersistentStorage(audioFile: File): String? {
         return try {
             // Create audio history directory
-            val audioDir = File(context.filesDir, "audio_history")
+            val audioDir = com.hyperwhisper.data.AudioHistoryFiles.dir(context)
             if (!audioDir.exists()) {
                 audioDir.mkdirs()
                 Log.d(TAG, "Created audio history directory: ${audioDir.absolutePath}")
             }
 
-            // Generate unique filename with timestamp
-            val filename = "audio_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.wav"
-            val destFile = File(audioDir, filename)
+            // Name the file from the recording time (see AudioHistoryFiles).
+            // Bump the timestamp on the off-chance two saves land in the same
+            // millisecond so the name stays unique and still round-trips.
+            var stamp = System.currentTimeMillis()
+            var destFile = File(audioDir, com.hyperwhisper.data.AudioHistoryFiles.nameFor(stamp))
+            while (destFile.exists()) {
+                stamp += 1
+                destFile = File(audioDir, com.hyperwhisper.data.AudioHistoryFiles.nameFor(stamp))
+            }
 
             // Copy file to persistent storage
-            audioFile.copyTo(destFile, overwrite = true)
+            audioFile.copyTo(destFile, overwrite = false)
 
             Log.d(TAG, "Audio saved to persistent storage: ${destFile.absolutePath}")
             TraceLogger.trace("TranscriptionViewModel", "Audio file saved: ${destFile.name}, size: ${destFile.length()} bytes")

@@ -44,6 +44,7 @@ class HistoryRepository(
     private val gson: Gson,
     private val appearanceSettings: Flow<AppearanceSettings>,
     private val historyDao: HistoryDao,
+    private val audioDir: File,
     scope: CoroutineScope,
 ) {
     @Inject constructor(
@@ -56,11 +57,15 @@ class HistoryRepository(
         gson = gson,
         appearanceSettings = appearanceRepository.appearanceSettings,
         historyDao = historyDao,
+        audioDir = AudioHistoryFiles.dir(context),
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     )
 
     init {
-        scope.launch { migrateLegacyIfNeeded() }
+        scope.launch {
+            migrateLegacyIfNeeded()
+            reconcileAudioFiles()
+        }
     }
 
     /**
@@ -100,6 +105,80 @@ class HistoryRepository(
      */
     suspend fun updateHistoryItem(itemId: String, newText: String) {
         historyDao.updateText(itemId, newText, System.currentTimeMillis())
+    }
+
+    /**
+     * Reconcile the on-disk audio_history directory against the history table.
+     *
+     *  1. Normalise legacy file names (`audio_<millis>_<uuid>.wav`) to the
+     *     current `rec_<datetime>.wav` convention, in place, updating any DB
+     *     row that referenced the old path.
+     *  2. Drop dangling references — rows pointing at a file that no longer
+     *     exists lose their audio path (or are deleted outright if they have
+     *     no text either, since an empty + audioless row is unusable).
+     *  3. Surface orphans — audio files that exist on disk but aren't linked to
+     *     any row (saved during walkie-talkie use, a crash, or before history
+     *     linking) get an audio-only history entry so they can be played and
+     *     reprocessed instead of silently rotting in storage.
+     *
+     * Idempotent and safe to call repeatedly (boot + each time the history
+     * panel opens).
+     */
+    suspend fun reconcileAudioFiles() {
+        val rows = historyDao.getAll()
+        val referenced = HashSet<String>()
+
+        // Pass 1 + 2: walk known rows, fix names, prune dead references.
+        for (row in rows) {
+            val path = row.audioFilePath ?: continue
+            val file = File(path)
+            if (!file.exists()) {
+                if (row.text.isBlank()) historyDao.deleteById(row.id)
+                else historyDao.updateAudioPath(row.id, null)
+                continue
+            }
+            val normalized = ensureConventionalName(file, row.timestamp)
+            if (normalized.absolutePath != path) {
+                historyDao.updateAudioPath(row.id, normalized.absolutePath)
+            }
+            referenced.add(normalized.absolutePath)
+        }
+
+        // Pass 3: anything on disk not now referenced is an orphan — adopt it.
+        val files = audioDir.listFiles()?.filter { it.isFile && it.name.endsWith(".wav") }
+            ?: return
+        for (file in files) {
+            if (file.absolutePath in referenced) continue
+            val timestamp = AudioHistoryFiles.timestampFor(file)
+            val normalized = ensureConventionalName(file, timestamp)
+            if (normalized.absolutePath in referenced) continue
+            val item = TranscriptionHistoryItem(
+                text = "",
+                timestamp = timestamp,
+                audioFilePath = normalized.absolutePath,
+            )
+            historyDao.upsert(item.toEntity())
+            referenced.add(normalized.absolutePath)
+        }
+    }
+
+    /**
+     * Rename [file] to the current convention derived from [timestampMs] if it
+     * doesn't already match. Returns the (possibly new) file; on any failure
+     * the original is returned unchanged so reconciliation can't lose audio.
+     */
+    private fun ensureConventionalName(file: File, timestampMs: Long): File {
+        if (AudioHistoryFiles.matchesConvention(file.name)) return file
+        val parent = file.parentFile ?: return file
+        var stamp = timestampMs
+        var target = File(parent, AudioHistoryFiles.nameFor(stamp))
+        var guard = 0
+        while (target.exists() && target.absolutePath != file.absolutePath) {
+            stamp += 1
+            target = File(parent, AudioHistoryFiles.nameFor(stamp))
+            if (++guard > 1000) return file
+        }
+        return if (runCatching { file.renameTo(target) }.getOrDefault(false)) target else file
     }
 
     /** Clear all history and delete all associated audio files. */

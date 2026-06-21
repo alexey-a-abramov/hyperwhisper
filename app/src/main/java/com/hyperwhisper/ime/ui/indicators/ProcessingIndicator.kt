@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.ProcessingStage
 import com.hyperwhisper.ui.util.localizedDisplayName
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * Circular processing indicator for the post-record stage.
@@ -120,25 +121,34 @@ fun ProcessingIndicator(
                     strokeWidth = 6.dp,
                     color = MaterialTheme.colorScheme.primary
                 )
-                // Counter inside the ring: wave icon + percentage. The wave
-                // is the "we're alive" cue when progress is approximate.
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(14.dp)
-                            .graphicsLayer { alpha = waveAlpha },
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                // Counter inside the ring: the percentage headline (the
+                // explicit "how far along" figure) with the rough ETA beneath
+                // it, and the pulsing wave as the "we're alive" cue.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.GraphicEq,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(12.dp)
+                                .graphicsLayer { alpha = waveAlpha },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "${(progress.coerceIn(0f, 1f) * 100).roundToInt()}%",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Text(
                         text = "≈ $secondsLeftText",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
                 }
             } else {

@@ -54,6 +54,18 @@ class HistoryViewModel(
     }
 
     /**
+     * Reconcile saved audio files against history — surfaces orphaned audio
+     * (saved but never linked) and normalises legacy file names. Runs off the
+     * main thread; the resulting rows flow back through [transcriptionHistory].
+     */
+    fun reconcileAudioHistory() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { settingsRepository.reconcileAudioFiles() }
+                .onFailure { Log.e(TAG, "Audio reconcile failed", it) }
+        }
+    }
+
+    /**
      * Clear all transcription history
      */
     fun clearHistory() {
@@ -64,137 +76,74 @@ class HistoryViewModel(
     }
 
     /**
-     * Reprocess audio from history with current settings
+     * Reprocess audio from history with current settings. Suspends until the
+     * run resolves so the caller can drive progress UI around it and react to
+     * success/failure deterministically (on error nothing is emitted to
+     * [reprocessedText] — check [errorMessage]).
      */
-    fun reprocessWithCurrentSettings(
+    suspend fun reprocessWithCurrentSettings(
         item: TranscriptionHistoryItem,
         currentSettings: ApiSettings,
         currentMode: VoiceMode?
     ) {
-        viewModelScope.launch {
-            try {
-                val audioFilePath = item.audioFilePath
-                if (audioFilePath == null) {
-                    _errorMessage.value = "No audio file available for reprocessing"
-                    return@launch
-                }
-
-                val audioFile = File(audioFilePath)
-                if (!audioFile.exists()) {
-                    _errorMessage.value = "Audio file no longer exists"
-                    return@launch
-                }
-
-                // Skip the cloud-key gate when on-device Whisper is active —
-                // local processing doesn't need a cloud key.
-                if (!currentSettings.localModelSettings.useLocalWhisper &&
-                    currentSettings.getCurrentApiKey().isBlank()) {
-                    _errorMessage.value = "Please configure API key for ${currentSettings.provider.displayName} in settings"
-                    return@launch
-                }
-
-                if (currentMode == null) {
-                    _errorMessage.value = "No voice mode selected"
-                    return@launch
-                }
-
-                Log.d(TAG, "Reprocessing audio with current settings: ${audioFile.name}")
-                TraceLogger.trace("HistoryViewModel", "Reprocessing audio: ${audioFile.name}")
-                _isReprocessing.value = true
-                _errorMessage.value = null
-
-                // Process audio through API
-                when (val result = voiceRepository.processAudio(audioFile, currentMode, currentSettings)) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Reprocessing successful: ${result.data}")
-                        TraceLogger.trace("HistoryViewModel", "Reprocessing successful, length: ${result.data.length} chars")
-
-                        _reprocessedText.value = result.data
-                        _reprocessingInfo.value = result.processingInfo
-
-                        // Update existing history item instead of creating a new one
-                        settingsRepository.updateHistoryItem(item.id, result.data)
-                    }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Reprocessing failed: ${result.message}")
-                        TraceLogger.error("HistoryViewModel", "Reprocessing failed: ${result.message}")
-                        _errorMessage.value = "API Error: ${result.message}"
-                    }
-                    is ApiResult.Loading -> {
-                        // Should not happen in this flow
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reprocessing audio", e)
-                TraceLogger.error("HistoryViewModel", "Error reprocessing audio", e)
-                _errorMessage.value = e.message
-            } finally {
-                _isReprocessing.value = false
+        try {
+            val audioFilePath = item.audioFilePath
+            if (audioFilePath == null) {
+                _errorMessage.value = "No audio file available for reprocessing"
+                return
             }
-        }
-    }
 
-    /**
-     * Reprocess audio from history with new settings
-     */
-    fun reprocessWithNewSettings(
-        item: TranscriptionHistoryItem,
-        newSettings: ApiSettings,
-        newMode: VoiceMode
-    ) {
-        viewModelScope.launch {
-            try {
-                val audioFilePath = item.audioFilePath
-                if (audioFilePath == null) {
-                    _errorMessage.value = "No audio file available for reprocessing"
-                    return@launch
-                }
-
-                val audioFile = File(audioFilePath)
-                if (!audioFile.exists()) {
-                    _errorMessage.value = "Audio file no longer exists"
-                    return@launch
-                }
-
-                if (!newSettings.localModelSettings.useLocalWhisper &&
-                    newSettings.getCurrentApiKey().isBlank()) {
-                    _errorMessage.value = "Please configure API key for ${newSettings.provider.displayName}"
-                    return@launch
-                }
-
-                Log.d(TAG, "Reprocessing audio with new settings: ${audioFile.name}, mode: ${newMode.name}")
-                TraceLogger.trace("HistoryViewModel", "Reprocessing with new settings: ${newMode.name}, provider: ${newSettings.provider}")
-                _isReprocessing.value = true
-                _errorMessage.value = null
-
-                // Process audio through API
-                when (val result = voiceRepository.processAudio(audioFile, newMode, newSettings)) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Reprocessing with new settings successful: ${result.data}")
-                        TraceLogger.trace("HistoryViewModel", "Reprocessing successful, length: ${result.data.length} chars")
-
-                        _reprocessedText.value = result.data
-                        _reprocessingInfo.value = result.processingInfo
-
-                        // Update existing history item instead of creating a new one
-                        settingsRepository.updateHistoryItem(item.id, result.data)
-                    }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Reprocessing failed: ${result.message}")
-                        TraceLogger.error("HistoryViewModel", "Reprocessing failed: ${result.message}")
-                        _errorMessage.value = "API Error: ${result.message}"
-                    }
-                    is ApiResult.Loading -> {
-                        // Should not happen in this flow
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reprocessing audio with new settings", e)
-                TraceLogger.error("HistoryViewModel", "Error reprocessing with new settings", e)
-                _errorMessage.value = e.message
-            } finally {
-                _isReprocessing.value = false
+            val audioFile = File(audioFilePath)
+            if (!audioFile.exists()) {
+                _errorMessage.value = "Audio file no longer exists"
+                return
             }
+
+            // Skip the cloud-key gate when on-device Whisper is active —
+            // local processing doesn't need a cloud key.
+            if (!currentSettings.localModelSettings.useLocalWhisper &&
+                currentSettings.getCurrentApiKey().isBlank()) {
+                _errorMessage.value = "Please configure API key for ${currentSettings.provider.displayName} in settings"
+                return
+            }
+
+            if (currentMode == null) {
+                _errorMessage.value = "No voice mode selected"
+                return
+            }
+
+            Log.d(TAG, "Reprocessing audio with current settings: ${audioFile.name}")
+            TraceLogger.trace("HistoryViewModel", "Reprocessing audio: ${audioFile.name}")
+            _isReprocessing.value = true
+            _errorMessage.value = null
+
+            // Process audio through API
+            when (val result = voiceRepository.processAudio(audioFile, currentMode, currentSettings)) {
+                is ApiResult.Success -> {
+                    Log.d(TAG, "Reprocessing successful: ${result.data}")
+                    TraceLogger.trace("HistoryViewModel", "Reprocessing successful, length: ${result.data.length} chars")
+
+                    _reprocessedText.value = result.data
+                    _reprocessingInfo.value = result.processingInfo
+
+                    // Update existing history item instead of creating a new one
+                    settingsRepository.updateHistoryItem(item.id, result.data)
+                }
+                is ApiResult.Error -> {
+                    Log.e(TAG, "Reprocessing failed: ${result.message}")
+                    TraceLogger.error("HistoryViewModel", "Reprocessing failed: ${result.message}")
+                    _errorMessage.value = "API Error: ${result.message}"
+                }
+                is ApiResult.Loading -> {
+                    // Should not happen in this flow
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reprocessing audio", e)
+            TraceLogger.error("HistoryViewModel", "Error reprocessing audio", e)
+            _errorMessage.value = e.message
+        } finally {
+            _isReprocessing.value = false
         }
     }
 
