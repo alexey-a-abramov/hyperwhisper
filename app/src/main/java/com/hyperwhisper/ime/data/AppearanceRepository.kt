@@ -37,6 +37,7 @@ class AppearanceRepository @Inject constructor(
         private val APPEARANCE_TECHIE_MODE_KEY = booleanPreferencesKey("appearance_techie_mode")
         private val APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY = booleanPreferencesKey("appearance_show_keyboard_switcher")
         private val APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY = booleanPreferencesKey("appearance_save_original_audio_files")
+        private val APPEARANCE_STREAMING_DICTATION_KEY = booleanPreferencesKey("appearance_streaming_dictation")
         private val APPEARANCE_MAX_HISTORY_ITEMS_KEY = stringPreferencesKey("appearance_max_history_items")
         private val APPEARANCE_UNLIMITED_HISTORY_KEY = booleanPreferencesKey("appearance_unlimited_history")
         private val APPEARANCE_LAST_KEYBOARD_MODE_KEY = stringPreferencesKey("appearance_last_keyboard_mode")
@@ -100,6 +101,7 @@ class AppearanceRepository @Inject constructor(
             techieModeEnabled = preferences[APPEARANCE_TECHIE_MODE_KEY] ?: false,
             showKeyboardSwitcher = preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] ?: false,
             saveOriginalAudioFiles = preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] ?: true,
+            streamingDictation = preferences[APPEARANCE_STREAMING_DICTATION_KEY] ?: false,
             maxHistoryItems = preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY]?.toIntOrNull() ?: 20,
             unlimitedHistory = preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] ?: false,
             lastKeyboardInputMode = preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY]?.let {
@@ -165,6 +167,7 @@ class AppearanceRepository @Inject constructor(
             preferences[APPEARANCE_TECHIE_MODE_KEY] = settings.techieModeEnabled
             preferences[APPEARANCE_SHOW_KEYBOARD_SWITCHER_KEY] = settings.showKeyboardSwitcher
             preferences[APPEARANCE_SAVE_ORIGINAL_AUDIO_FILES_KEY] = settings.saveOriginalAudioFiles
+            preferences[APPEARANCE_STREAMING_DICTATION_KEY] = settings.streamingDictation
             preferences[APPEARANCE_MAX_HISTORY_ITEMS_KEY] = settings.maxHistoryItems.toString()
             preferences[APPEARANCE_UNLIMITED_HISTORY_KEY] = settings.unlimitedHistory
             preferences[APPEARANCE_LAST_KEYBOARD_MODE_KEY] = settings.lastKeyboardInputMode.name

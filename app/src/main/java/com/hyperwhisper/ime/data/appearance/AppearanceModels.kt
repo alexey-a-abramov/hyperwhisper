@@ -181,6 +181,9 @@ data class AppearanceSettings(
     val enabledAgentKeyboards: Set<String> = emptySet(),
     val showKeyboardSwitcher: Boolean = false, // Show keyboard switcher button on main screen
     val saveOriginalAudioFiles: Boolean = true, // Save audio files for playback/reprocessing from history
+    // Streaming (long-form) dictation: transcribe chunks live during recording,
+    // then run one LLM pass at stop. Off by default — opt-in for long dictations.
+    val streamingDictation: Boolean = false,
     val maxHistoryItems: Int = 20, // Maximum number of history items to keep (0 = unlimited)
     val unlimitedHistory: Boolean = false, // If true, maxHistoryItems is ignored
     val lastKeyboardInputMode: KeyboardInputMode = KeyboardInputMode.DICTATION, // Remember last keyboard mode

@@ -86,6 +86,13 @@ fun KeyboardBehaviorSection(
             onChange = { onSettingsChange(appearanceSettings.copy(saveOriginalAudioFiles = it)) }
         )
 
+        ToggleRow(
+            title = "Streaming dictation (beta)",
+            description = "For long recordings: transcribe in chunks while you speak (split on pauses), then one cleanup pass at stop. Off = transcribe once at stop.",
+            checked = appearanceSettings.streamingDictation,
+            onChange = { onSettingsChange(appearanceSettings.copy(streamingDictation = it)) }
+        )
+
         Spacer(Modifier.height(4.dp))
         GroupHeader(strings.keyboardBehaviorKeyboardHeader)
 

@@ -348,6 +348,18 @@ class TranscriptionViewModel(
     }
 
     /**
+     * Streaming path hooks. [persistAudioForHistory] keeps the full recording
+     * for history/reprocess (same store the live path uses); [setStreamedText]
+     * publishes the assembled streamed transcript so the screen auto-commits it
+     * exactly like a single-shot result.
+     */
+    fun persistAudioForHistory(audioFile: File): String? = saveAudioFileToPersistentStorage(audioFile)
+
+    fun setStreamedText(text: String) {
+        _transcribedText.value = text
+    }
+
+    /**
      * Save audio file to persistent storage for reprocessing
      * Returns the absolute path to the saved file, or null on error
      */

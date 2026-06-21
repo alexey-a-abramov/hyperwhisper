@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyperwhisper.audio.AudioRecorderManager
 import com.hyperwhisper.audio.SoundManager
+import com.hyperwhisper.audio.StreamingTranscriptionSession
 import com.hyperwhisper.data.*
 import com.hyperwhisper.network.VoiceRepository
 import com.hyperwhisper.ui.viewmodels.HistoryViewModel
@@ -253,6 +254,10 @@ class KeyboardViewModel @Inject constructor(
     /**
      * Start recording audio
      */
+    // Active streaming session for the current recording, or null when streaming
+    // is off (the default) — recording then behaves fully single-shot.
+    private var streamingSession: StreamingTranscriptionSession? = null
+
     fun startRecording() {
         // Sync state with repository first to catch any desync issues
         syncRecordingState()
@@ -263,7 +268,41 @@ class KeyboardViewModel @Inject constructor(
             return
         }
 
+        setUpStreamingIfEnabled()
         recordingViewModel.startRecording()
+    }
+
+    /**
+     * Arm live chunked transcription for this recording when the streaming
+     * setting is on and a normal voice mode is selected; otherwise clear the
+     * recorder's chunk hook so capture stays single-shot. The chunk ASR + the
+     * one final LLM pass route through the new [VoiceRepository] entry points.
+     */
+    private fun setUpStreamingIfEnabled() {
+        val mode = selectedMode.value
+        if (!appearanceSettings.value.streamingDictation || mode == null) {
+            streamingSession = null
+            audioRecorderManager.onChunkReady = null
+            return
+        }
+        val settings = apiSettings.value
+        val session = StreamingTranscriptionSession(
+            scope = viewModelScope,
+            transcribeChunk = { file, _ ->
+                when (val r = voiceRepository.transcribeChunk(file, mode, settings)) {
+                    is ApiResult.Success -> r.data
+                    else -> ""
+                }
+            },
+            postProcess = { text ->
+                when (val r = voiceRepository.postProcessStreamed(text, mode, settings)) {
+                    is ApiResult.Success -> r.data
+                    else -> text
+                }
+            },
+        )
+        streamingSession = session
+        audioRecorderManager.onChunkReady = { file, idx -> session.onChunk(file, idx) }
     }
 
     /**
@@ -288,9 +327,59 @@ class KeyboardViewModel @Inject constructor(
     }
 
     /**
+     * Finish a streamed dictation: persist the full recording for history (per
+     * the retain setting), await + assemble the chunk transcripts, run the one
+     * final LLM pass, then commit + record history like a single-shot success.
+     */
+    private suspend fun processStreamedResult(
+        session: StreamingTranscriptionSession,
+        audioFile: java.io.File,
+    ) {
+        transcriptionViewModel.clearError()
+        transcriptionViewModel.clearTranscribedText()
+        transcriptionViewModel.clearProcessingInfo()
+        recordingViewModel.setProcessing()
+
+        val settings = apiSettings.value
+        val keepAudio = appearanceSettings.value.saveOriginalAudioFiles
+        settingsRepository.trackProviderModelUsage(settings.provider, settings.modelId)
+
+        val savedAudioPath =
+            if (keepAudio) transcriptionViewModel.persistAudioForHistory(audioFile) else null
+
+        val text = runCatching { session.finalize() }.getOrDefault("").trim()
+        val inWalkieTalkie = walkieTalkieMode.value
+
+        if (text.isEmpty()) {
+            soundManager.playErrorSound()
+            recordingViewModel.setError("Recording processed, but no speech was detected. Try speaking louder or recording a bit longer.")
+            if (!inWalkieTalkie) historyViewModel.addToHistory("", savedAudioPath)
+            Log.d(TAG, "processStreamedResult: empty (${session.chunkCount()} chunks)")
+        } else {
+            soundManager.playSuccessSound()
+            recordingViewModel.setIdle()
+            // Publish so KeyboardScreen auto-commits + sets the paste buffer,
+            // exactly like a single-shot result.
+            transcriptionViewModel.setStreamedText(text)
+            if (!inWalkieTalkie) historyViewModel.addToHistory(text, savedAudioPath)
+            Log.d(TAG, "processStreamedResult: ${session.chunkCount()} chunks, ${text.length} chars")
+        }
+        audioFile.delete()
+        recordingViewModel.clearRecordedAudioFile()
+    }
+
+    /**
      * Process audio file through transcription API
      */
     private suspend fun processAudioFile(audioFile: java.io.File) {
+        // Streaming path: chunks were transcribed live during recording — just
+        // assemble + run the one final LLM pass. Single-shot otherwise (default).
+        streamingSession?.let { session ->
+            streamingSession = null
+            audioRecorderManager.onChunkReady = null
+            processStreamedResult(session, audioFile)
+            return
+        }
         Log.d(
             TAG,
             "processAudioFile: start file=${audioFile.name}, bytes=${audioFile.length()}, mode=${selectedMode.value?.id}, provider=${apiSettings.value.provider}"
@@ -393,6 +482,7 @@ class KeyboardViewModel @Inject constructor(
      * Cancel recording
      */
     fun cancelRecording() {
+        clearStreaming()
         recordingViewModel.cancelRecording()
     }
 
@@ -400,7 +490,14 @@ class KeyboardViewModel @Inject constructor(
      * User confirmed they want to cancel the recording
      */
     fun confirmCancelRecording() {
+        clearStreaming()
         recordingViewModel.confirmCancelRecording()
+    }
+
+    /** Drop any armed streaming session + the recorder's chunk hook. */
+    private fun clearStreaming() {
+        streamingSession = null
+        audioRecorderManager.onChunkReady = null
     }
 
     /**
