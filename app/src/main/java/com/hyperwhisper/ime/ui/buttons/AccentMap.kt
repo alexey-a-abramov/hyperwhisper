@@ -39,6 +39,9 @@ internal object AccentMap {
         "е" to listOf("ё"),
         "г" to listOf("ґ"),
         "и" to listOf("і", "ї"),
+        // ъ lives on a long-press of ь so it can drop off the top row, which
+        // widens the remaining Russian letters (ъ is rare; Ukrainian ignores it).
+        "ь" to listOf("ъ"),
     )
 
     /**

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.TranscriptionHistoryItem
+import com.hyperwhisper.ui.buttons.PeriodKeyWithPopup
 import com.hyperwhisper.ui.sections.KeyboardBottomBar
 import com.hyperwhisper.ui.util.repeatOnHold
 
@@ -172,25 +173,36 @@ private fun CodeKeyRow(
         horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.KeySpacing)
     ) {
         keys.forEach { key ->
-            Surface(
-                onClick = { onKeyPress(key) },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(height),
-                shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
-                color = KeyboardKeyColor,
-                tonalElevation = 1.dp
-            ) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            if (key == ".") {
+                // Same hold-to-grid symbol pad as the other layouts, so the
+                // dot's long-press behaves identically everywhere. Tap still
+                // emits ".".
+                PeriodKeyWithPopup(
+                    onKeyPress = onKeyPress,
+                    modifier = Modifier.weight(1f),
+                    height = height,
+                )
+            } else {
+                Surface(
+                    onClick = { onKeyPress(key) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(height),
+                    shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
+                    color = KeyboardKeyColor,
+                    tonalElevation = 1.dp
                 ) {
-                    Text(
-                        text = key,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KeyboardKeyTextColor
-                    )
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = key,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = KeyboardKeyTextColor
+                        )
+                    }
                 }
             }
         }

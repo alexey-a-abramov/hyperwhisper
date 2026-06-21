@@ -69,6 +69,7 @@ fun BottomActionsRow(
     onSpace: () -> Unit,
     onEnter: () -> Unit,
     onDelete: () -> Unit,
+    onDeleteAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -87,16 +88,8 @@ fun BottomActionsRow(
             horizontalArrangement = Arrangement.spacedBy(KeyboardMetrics.BottomBarSpacing),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Paste shrinks (weight 1f → was 1.4f) to free space for the
-            // new comma/dot keys.
-            PasteLastPill(
-                lastTranscribedText = lastTranscribedText,
-                transcriptionHistory = transcriptionHistory,
-                enableHistoryPanel = enableHistoryPanel,
-                onPasteText = onCommitText,
-                onShowHistory = onShowHistory,
-                weight = 1f
-            )
+            // Paste-last "Insert" moved to the universal top strip — the
+            // dictation row now starts straight at the locality switcher.
             // Locality switcher — tap cycles the enabled keyboard localities
             // (and points dictation at that language); long-press opens the
             // full list. Sits between Paste and the comma key.
@@ -146,7 +139,7 @@ fun BottomActionsRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(rowHeight)
-                    .repeatOnHold(onTrigger = onDelete)
+                    .repeatOnHold(onTrigger = onDelete, onLongHold = onDeleteAll)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(

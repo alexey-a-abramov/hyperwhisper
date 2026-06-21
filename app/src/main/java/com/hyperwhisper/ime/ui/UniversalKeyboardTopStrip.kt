@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.hyperwhisper.data.KeyboardInputMode
 import com.hyperwhisper.localization.LocalStrings
 import com.hyperwhisper.ui.components.LongPressIndicator
+import com.hyperwhisper.ui.sections.InsertChip
 import com.hyperwhisper.ui.util.localizedDisplayName
 import com.hyperwhisper.ui.util.repeatOnHold
 
@@ -61,6 +62,10 @@ fun UniversalKeyboardTopStrip(
     onBackspace: () -> Unit,
     onSettings: (() -> Unit)? = null,
     onLogs: (() -> Unit)? = null,
+    pasteText: String = "",
+    enableHistoryPanel: Boolean = false,
+    onPaste: (String) -> Unit = {},
+    onShowHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -154,6 +159,20 @@ fun UniversalKeyboardTopStrip(
             }
 
             Spacer(modifier = Modifier.weight(1f))
+
+            // Insert (paste-last) — relocated here from the per-layout bottom
+            // rows. Tap pastes the last transcription, long-press opens history.
+            // Hidden when there's nothing to paste.
+            InsertChip(
+                pasteText = pasteText,
+                enableHistoryPanel = enableHistoryPanel,
+                onPaste = onPaste,
+                onShowHistory = onShowHistory,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(vertical = KeyboardMetrics.RowGap)
+                    .width(KeyboardMetrics.ModeChipWidth)
+            )
 
             // Settings / Logs — Help is intentionally absent; reachable from
             // Settings if needed.

@@ -14,18 +14,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,14 +57,19 @@ fun TranscriptionHistoryPanel(
     onSelect: (String) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit,
-    onPlayAudio: ((TranscriptionHistoryItem) -> Unit)? = null,
+    onCopy: ((TranscriptionHistoryItem) -> Unit)? = null,
     onReprocessWithCurrentSettings: ((TranscriptionHistoryItem) -> Unit)? = null,
-    onReprocessWithNewSettings: ((TranscriptionHistoryItem) -> Unit)? = null
+    playback: HistoryPlaybackState = HistoryPlaybackState(),
+    onTogglePlay: ((TranscriptionHistoryItem) -> Unit)? = null,
+    onSeek: ((Float) -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     // Local confirmation state — IMEs can't host real Dialogs, so the
     // confirmation is rendered as an inline overlay over the history list.
     var showClearConfirmation by remember { mutableStateOf(false) }
+    // Play mode reveals the per-recording scrubber + time below the active
+    // row. Off by default so the list stays compact; toggled from the header.
+    var playMode by remember { mutableStateOf(false) }
 
     // Fullscreen overlay - no padding for maximum space
     Surface(
@@ -110,6 +116,22 @@ fun TranscriptionHistoryPanel(
 
                 // Compact action buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (onTogglePlay != null && history.isNotEmpty()) {
+                        // Play mode — reveals the scrubber + time under the
+                        // active recording. Highlighted when on.
+                        IconButton(
+                            onClick = { playMode = !playMode },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = "Toggle play mode",
+                                tint = if (playMode) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                     if (history.isNotEmpty()) {
                         // Clear all — confirmation gate so a stray tap can't
                         // wipe the entire history. Tap once to arm the
@@ -230,22 +252,54 @@ fun TranscriptionHistoryPanel(
                                         }
                                     }
 
-                                    // Right: just the play button in the
-                                    // header. The reprocess buttons are now
-                                    // a labeled row below the text — bigger
-                                    // hit targets and discoverable instead of
-                                    // hiding behind 16dp icons.
-                                    if (hasAudio && onPlayAudio != null) {
-                                        IconButton(
-                                            onClick = { onPlayAudio(item) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.PlayArrow,
-                                                contentDescription = "Play original audio",
-                                                modifier = Modifier.size(18.dp),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
+                                    // Right: copy + play + redo as compact
+                                    // icons. Copy needs text; play and redo
+                                    // need the source audio. Redo reprocesses
+                                    // with whatever model/params are currently
+                                    // set in settings — no per-item picker.
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (hasText && onCopy != null) {
+                                            IconButton(
+                                                onClick = { onCopy(item) },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "Copy text to clipboard",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                        if (hasAudio && onTogglePlay != null) {
+                                            val isThisPlaying = playback.itemId == item.id && playback.isPlaying
+                                            IconButton(
+                                                onClick = { onTogglePlay(item) },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                    contentDescription = if (isThisPlaying) "Pause" else "Play original audio",
+                                                    modifier = Modifier.size(18.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                        if (hasAudio && onReprocessWithCurrentSettings != null) {
+                                            IconButton(
+                                                onClick = { onReprocessWithCurrentSettings(item) },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Replay,
+                                                    contentDescription = "Reprocess with current settings",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -261,65 +315,37 @@ fun TranscriptionHistoryPanel(
                                     )
                                 } else if (isAudioOnly) {
                                     Text(
-                                        "Tap reprocess to transcribe this audio",
+                                        "Tap redo to transcribe this audio",
                                         fontSize = 11.sp,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
 
-                                // Reprocess actions — only meaningful when
-                                // we still have the source audio. Two paths:
-                                // current settings (one tap), or pick a
-                                // different model (opens picker).
-                                if (hasAudio && (onReprocessWithCurrentSettings != null || onReprocessWithNewSettings != null)) {
+                                // Play-mode scrubber: only under the active
+                                // recording, so the list stays compact.
+                                if (playMode && hasAudio && playback.itemId == item.id) {
+                                    Slider(
+                                        value = if (playback.durationMs > 0)
+                                            (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
+                                        else 0f,
+                                        onValueChange = { onSeek?.invoke(it) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        if (onReprocessWithCurrentSettings != null) {
-                                            FilledTonalButton(
-                                                onClick = { onReprocessWithCurrentSettings(item) },
-                                                modifier = Modifier.weight(1f).height(36.dp),
-                                                colors = ButtonDefaults.filledTonalButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                                ),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Replay,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(Modifier.size(4.dp))
-                                                Text(
-                                                    "Redo: current",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
-                                        if (onReprocessWithNewSettings != null) {
-                                            OutlinedButton(
-                                                onClick = { onReprocessWithNewSettings(item) },
-                                                modifier = Modifier.weight(1f).height(36.dp),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Tune,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(Modifier.size(4.dp))
-                                                Text(
-                                                    "Redo: pick model",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            formatPlaybackTime(playback.positionMs),
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        Text(
+                                            formatPlaybackTime(playback.durationMs),
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
                                     }
                                 }
                             }
@@ -402,4 +428,10 @@ fun TranscriptionHistoryPanel(
             }
         }
     }
+}
+
+/** m:ss for a playback position/duration in milliseconds. */
+private fun formatPlaybackTime(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(totalSec / 60, totalSec % 60)
 }

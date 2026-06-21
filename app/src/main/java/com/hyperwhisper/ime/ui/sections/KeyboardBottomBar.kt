@@ -73,24 +73,14 @@ fun KeyboardBottomBar(
     onEnter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Paste-last "Insert" moved to the top header (universal strip /
+    // dictation header), so the bottom bar is now just Space + Enter.
     Row(
         modifier = modifier.fillMaxWidth().height(KeyboardBottomBarHeight),
         horizontalArrangement = Arrangement.spacedBy(KeyboardBottomBarSpacing),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PasteLastPill(
-            lastTranscribedText = lastTranscribedText,
-            transcriptionHistory = transcriptionHistory,
-            enableHistoryPanel = enableHistoryPanel,
-            onPasteText = onPasteText,
-            onShowHistory = onShowHistory
-        )
-        BottomBarSpace(
-            // When the paste pill is hidden the space button expands to take
-            // the full free width so the target stays large.
-            weight = if (hasPasteContent(lastTranscribedText, transcriptionHistory)) 1.4f else 1f,
-            onClick = onSpace
-        )
+        BottomBarSpace(weight = 1f, onClick = onSpace)
         BottomBarEnter(onClick = onEnter)
     }
 }
@@ -100,24 +90,23 @@ internal fun hasPasteContent(
     transcriptionHistory: List<TranscriptionHistoryItem>
 ): Boolean = lastTranscribedText.isNotEmpty() || transcriptionHistory.isNotEmpty()
 
+/**
+ * Compact "Insert" chip for the top headers (universal strip + dictation
+ * header): clipboard icon + a short preview of [pasteText]. Tap pastes it;
+ * long-press opens history. Renders nothing when [pasteText] is blank. The
+ * caller sizes it via [modifier].
+ */
 @Composable
-fun RowScope.PasteLastPill(
-    lastTranscribedText: String,
-    transcriptionHistory: List<TranscriptionHistoryItem>,
+fun InsertChip(
+    pasteText: String,
     enableHistoryPanel: Boolean,
-    onPasteText: (String) -> Unit,
+    onPaste: (String) -> Unit,
     onShowHistory: () -> Unit,
-    weight: Float = 1f,
+    modifier: Modifier = Modifier,
 ) {
-    if (!hasPasteContent(lastTranscribedText, transcriptionHistory)) return
+    if (pasteText.isEmpty()) return
     val strings = LocalStrings.current
-    val textToShow = if (lastTranscribedText.isNotEmpty()) lastTranscribedText
-        else transcriptionHistory.first().text
-    Box(
-        modifier = Modifier
-            .weight(weight)
-            .fillMaxHeight()
-    ) {
+    Box(modifier = modifier) {
         Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
             shape = RoundedCornerShape(KeyboardMetrics.KeyRadius),
@@ -125,35 +114,33 @@ fun RowScope.PasteLastPill(
                 .fillMaxSize()
                 .pointerInput(enableHistoryPanel) {
                     detectTapGestures(
-                        onTap = { onPasteText(textToShow) },
-                        onLongPress = {
-                            if (enableHistoryPanel) onShowHistory()
-                        }
+                        onTap = { onPaste(pasteText) },
+                        onLongPress = { if (enableHistoryPanel) onShowHistory() }
                     )
                 }
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = KeyboardMetrics.BaseUnit * 2.5f),
+                    .padding(horizontal = KeyboardMetrics.BaseUnit * 2),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentPaste,
                     contentDescription = strings.pasteLastTranscription,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(4.dp))
                 Text(
-                    text = if (textToShow.length > 24) textToShow.take(24) + "…" else textToShow,
-                    fontSize = 11.sp,
+                    text = if (pasteText.length > 12) pasteText.take(12) + "…" else pasteText,
+                    fontSize = 10.sp,
                     maxLines = 1,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
                 )
             }
         }
-        if (enableHistoryPanel) LongPressIndicator(padding = 4.dp)
+        if (enableHistoryPanel) LongPressIndicator(padding = 3.dp)
     }
 }
 

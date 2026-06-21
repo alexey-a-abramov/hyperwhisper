@@ -18,9 +18,11 @@ object KeyboardLayouts {
         )
     )
 
-    // Russian ЙЦУКЕН Layout
+    // Russian ЙЦУКЕН Layout. Ъ is dropped from the top row (it's rare) and
+    // moved to a long-press of ь — see AccentMap — so the row goes from 12 to
+    // 11 keys and every letter gets more width. Rows are now a balanced 11/11/9.
     val russianLayout = LayoutDefinition(
-        topRow = listOf("й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ъ"),
+        topRow = listOf("й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х"),
         middleRow = listOf("ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", "э"),
         bottomRow = listOf("я", "ч", "с", "м", "и", "т", "ь", "б", "ю"),
         shiftedSymbols = mapOf(

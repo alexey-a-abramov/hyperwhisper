@@ -30,7 +30,6 @@ import com.hyperwhisper.ui.buttons.AccentKeyWithPopup
 import com.hyperwhisper.ui.buttons.AccentMap
 import com.hyperwhisper.ui.buttons.LocalityKey
 import com.hyperwhisper.ui.buttons.PeriodKeyWithPopup
-import com.hyperwhisper.ui.sections.PasteLastPill
 
 /**
  * Typing layouts for the non-dictation modes. [mode] is normalized via
@@ -40,6 +39,9 @@ import com.hyperwhisper.ui.sections.PasteLastPill
  * SPECIAL_CHARS renderers were removed once normalize() made them
  * unreachable — old persisted modes collapse into CODE or QWERTY.
  */
+/** A keyboard row plus the half-key indent applied to each side (0 = full width). */
+private data class KeyRow(val keys: List<String>, val indentWeight: Float)
+
 @Composable
 internal fun TextKeyboardSectionNew(
     mode: KeyboardInputMode,
@@ -91,10 +93,16 @@ internal fun TextKeyboardSectionNew(
     // Get the layout definition
     val layoutDef = KeyboardLayouts.getLayout(layout)
 
-    val topRows = listOf(
-        listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
-        layoutDef.topRow,
-        layoutDef.middleRow
+    // Letter rows are centred Gboard-style: when a letter row is shorter than
+    // its sibling (English a–l = 9 vs q–p = 10), it's indented half a key on
+    // each side so the keys line up in a grid and keep the same width as the
+    // row above, instead of stretching to fill the board. The number row keeps
+    // full width.
+    val maxLetters = maxOf(layoutDef.topRow.size, layoutDef.middleRow.size)
+    val keyRows = listOf(
+        KeyRow(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"), indentWeight = 0f),
+        KeyRow(layoutDef.topRow, indentWeight = (maxLetters - layoutDef.topRow.size) / 2f),
+        KeyRow(layoutDef.middleRow, indentWeight = (maxLetters - layoutDef.middleRow.size) / 2f),
     )
 
     val bottomRowKeys = layoutDef.bottomRow
@@ -148,7 +156,7 @@ internal fun TextKeyboardSectionNew(
                     // Kept as twice RowGap so it still scales together.
                     val verticalGap = KeyboardMetrics.RowGap * 2
                     // Calculate total rows: topRows + shiftRow + bottomRow
-                    val totalRows = topRows.size + 1 + 1
+                    val totalRows = keyRows.size + 1 + 1
                     val totalVerticalGaps = verticalGap * (totalRows + 1)
                     val availableHeight = maxHeight - totalVerticalGaps
                     val keyHeight = (availableHeight / totalRows)
@@ -158,14 +166,17 @@ internal fun TextKeyboardSectionNew(
                         modifier = Modifier.fillMaxSize().padding(KeyboardMetrics.OuterPadding),
                         verticalArrangement = Arrangement.spacedBy(verticalGap)
                     ) {
-                        // Number row
-                        topRows.forEach { row ->
+                        // Number row + letter rows (shorter letter rows centred)
+                        keyRows.forEach { kbRow ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(keyHeight),
                                 horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                row.forEach { key ->
+                                if (kbRow.indentWeight > 0f) {
+                                    Spacer(modifier = Modifier.weight(kbRow.indentWeight))
+                                }
+                                kbRow.keys.forEach { key ->
                                     if (key.isEmpty()) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     } else if (AccentMap.accentsFor(key).isNotEmpty()) {
@@ -212,31 +223,20 @@ internal fun TextKeyboardSectionNew(
                                         )
                                     }
                                 }
+                                if (kbRow.indentWeight > 0f) {
+                                    Spacer(modifier = Modifier.weight(kbRow.indentWeight))
+                                }
                             }
                         }
 
-                        // Shift row (bottom row keys with shift and backspace)
+                        // Letter row — just the letters + backspace now. Shift
+                        // moved down to the action row (left of the language
+                        // control), which hands its old width to these letters.
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            KeyboardActionButton(
-                                icon = if (capsLockEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
-                                onClick = {
-                                    if (shiftEnabled) {
-                                        capsLockEnabled = true
-                                        shiftEnabled = false
-                                    } else if (capsLockEnabled) {
-                                        capsLockEnabled = false
-                                    } else {
-                                        shiftEnabled = true
-                                    }
-                                },
-                                modifier = Modifier.weight(1.5f),
-                                style = KeyboardActionStyle.NORMAL,
-                                height = keyHeight
-                            )
                             bottomRowKeys.forEach { key ->
                                 if (AccentMap.accentsFor(key).isNotEmpty()) {
                                     AccentKeyWithPopup(
@@ -264,72 +264,73 @@ internal fun TextKeyboardSectionNew(
                             RepeatingActionButton(
                                 icon = Icons.Default.Backspace,
                                 onAction = onDelete,
-                                modifier = Modifier.weight(1.5f),
+                                // Matched to the shift key above (1.25) — see note there.
+                                modifier = Modifier.weight(1.25f),
                                 style = KeyboardActionStyle.BACKSPACE,
                                 height = keyHeight
                             )
                         }
 
-                        // Bottom row — universal paste-last pill (when there's
-                        // history) at the leftmost slot for muscle-memory
-                        // parity with Dictation/Agent/Emoji/Code, then the
-                        // typing-friendly comma/space/period/enter cluster.
-                        // Mode switching + backspace live in the universal
-                        // top strip.
-                        val hasPasteContent = lastTranscribedText.isNotEmpty() ||
-                            transcriptionHistory.isNotEmpty()
+                        // Action row: Shift · language · space · period · enter.
+                        // The comma key is gone (comma now lives on the period
+                        // long-press), and the paste-last "Insert" pill moved up
+                        // to the universal top strip — leaving a clean cluster.
                         Row(
                             modifier = Modifier.fillMaxWidth().height(keyHeight),
                             horizontalArrangement = Arrangement.spacedBy(horizontalGap),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PasteLastPill(
-                                lastTranscribedText = lastTranscribedText,
-                                transcriptionHistory = transcriptionHistory,
-                                enableHistoryPanel = enableHistoryPanel,
-                                onPasteText = onPasteText,
-                                onShowHistory = onShowHistory,
-                                weight = 2.0f,
+                            // Shift — moved down from the letter row so it sits
+                            // under the thumb, left of the language control.
+                            // Same one-shot → caps-lock → off state machine.
+                            KeyboardActionButton(
+                                icon = if (capsLockEnabled) Icons.Default.KeyboardCapslock else Icons.Default.ArrowUpward,
+                                onClick = {
+                                    if (shiftEnabled) {
+                                        capsLockEnabled = true
+                                        shiftEnabled = false
+                                    } else if (capsLockEnabled) {
+                                        capsLockEnabled = false
+                                    } else {
+                                        shiftEnabled = true
+                                    }
+                                },
+                                modifier = Modifier.weight(1.25f),
+                                style = KeyboardActionStyle.NORMAL,
+                                height = keyHeight
                             )
-                            // Locality switcher — same control as the dictation
-                            // row so layout/language switching works while
-                            // typing too. Tap cycles, long-press lists.
+                            // Language / locality switcher — wider than before.
+                            // Tap cycles the enabled localities (and points
+                            // dictation at that language); long-press lists them.
                             LocalityKey(
                                 code = localityCode,
                                 onClick = onCycleLocality,
                                 onLongClick = onShowLocalityList,
-                                modifier = Modifier.weight(0.7f).fillMaxHeight()
+                                modifier = Modifier.weight(1.5f).fillMaxHeight()
                             )
-                            // Comma — fixed PunctKeyWidth so it matches the
-                            // dictation row's comma/period exactly.
-                            KeyboardKeyButton(
-                                label = ",",
-                                onClick = { onKeyPress(",") },
-                                modifier = Modifier.width(KeyboardMetrics.PunctKeyWidth),
-                                height = keyHeight
-                            )
-                            // Space bar. Reduce weight when paste-last is
-                            // present to keep the row visually balanced.
+                            // Space bar — takes the slack freed by the dropped
+                            // comma + paste pill.
                             KeyboardActionButton(
                                 label = "space",
                                 onClick = onSpacePress,
-                                modifier = Modifier.weight(if (hasPasteContent) 3.5f else 5.5f),
+                                modifier = Modifier.weight(4f),
                                 style = KeyboardActionStyle.SPACE,
                                 height = keyHeight
                             )
-                            // Period — shared hold-to-grid punctuation popup,
-                            // same component and width as the dictation row.
+                            // Period — shared hold-to-grid punctuation popup
+                            // (comma is its first alternate).
                             PeriodKeyWithPopup(
                                 onKeyPress = onKeyPress,
                                 modifier = Modifier.width(KeyboardMetrics.PunctKeyWidth),
                                 height = keyHeight
                             )
-                            // Enter/Return (long-press for action selector)
+                            // Enter/Return (long-press for action selector).
+                            // Matched to Shift's width so the row's ends balance.
                             LongPressActionButton(
                                 icon = Icons.Default.KeyboardReturn,
                                 onClick = onEnter,
                                 onLongPress = onEnterLongPress,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1.25f),
                                 style = KeyboardActionStyle.ENTER,
                                 height = keyHeight,
                                 longPressThreshold = 800L

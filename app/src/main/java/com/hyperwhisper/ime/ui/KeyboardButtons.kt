@@ -2,9 +2,12 @@ package com.hyperwhisper.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -54,17 +57,29 @@ internal fun KeyboardKeyButton(
     longPressLabel: String? = null,
     onLongPress: (() -> Unit)? = null
 ) {
+    // Press feedback: drive the fill straight off the interaction source so the
+    // key under the finger lights up (the default ripple is nearly invisible on
+    // a white cap). The thin border gives every key a crisp, divided edge.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
     val baseModifier = modifier
         .height(height)
         .clip(RoundedCornerShape(8.dp))
-        .background(KeyboardKeyColor)
+        .background(if (pressed) KeyboardKeyPressedColor else KeyboardKeyColor)
+        .border(1.dp, KeyboardKeyBorderColor, RoundedCornerShape(8.dp))
     val tappableMod = if (onLongPress != null) {
         baseModifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
             onClick = onClick,
             onLongClick = onLongPress
         )
     } else {
-        baseModifier.clickable(onClick = onClick)
+        baseModifier.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick
+        )
     }
     Box(
         modifier = tappableMod,
@@ -128,7 +143,7 @@ internal fun RepeatingActionButton(
     Surface(
         modifier = sized.repeatOnHold(
             initialDelayMs = initialDelayMs,
-            repeatIntervalMs = repeatDelayMs,
+            startIntervalMs = repeatDelayMs,
             onTrigger = onAction
         ),
         shape = RoundedCornerShape(10.dp),

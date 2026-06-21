@@ -60,6 +60,10 @@ fun DictationHeader(
     onSelectMode: (KeyboardInputMode) -> Unit,
     onPresetLongPress: () -> Unit,
     onSettings: () -> Unit,
+    pasteText: String = "",
+    enableHistoryPanel: Boolean = false,
+    onPaste: (String) -> Unit = {},
+    onShowHistory: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -135,6 +139,18 @@ fun DictationHeader(
             }
 
             Spacer(modifier = Modifier.weight(1f))
+
+            // Insert (paste-last) — relocated here from the dictation bottom
+            // row. Tap pastes the last transcription, long-press opens history.
+            InsertChip(
+                pasteText = pasteText,
+                enableHistoryPanel = enableHistoryPanel,
+                onPaste = onPaste,
+                onShowHistory = onShowHistory,
+                modifier = Modifier
+                    .height(chipHeight)
+                    .width(KeyboardMetrics.ModeChipWidth)
+            )
 
             Surface(
                 onClick = onSettings,

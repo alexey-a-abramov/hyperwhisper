@@ -47,9 +47,10 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * Gboard-style long-press punctuation selector for the period key — now a
- * **multi-row grid** (the user asked for "a couple of rows for dot") with the
- * same single-gesture, edge-aware model as [AccentKeyWithPopup]:
+ * Gboard-style long-press selector for the period key — a **full symbol pad**
+ * (brackets, math, currency, quotes, punctuation) so symbols are reachable in
+ * place without switching to a separate symbol layout. Same single-gesture,
+ * edge-aware model as [AccentKeyWithPopup]:
  *
  *  - tap-and-release types "." (the rest cell, bottom row);
  *  - press-and-hold opens the grid above the key;
@@ -240,9 +241,13 @@ fun PeriodKeyWithPopup(
     }
 }
 
-// Two-row punctuation grid. Bottom row carries "." (the rest cell) so a plain
-// tap-release types a period; common sentence + chat punctuation fills the rest.
+// Compact two-row pad: money + @/& + quotes on top, sentence punctuation
+// below. A plain tap-release still types "." (the rest cell, bottom-right),
+// while a hold exposes the everyday symbols that aren't already on the letter
+// rows. Trimmed down from the old 5-row symbol grid — brackets/math/logic
+// belong on the Code keyboard, not behind the period key. Rows are kept
+// uniform width (7 cols) so the drag-highlight maps cleanly.
 private val DEFAULT_PERIOD_GRID: List<List<String>> = listOf(
-    listOf("?", "!", ":", ";", "—", "…"),
-    listOf(",", "'", "\"", ".", "/", "@"),
+    listOf("\$", "€", "£", "@", "&", "'", "\""),
+    listOf("?", "!", ":", ";", ",", "-", "."),
 )
